@@ -1,0 +1,39 @@
+name: Bug Report
+description: Report a bug to help us improve
+title: "[Bug] "
+labels: ["type:bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and the expected behavior
+      placeholder: A clear description of the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Go to …\n2. Click on …\n3. See error"
+    validations:
+      required: true
+  - type: textarea
+    id: error-log
+    attributes:
+      label: Error log / message
+      placeholder: Paste the full error message or log.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment (optional)
+      placeholder: "OS, version, browser, etc. (e.g. macOS 14, Node 20)"
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      placeholder: Screenshots, config, or any other relevant details.

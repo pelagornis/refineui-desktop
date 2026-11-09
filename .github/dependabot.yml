@@ -1,0 +1,28 @@
+# Dependabot: automated dependency update suggestions (optional)
+# Remove this file or unused blocks if the project doesn't use the corresponding package manager.
+# https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # npm
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Uncomment as needed for your project
+  # - package-ecosystem: "bundler"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"
+  # - package-ecosystem: "pip"
+  #   directory: "/"
+  #   schedule:
+  #     interval: "weekly"

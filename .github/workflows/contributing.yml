@@ -1,0 +1,21 @@
+name: Contributing
+
+on:
+  workflow_call:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - "**.md"
+      - ".github/**"
+
+jobs:
+  check-contributing-guide:
+    name: Check contributing / docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Validate markdown links (optional)
+        run: |
+          echo "Add your own checks here (e.g. markdownlint, link checker)."
+          exit 0
