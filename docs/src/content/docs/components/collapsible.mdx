@@ -1,0 +1,51 @@
+---
+title: Collapsible
+description: "Headless show / hide region using the accordion panel motion."
+sidebar:
+  order: 40
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Headless show / hide region using the accordion panel motion.
+
+<Screenshot id="collapsible" alt="Collapsible variants and states" />
+
+## Usage
+
+- Click the trigger to toggle; control it with `open` + `on_open_change` or leave it uncontrolled with `default_open`.
+
+```rust
+use refineui::prelude::*;
+
+Collapsible::new("repos", Text::new("Starred repositories"), |_, _| {
+    v_stack(6.).child("pelagornis/refineui").into_any_element()
+})
+.default_open(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story collapsible
+```
+
+## Motion
+
+Same height + content motion as Accordion.
+
+## API
+
+Source: [`crates/refineui/src/components/accordion.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/accordion.rs)
+
+### Collapsible
+
+Headless show / hide region (web `Collapsible`): click `trigger` to toggle `content`, which expands with the accordion panel motion.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, trigger: impl IntoElement, content: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self` | New collapsible region. |
+| `fn open(mut self, open: bool) -> Self` | Controlled open state. |
+| `fn default_open(mut self, open: bool) -> Self` | Initial state when uncontrolled. |
+| `fn on_open_change(mut self, f: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self` | Called with the requested state. |
+

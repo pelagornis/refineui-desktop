@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema.json",
+  "id": "code-block",
+  "name": "Code Block",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Editor (read-only)",
+  "rust_types": [
+    "CodeBlock"
+  ],
+  "a11y_role": "code",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrandSubtle",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary",
+      "surfaceSunken"
+    ],
+    "radius": [
+      "roundedXLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeXLarge",
+      "sizeXSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyLg",
+      "labelMd"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

@@ -1,0 +1,46 @@
+---
+title: Breadcrumb
+description: "Shows the location within a hierarchy; earlier items are clickable."
+sidebar:
+  order: 35
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Shows the location within a hierarchy; earlier items are clickable.
+
+<Screenshot id="breadcrumb" alt="Breadcrumb variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Breadcrumb::new("path", ["Workspace", "crates", "button.rs"])
+    .on_select(|ix, _, _| println!("go to {ix}"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story breadcrumb
+```
+
+## Motion
+
+Link plates tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/breadcrumb.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/breadcrumb.rs)
+
+### Breadcrumb
+
+Path trail. The last item is the current page.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, items: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | New trail. |
+| `fn on_select(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the index of a clicked ancestor. |
+

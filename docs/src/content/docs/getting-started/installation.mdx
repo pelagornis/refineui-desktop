@@ -1,0 +1,61 @@
+---
+title: Installation
+description: Add RefineUI GPUI to a GPUI application.
+sidebar:
+  order: 0
+---
+
+RefineUI GPUI targets **macOS on Apple Silicon** and GPUI `0.2`. It needs Rust 1.88 or newer.
+
+## Add the crate
+
+```toml
+# Cargo.toml
+[dependencies]
+gpui = "0.2.2"
+refineui = { git = "https://github.com/pelagornis/refineui-gpui" }
+```
+
+The `bundled-fonts` feature (on by default) embeds Inter. Disable it with
+`default-features = false` if your app ships its own fonts.
+
+## Initialise
+
+```rust
+use gpui::{
+    App, AppContext, Application, Context, IntoElement, ParentElement, Render, Styled, Window,
+    WindowOptions, px,
+};
+use refineui::prelude::*;
+
+struct Hello;
+
+impl Render for Hello {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        refineui::root(cx)
+            .p(px(24.))
+            .child(Button::new("hello", "Hello RefineUI").on_click(|_, _, _| println!("hi")))
+    }
+}
+
+fn main() {
+    Application::new()
+        .with_assets(refineui::Assets) // icons + spinner
+        .run(|cx: &mut App| {
+            refineui::init(cx); // fonts, theme, key bindings
+            cx.open_window(WindowOptions::default(), |_, cx| cx.new(|_| Hello)).unwrap();
+            cx.activate(true);
+        });
+}
+```
+
+`refineui::root(cx)` gives your window the theme background, text color, font and
+Tab / Shift-Tab focus traversal.
+
+## Run the gallery
+
+```sh
+git clone https://github.com/pelagornis/refineui-gpui
+cd refineui-gpui
+cargo run -p refineui-gallery
+```

@@ -1,0 +1,62 @@
+{
+  "$schema": "../schema.json",
+  "id": "progress-stepper",
+  "name": "Progress Stepper",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "ProgressStepper"
+  ],
+  "a11y_role": "list",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandSubtle",
+      "borderDefault",
+      "borderFocus",
+      "foregroundBrand",
+      "foregroundOnBrand",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "spacing": [
+      "sizeXSmall"
+    ],
+    "typography": [
+      "labelSm"
+    ],
+    "motion": [
+      "motion.fast"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

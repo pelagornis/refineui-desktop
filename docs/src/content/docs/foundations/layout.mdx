@@ -1,0 +1,41 @@
+---
+title: Layout
+description: "Stack, Grid, Container, Box and Spacer presets (web `Layout`)."
+sidebar:
+  order: 79
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Stack, Grid, Container, Box and Spacer presets (web `Layout`).
+
+<Screenshot id="layout" alt="Layout variants and states" />
+
+## Usage
+
+- `container()` / `container_with()` (centred page width) are behind the optional `web-extras` feature; desktop layouts use split views and panels instead.
+- `h_stack(gap)` / `v_stack(gap)` — web `Stack`; `spacer()` — web `Spacer`.
+- `grid(columns, gap)` — web `Grid`; give children `.col_span(n)` for `GridItem span`.
+- `container()` — web `Container` (24px inline padding); `token_box(...)` — web `Box`.
+- In a grid, avoid children that are `w_full()` flex rows (Taffy resolves their percentage width against the whole grid).
+
+```rust
+use refineui::prelude::*;
+
+grid(3, 8.)
+    .child(card_a)
+    .child(card_b.col_span(2));
+container().child(h_stack(8.).child(title).child(spacer()).child(actions));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story layout
+```
+
+## API
+
+Source: [`crates/refineui/src/components/layout.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/layout.rs)
+
+

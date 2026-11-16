@@ -1,0 +1,95 @@
+{
+  "$schema": "../schema.json",
+  "id": "carousel",
+  "name": "Carousel",
+  "layer": "components",
+  "status": "optional",
+  "phase": 4,
+  "feature": "web-extras",
+  "desktop_target": null,
+  "rust_types": [
+    "Carousel"
+  ],
+  "a11y_role": "region",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "implemented",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "borderDefault"
+    ],
+    "radius": [
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeXxxSmall"
+    ],
+    "motion": [
+      "motion.indicator"
+    ],
+    "elevation": [
+      "elevation.raised"
+    ],
+    "stroke": [
+      "strokeWidthThin"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous slide"
+    },
+    {
+      "keys": "right",
+      "action": "next slide"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "pointer",
+    "hover_only": false
+  }
+}

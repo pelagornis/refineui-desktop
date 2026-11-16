@@ -1,0 +1,57 @@
+{
+  "$schema": "../schema.json",
+  "id": "kbd",
+  "name": "Kbd",
+  "layer": "interaction",
+  "status": "adapt",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Shortcut Hint",
+  "rust_types": [
+    "Kbd"
+  ],
+  "a11y_role": "none",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundSurface",
+      "borderStrong",
+      "foregroundInversed",
+      "foregroundSecondary"
+    ],
+    "radius": [
+      "roundedMedium"
+    ],
+    "spacing": [
+      "sizeXSmall"
+    ],
+    "typography": [
+      "captionMd"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

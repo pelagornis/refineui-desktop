@@ -1,0 +1,54 @@
+---
+title: Field
+description: "Label, hint, required marker and validation message around any control."
+sidebar:
+  order: 12
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Label, hint, required marker and validation message around any control.
+
+<Screenshot id="field" alt="Field variants and states" />
+
+## Usage
+
+- Show either a hint or an error; `error` replaces the hint and tints the message.
+- Mark the inner `TextInput` invalid too so its border matches.
+
+```rust
+use refineui::prelude::*;
+
+Field::new()
+    .label("Email")
+    .required(true)
+    .hint("We never share it.")
+    .error_opt(self.email_error.clone())
+    .control(self.email.clone());
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story field
+```
+
+## API
+
+Source: [`crates/refineui/src/components/field.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/field.rs)
+
+### Field
+
+Form row wrapping any control.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | New field. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Label above the control. |
+| `fn hint(mut self, hint: impl Into<SharedString>) -> Self` | Helper text below the control. |
+| `fn error(mut self, error: impl Into<SharedString>) -> Self` | Error message (replaces the hint). |
+| `fn error_opt(mut self, error: Option<SharedString>) -> Self` | Optional error. |
+| `fn required(mut self, required: bool) -> Self` | Required marker. |
+| `fn size(mut self, size: ControlSize) -> Self` | Label size. |
+| `fn control(mut self, control: impl IntoElement) -> Self` | The control (TextInput entity, Select, Checkbox, …). |
+

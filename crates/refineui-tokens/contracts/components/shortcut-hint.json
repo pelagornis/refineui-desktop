@@ -1,0 +1,53 @@
+{
+  "$schema": "../schema.json",
+  "id": "shortcut-hint",
+  "name": "Shortcut Hint",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Shortcut Hint",
+  "rust_types": [
+    "ShortcutHint"
+  ],
+  "a11y_role": "none",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "foregroundInversed",
+      "foregroundTertiary"
+    ],
+    "spacing": [
+      "sizeXSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyXs"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

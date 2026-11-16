@@ -1,0 +1,75 @@
+{
+  "$schema": "../schema.json",
+  "id": "drop-zone",
+  "name": "Drop Zone",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Drop Zone",
+  "rust_types": [
+    "DropIndicator",
+    "DropZone"
+  ],
+  "a11y_role": "none",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "borderDefault",
+      "borderFocus",
+      "foregroundOnBrand",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedSmall"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm",
+      "captionMd"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline",
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

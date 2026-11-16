@@ -1,0 +1,71 @@
+---
+title: Time Input
+description: "Field that opens hour / minute wheels (web `TimeInput`)."
+sidebar:
+  order: 63
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Field that opens hour / minute wheels (web `TimeInput`).
+
+<Screenshot id="time-input" alt="Time Input variants and states" />
+
+## Usage
+
+- Wheels are 140px tall with 32px rows; rows fade toward the edges and the wheel snaps to a row 120ms after scrolling stops.
+- `minute_step(15)` and `twelve_hour(true)` match the web props.
+
+```rust
+use refineui::prelude::*;
+
+TimeInput::new("start", Some(Time::new(9, 30)))
+    .minute_step(15)
+    .on_change(cx.listener(|this, t: &Time, _, cx| {
+        this.start = Some(*t);
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story time-input
+```
+
+## Motion
+
+Same popover motion as Date Input; wheels snap to a row 120ms after scrolling stops and rows fade toward the edges.
+
+## API
+
+Source: [`crates/refineui/src/components/time_input.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/time_input.rs)
+
+### TimeInput
+
+A time field with a wheel picker.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, value: Option<Time>) -> Self` | New time input. |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Placeholder (default `Select time`). |
+| `fn minute_step(mut self, step: u32) -> Self` | Minute increments (1, 5, 10, 15 or 30). |
+| `fn twelve_hour(mut self, on: bool) -> Self` | 12-hour picker with an AM/PM column (web `hourCycle="12h"`). |
+| `fn size(mut self, size: ControlSize) -> Self` | Field size (default `Large`). |
+| `fn error(mut self, e: bool) -> Self` | Error border. |
+| `fn success(mut self, s: bool) -> Self` | Success border. |
+| `fn disabled(mut self, d: bool) -> Self` | Disabled. |
+| `fn full_width(mut self, f: bool) -> Self` | Stretch to the parent's width. |
+| `fn on_change(mut self, f: impl Fn(&Time, &mut Window, &mut App) + 'static) -> Self` | Called whenever a wheel settles on a new value. |
+
+### Time
+
+A 24-hour time.
+
+| Method | Description |
+| --- | --- |
+| `fn new(hour: u32, minute: u32) -> Self` | New time (clamped). |
+| `fn parse(s: &str) -> Option<Self>` | Parse `HH:mm`. |
+| `fn format(self) -> String` | `HH:mm`. |
+| `fn format_12h(self) -> String` | `hh:mm AM` (web `formatDisplay` for `12h`). |
+

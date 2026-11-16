@@ -1,0 +1,122 @@
+{
+  "$schema": "../schema.json",
+  "id": "tree",
+  "name": "Tree",
+  "layer": "components",
+  "status": "adapt",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Tree (virtualized, multi-select, DnD)",
+  "rust_types": [
+    "Tree"
+  ],
+  "a11y_role": "tree",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "row",
+    "compact": {
+      "row_height": 26
+    },
+    "comfortable": {
+      "row_height": 32
+    },
+    "spacious": {
+      "row_height": 40
+    }
+  },
+  "tokens": {
+    "color": [
+      "borderFocus",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeXSmall"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyMd",
+      "bodySm"
+    ],
+    "motion": [
+      "motion.chevron",
+      "motion.fast"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next row"
+    },
+    {
+      "keys": "up",
+      "action": "previous row"
+    },
+    {
+      "keys": "right",
+      "action": "expand / first child"
+    },
+    {
+      "keys": "left",
+      "action": "collapse / parent"
+    },
+    {
+      "keys": "enter",
+      "action": "activate row"
+    },
+    {
+      "keys": "shift-down",
+      "action": "extend selection"
+    },
+    {
+      "keys": "secondary-a",
+      "action": "select all"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

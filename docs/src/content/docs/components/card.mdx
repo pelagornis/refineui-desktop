@@ -1,0 +1,84 @@
+---
+title: Card
+description: "Grouped content surface with optional header, action and footer."
+sidebar:
+  order: 23
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Grouped content surface with optional header, action and footer.
+
+<Screenshot id="card" alt="Card variants and states" />
+
+## Usage
+
+- Elevated (default): hairline `borderSubtle` + `shadow-8`. Outlined: thin `borderDefault`, no shadow.
+- `state(CardState::Hover | Pressed | Disabled)` forces the web `state` fills (`primaryHover`, `surfaceActive`, `surfaceDisabled`).
+- Children go into the card body; `flush()` removes body padding for tables and lists.
+- Give a card an `id` + `on_click` to make it interactive; `selected(true)` draws the 2px focus-colored ring.
+
+```rust
+use refineui::prelude::*;
+
+Card::new()
+    .title("Storage")
+    .description("62% of 1 TB used")
+    .child(Progress::new("storage", 0.62))
+    .footer(Button::new("manage", "Manage"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story card
+```
+
+## Motion
+
+Hover / pressed plates and the selection ring tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/card.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/card.rs)
+
+### Card
+
+A grouped content surface.  Web anatomy: `backgroundPrimary`, `roundedXXLarge`, elevated = hairline `borderSubtle` + `shadow-8` / outlined = thin `borderDefault`, no shadow. Header `sizeXLarge × sizeLarge` with a `titleSm` title and `bodyMd` tertiary description; content `sizeXLarge` sides + `sizeLarge` bottom; footer right-aligned, `sizeXLarge × sizeMedium`. With `Card::id` + `Card::on_click` it is interactive: hover `backgroundPrimaryHover`, pressed `surfaceSelected`, selected = 2px inset `borderFocus` ring; transitions over `duration-fast`.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Empty card. |
+| `fn eyebrow(mut self, el: impl IntoElement) -> Self` | Row above the title inside `CardHeaderMain` (web demo: badge + caption). |
+| `fn variant(mut self, variant: CardVariant) -> Self` | Surface style. |
+| `fn title(mut self, title: impl Into<SharedString>) -> Self` | Header title. |
+| `fn description(mut self, description: impl Into<SharedString>) -> Self` | Header description. |
+| `fn action(mut self, action: impl IntoElement) -> Self` | Header trailing action (e.g. an icon button). |
+| `fn footer(mut self, footer: impl IntoElement) -> Self` | Footer row (e.g. buttons), right-aligned. |
+| `fn id(mut self, id: impl Into<gpui::ElementId>) -> Self` | Element id (required for interactive cards). |
+| `fn on_click(mut self, f: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Make the card clickable (needs `Card::id`). |
+| `fn selected(mut self, selected: bool) -> Self` | Selected (2px `borderFocus` inset ring). |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled (`surfaceDisabled`, disabled text). |
+| `fn state(mut self, state: CardState) -> Self` | Force a visual state (web `state`): `Hover` / `Pressed` fills, `Disabled` = `Card::disabled`. |
+| `fn flush(mut self) -> Self` | Remove inner padding (for full-bleed content such as tables). |
+
+### CardVariant
+
+Card surface style.
+
+| Variant | Description |
+| --- | --- |
+| `Elevated` | Shadow (default). |
+| `Outlined` | Border, no shadow. |
+
+### CardState
+
+Forced visual state (web `state` prop, e.g. for docs / previews).
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Live (pointer-driven when interactive). |
+| `Hover` | `backgroundPrimaryHover`. |
+| `Pressed` | `backgroundSurfaceActive`. |
+| `Disabled` | Same as `Card::disabled`. |
+

@@ -1,0 +1,101 @@
+{
+  "$schema": "../schema.json",
+  "id": "radio",
+  "name": "Radio",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Radio",
+    "RadioGroup"
+  ],
+  "a11y_role": "radiogroup",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "planned",
+      "visual": "hover border / fill"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "active fill"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on :focus-visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "implemented",
+      "visual": "checked / on: backgroundBrand + foregroundOnBrand"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "borderDefault",
+      "borderDisabled",
+      "borderStrong",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "captionMd",
+      "labelMd"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.fastEase"
+    ],
+    "stroke": [
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "up",
+      "action": "select previous"
+    },
+    {
+      "keys": "down",
+      "action": "select next"
+    },
+    {
+      "keys": "left",
+      "action": "select previous"
+    },
+    {
+      "keys": "right",
+      "action": "select next"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

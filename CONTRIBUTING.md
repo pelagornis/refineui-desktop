@@ -11,8 +11,21 @@ Thank you for your interest in contributing. Please follow the guidelines below 
 
 ## Development
 
-- Describe how to run and test the project locally in this section.
-- Add links to your tech stack and style guide if you have them.
+You need Rust 1.88+ (`rust-toolchain.toml` selects stable) and, for the docs, [Bun](https://bun.sh) or Node 20+.
+macOS on Apple Silicon is the primary platform.
+
+```sh
+cargo fmt --all
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo run -p refineui-gallery          # try your change in the gallery
+./scripts/screenshots.sh <story-id>    # refresh the docs screenshot
+python3 scripts/gen_docs.py            # refresh generated doc pages
+cd docs && bun install && bun run build
+```
+
+New components need a gallery story, a docs entry and a screenshot. The steps are in
+[AGENTS.md → Adding a component](AGENTS.md#adding-a-component).
 
 ## Releasing
 

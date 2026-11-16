@@ -1,0 +1,59 @@
+---
+title: Button Group
+description: "Related buttons joined in one tube (attached) or spaced apart (web `ButtonGroup`)."
+sidebar:
+  order: 60
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Related buttons joined in one tube (attached) or spaced apart (web `ButtonGroup`).
+
+<Screenshot id="button-group" alt="Button Group variants and states" />
+
+## Usage
+
+- Buttons inherit the group `size` and `variant` unless they set their own.
+- Attached groups sit in a 2px-padded `backgroundBrandSubtle` tube with a thin `borderDefault` edge; its radius is the button radius + 2 so the corners stay concentric.
+- `orientation(Axis::Vertical)` stacks the buttons.
+
+```rust
+use refineui::prelude::*;
+
+ButtonGroup::new()
+    .buttons([
+        Button::new("left", "Left"),
+        Button::new("center", "Center"),
+        Button::new("right", "Right"),
+    ])
+    .size(ControlSize::Medium);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story button-group
+```
+
+## Motion
+
+Buttons keep their own press (0.96) and color motion.
+
+## API
+
+Source: [`crates/refineui/src/components/button_group.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/button_group.rs)
+
+### ButtonGroup
+
+A row (or column) of related buttons.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Empty, attached, horizontal group. |
+| `fn button(mut self, button: Button) -> Self` | Add a button. |
+| `fn buttons(mut self, buttons: impl IntoIterator<Item = Button>) -> Self` | Add several buttons. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size cascaded to buttons without their own (web `size`). |
+| `fn variant(mut self, variant: ButtonVariant) -> Self` | Variant cascaded to buttons without their own (web `variant`). |
+| `fn orientation(mut self, orientation: Axis) -> Self` | Layout direction (web `orientation`). |
+| `fn attached(mut self, attached: bool) -> Self` | `true` (default): one tube outline; `false`: spaced buttons only. |
+

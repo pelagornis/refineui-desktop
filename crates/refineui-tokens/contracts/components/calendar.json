@@ -1,0 +1,119 @@
+{
+  "$schema": "../schema.json",
+  "id": "calendar",
+  "name": "Calendar",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Calendar"
+  ],
+  "a11y_role": "grid",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "borderDefault",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundInversed",
+      "foregroundPrimary",
+      "foregroundPrimaryHover"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXxLarge",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "captionLg",
+      "subtitleMd"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous day"
+    },
+    {
+      "keys": "right",
+      "action": "next day"
+    },
+    {
+      "keys": "up",
+      "action": "previous week"
+    },
+    {
+      "keys": "down",
+      "action": "next week"
+    },
+    {
+      "keys": "pageup",
+      "action": "previous month"
+    },
+    {
+      "keys": "pagedown",
+      "action": "next month"
+    },
+    {
+      "keys": "enter",
+      "action": "choose day"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

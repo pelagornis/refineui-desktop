@@ -1,0 +1,67 @@
+---
+title: Badge
+description: "Small status or count indicator."
+sidebar:
+  order: 20
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Small status or count indicator.
+
+<Screenshot id="badge" alt="Badge variants and states" />
+
+## Usage
+
+- `Badge::count(n)` caps the label at `99+`.
+- Give a badge an `id` to make it interactive (hover / pressed plates per variant).
+
+```rust
+use refineui::prelude::*;
+
+Badge::new("Beta").variant(BadgeVariant::Warning);
+Badge::count(unread).variant(BadgeVariant::Danger);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story badge
+```
+
+## Motion
+
+Interactive badges tween their plate over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/badge.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/badge.rs)
+
+### Badge
+
+A small status label or count. Small status label or count.  `captionMd`, `sizeXXSmall × sizeSmall` padding, `roundedMedium` (label) or circular (number). With `Badge::id` it gets the Web Kit hover / pressed fills, transitioned over `duration-fast`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Label badge. |
+| `fn count(count: usize) -> Self` | Circular count badge (`99+` above 99), `danger` by default. |
+| `fn variant(mut self, variant: BadgeVariant) -> Self` | Variant. |
+| `fn id(mut self, id: impl Into<ElementId>) -> Self` | Make the badge interactive (hover / pressed fills). |
+
+### BadgeVariant
+
+Badge color variant.
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Brand fill (default). |
+| `Neutral` | Subtle brand fill. |
+| `Outline` | Bordered. |
+| `Success` | Green. |
+| `Warning` | Yellow. |
+| `Danger` | Red. |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+

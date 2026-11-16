@@ -1,0 +1,91 @@
+---
+title: Window Controls
+description: "Minimize, maximize / restore and close buttons drawn per OS, plus window presets and size / position restore."
+sidebar:
+  order: 52
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Minimize, maximize / restore and close buttons drawn per OS, plus window presets and size / position restore.
+
+<Screenshot id="window-controls" alt="Window Controls variants and states" />
+
+## Usage
+
+- macOS draws nothing (AppKit owns the traffic lights) except in previews. Windows: Segoe-style glyphs, close turns `#C42B1C` on hover. Linux: 24px round buttons.
+- Buttons the platform reports as unsupported (`window.window_controls()`) or the preset disables (`WindowPreset::Settings` has no minimize / maximize) are omitted.
+- **Presets** — `Main` (1280 × 800, min 720 × 480), `Document`, `Settings` (fixed-ish, no maximize) and `Utility`.
+- **Restore** — `track_window_state(window, cx, path)` saves the bounds, maximized and full-screen state on every move / resize and on close; `WindowState::load` + `sanitized(displays, min)` drop placements whose titlebar would be off every connected display (unplugged monitor) and clamp the size to the preset minimum.
+
+```rust
+use refineui::prelude::*;
+
+WindowControls::new("controls").buttons(WindowPreset::Settings);
+
+// Remember where the window was.
+let _sub = track_window_state(window, cx, config_dir.join("window.state"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story window-controls
+```
+
+## API
+
+Source: [`crates/refineui/src/shell/titlebar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/titlebar.rs)
+
+### WindowControls
+
+Minimize / maximize / close. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Controls with every button. |
+| `fn os(mut self, os: Os) -> Self` | Draw for this OS instead of `crate::platform::chrome_os` (docs, previews). |
+| `fn interactive(mut self, interactive: bool) -> Self` | `false`: draw only (no window actions) — for previews embedded in another window. |
+| `fn buttons(mut self, buttons: impl Into<ControlButtons>) -> Self` | Show only some buttons (or `ControlButtons::from(preset)`). |
+| `fn height(mut self, h: f32) -> Self` | Titlebar height (Windows caption buttons fill it). |
+
+### ControlButtons
+
+Which window buttons to show.
+
+### WindowPreset
+
+Window kinds with their default and minimum sizes.
+
+| Variant | Description |
+| --- | --- |
+| `Main` | The main application window (full shell). |
+| `Document` | A document / secondary editor window. |
+| `Settings` | Preferences / settings. |
+| `Utility` | A small tool / inspector panel. |
+
+### WindowState
+
+Saved window placement (logical pixels).
+
+| Method | Description |
+| --- | --- |
+| `fn capture(window: &Window) -> Self` | The current placement of `window`. |
+| `fn sanitized(self, displays: &[DisplayFrame], min: (f32, f32)) -> Option<Self>` | A placement that is safe to restore on `displays`, or `None` when the saved titlebar is not on any of them. Size is clamped to `min` and to the display the window lands on; the frame is nudged fully onto that display. |
+| `fn to_window_bounds(self) -> WindowBounds` | GPUI bounds for `WindowOptions::window_bounds`. |
+| `fn to_line(self) -> String` | One-line text form (`x y width height maximized fullscreen`) — no serde needed. With the `serde` feature the type is also `Serialize` / `Deserialize`. |
+| `fn from_line(line: &str) -> Option<Self>` | Parse `Self::to_line`. |
+| `fn load(path: &std::path::Path) -> Option<Self>` | Read a state file written by `Self::save` (`None` if missing or unreadable). |
+| `fn save(self, path: &std::path::Path) -> std::io::Result<()>` | Write the state file (creating parent directories). |
+
+### WindowSpec
+
+What to open.
+
+| Method | Description |
+| --- | --- |
+| `fn new(preset: WindowPreset, title: impl Into<gpui::SharedString>) -> Self` | Spec for `preset` titled `title`. |
+| `fn restore(mut self, state: Option<WindowState>) -> Self` | Restore a saved placement (sanitized against the current displays). |
+| `fn app_id(mut self, id: impl Into<String>) -> Self` | Linux application id. |
+| `fn titlebar_height(mut self, h: f32) -> Self` | Titlebar height for the traffic-light position. |
+

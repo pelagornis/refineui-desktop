@@ -1,0 +1,51 @@
+---
+title: Carousel
+description: "Looping slides with outline buttons and a sliding-pill meter (web `Carousel`)."
+sidebar:
+  order: 72
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Looping slides with outline buttons and a sliding-pill meter (web `Carousel`).
+
+<Screenshot id="carousel" alt="Carousel variants and states" />
+
+## Usage
+
+- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
+- Slides are built on demand by index, so the loop continues in the same direction past the last slide.
+- Drag the stage to swipe: the track follows the pointer and a release past 18% of the width (web `DRAG_COMMIT_RATIO`) moves one slide; shorter drags spring back. Buttons, the meter and ← / → (while focused) also navigate.
+
+```rust
+use refineui::prelude::*;
+
+Carousel::new("hero", 4, |ix, _window, _cx| {
+    div().size_full().child(format!("Slide {}", ix + 1)).into_any_element()
+})
+.height(220.);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story carousel
+```
+
+## Motion
+
+Slides glide over `duration-panel` and the meter thumb over `duration-medium` (both emphasized). While dragging the track follows the pointer 1:1; on release it settles over `duration-panel` (emphasized).
+
+## API
+
+Source: [`crates/refineui/src/components/carousel.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/carousel.rs)
+
+### Carousel
+
+Looping slide carousel.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, count: usize, slide: impl Fn(usize, &mut Window, &mut App) -> AnyElement + 'static) -> Self` | `count` slides, each built by `slide(index)`. |
+| `fn height(mut self, h: f32) -> Self` | Stage height (default 240). |
+

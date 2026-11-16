@@ -1,0 +1,88 @@
+{
+  "$schema": "../schema.json",
+  "id": "dialog",
+  "name": "Dialog",
+  "layer": "components",
+  "status": "adapt",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Dialog / Sheet",
+  "rust_types": [
+    "Dialog"
+  ],
+  "a11y_role": "dialog",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": {
+      "status": "implemented",
+      "visual": "first focusable child focused on open; focus restored on close"
+    },
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "radius": [
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXLarge",
+      "sizeXSmall",
+      "sizeXxLarge",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "bodyXs",
+      "subtitleLg"
+    ],
+    "motion": [
+      "motion.panel",
+      "motion.scrim"
+    ],
+    "elevation": [
+      "elevation.floating",
+      "elevation.overlay"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "escape",
+      "action": "dismiss"
+    },
+    {
+      "keys": "tab",
+      "action": "next focusable (trapped)"
+    },
+    {
+      "keys": "shift-tab",
+      "action": "previous focusable (trapped)"
+    }
+  ],
+  "focus": {
+    "tab_stop": "trap",
+    "ring": "none",
+    "restores_focus": true
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

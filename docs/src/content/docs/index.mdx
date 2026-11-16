@@ -1,0 +1,31 @@
+---
+title: RefineUI GPUI
+description: The RefineUI design system for desktop applications built with GPUI.
+template: splash
+hero:
+  tagline: RefineUI tokens and components, rebuilt for native desktop apps on GPUI.
+  actions:
+    - text: Get started
+      link: getting-started/installation/
+      icon: right-arrow
+    - text: Browse components
+      link: components/button/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Desktop first" icon="laptop">
+    Compact density, keyboard focus, hover states, menus and dialogs tuned for macOS desktop apps.
+  </Card>
+  <Card title="Same tokens as the web" icon="seti:config">
+    Colors, typography, spacing, radius, shadows and motion are ported from RefineUI, in light and dark.
+  </Card>
+  <Card title="40+ components" icon="puzzle">
+    Buttons, inputs, selects, menus, dialogs, tables, trees and more — all `RenderOnce` builders.
+  </Card>
+  <Card title="Gallery and screenshots" icon="seti:image">
+    Every component has a gallery story; the screenshots on these pages are captured from it.
+  </Card>
+</CardGrid>

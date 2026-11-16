@@ -1,0 +1,74 @@
+---
+title: Drawer
+description: "Side panel that slides over content."
+sidebar:
+  order: 46
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Side panel that slides over content.
+
+<Screenshot id="drawer" alt="Drawer variants and states" />
+
+## Usage
+
+- Controlled like `Dialog`; open it from a regular `Button` (web `DrawerTrigger` is a default Button).
+- `footer_actions([...])` lays out the web footer states: one action full width, two split in halves, more as a trailing row.
+- No header close button by default (`close_button(true)` adds one); the scrim click and Escape close it.
+
+```rust
+use refineui::prelude::*;
+
+Drawer::new("details", "Drawer title")
+    .size(DrawerSize::Small)
+    .description("Supporting copy")
+    .child(Text::new("Drawer content"))
+    .footer_actions([
+        Button::new("cancel", "Cancel").variant(ButtonVariant::Outline).full_width(true),
+        Button::new("submit", "Submit").full_width(true),
+    ])
+    .open(self.open)
+    .on_close(|_, _| {});
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story drawer
+```
+
+## Motion
+
+Scrim fades over `duration-overlay` and the panel slides in from the edge over `duration-panel` (panel curve); reverses on close.
+
+## API
+
+Source: [`crates/refineui/src/components/dialog.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/dialog.rs)
+
+### Drawer
+
+Side sheet sliding in from the trailing edge.  `backgroundPrimary` panel with `shadow-16`; header `24 / 24 / 10` padding with a `subtitleLg` title and `bodyXs` description; body `bodyMd`; footer `sizeXXLarge × sizeXLarge` padding. Like the web there is no grab handle and no close button by default (scrim click / Escape close it); add one with `Drawer::close_button`. `Drawer::footer_actions` follows web `DrawerFooter` states: one action → full width, two → equal split, more → right-aligned.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self` | New drawer. |
+| `fn footer_actions(mut self, actions: impl IntoIterator<Item = impl IntoElement>) -> Self` | Footer actions laid out like web `DrawerFooter` (`single` → full width, `split` → equal halves, `icons` → trailing row). Pass buttons built with `.full_width(true)` for the single / split states. |
+| `fn close_button(mut self, show: bool) -> Self` | Show a ghost dismiss button in the header (web `DrawerHeader actions`). |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Supporting text under the title. |
+| `fn size(mut self, size: DrawerSize) -> Self` | Width. |
+| `fn footer(mut self, footer: impl IntoElement) -> Self` | Footer. |
+| `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Close handler. |
+| `fn open(mut self, open: bool) -> Self` | Open state (default `true`); see `Dialog::open`. |
+| `fn inline(mut self, inline: bool) -> Self` | Render only the panel, in flow. |
+
+### DrawerSize
+
+Drawer width.
+
+| Variant | Description |
+| --- | --- |
+| `Small` | `drawerWidthSm` — 320px (default) |
+| `Medium` | `drawerWidthMd` — 575px |
+| `Large` | `drawerWidthLg` — 850px |
+

@@ -1,0 +1,188 @@
+{
+  "$schema": "../schema.json",
+  "id": "tabs",
+  "name": "Tabs",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Tab Bar (documents)",
+  "rust_types": [
+    "Tabs"
+  ],
+  "a11y_role": "tablist",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "button",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 22,
+        "padding_x": 8,
+        "padding_y": 2,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 16,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "md": {
+        "height": 36,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 20
+      },
+      "lg": {
+        "height": 48,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 16,
+        "text_size": 20,
+        "icon": 24
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "md": {
+        "height": 40,
+        "padding_x": 16,
+        "padding_y": 8,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 20
+      },
+      "lg": {
+        "height": 52,
+        "padding_x": 20,
+        "padding_y": 10,
+        "radius": 16,
+        "text_size": 20,
+        "icon": 24
+      }
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandHover",
+      "borderDefault",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundPrimaryHover",
+      "foregroundTertiary"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall"
+    ],
+    "typography": [
+      "captionLg"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.indicator"
+    ],
+    "stroke": [
+      "strokeWidthThick",
+      "strokeWidthThin"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous tab"
+    },
+    {
+      "keys": "right",
+      "action": "next tab"
+    },
+    {
+      "keys": "home",
+      "action": "first tab"
+    },
+    {
+      "keys": "end",
+      "action": "last tab"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

@@ -1,0 +1,80 @@
+---
+title: Density
+description: Compact, Comfortable and Spacious density modes with concrete metrics derived from the tokens.
+sidebar:
+  order: 4
+---
+
+`Theme::density` picks one of three modes. **Comfortable** is the default
+and matches RefineUI web pixel-for-pixel. Every number below comes from
+`refineui_tokens::size::Density` and is exported to
+`crates/refineui-tokens/contracts/density.json`; a test keeps the file in
+sync. Padding, gap and radius values are always spacing / radius / icon
+tokens.
+
+```rust
+Theme::set_density(Density::Compact, cx);
+let m = cx.theme().desktop(); // DesktopMetrics
+```
+
+## Controls (height, px)
+
+| Control | Size | Compact | Comfortable | Spacious |
+| --- | --- | --- | --- | --- |
+| Button | sm / md / lg | 22 / 28 / 32 | 28 / 36 / 48 | 32 / 40 / 52 |
+| Field (Input, Spin, Search) | sm / md / lg | 24 / 28 / 32 | 36 / 44 / 52 | 40 / 48 / 56 |
+| Select trigger | sm / md / lg | button heights | button heights | button heights |
+| Tag (Chip) | sm / md / lg | 20 / 24 / 32 | 20 / 24 / 32 | 20 / 24 / 32 |
+
+Radius: compact uses `roundedMedium` (6) / `roundedLarge` (8). Comfortable
+and spacious use `roundedLarge` / `roundedXLarge` / `roundedXXLarge`,
+growing with the size.
+
+## Desktop chrome (`DesktopMetrics`, px)
+
+| Metric | Compact | Comfortable | Spacious |
+| --- | --- | --- | --- |
+| List / menu / table row | 26 | 32 | 40 |
+| Tree row | 22 | 28 | 32 |
+| Tab (document / panel) | 28 | 36 | 40 |
+| Toolbar (separate row) | 32 | 40 | 48 |
+| Status bar | 22 | 24 | 28 |
+| Panel header | 28 | 36 | 44 |
+| Activity bar width / item | 40 / 32 | 48 / 36 | 56 / 44 |
+| Panel padding | 8 (`sizeSmall`) | 10 (`sizeMedium`) | 16 (`sizeLarge`) |
+| Gap | 4 (`sizeXXSmall`) | 6 (`sizeXSmall`) | 8 (`sizeSmall`) |
+| Chrome icon | 16 | 16 | 20 |
+| Splitter hit area | 4 | 6 | 8 |
+
+The visible splitter line stays a hairline (`strokeWidthHairline`) in every
+mode. Only the hit area grows.
+
+## Titlebar (platform × density)
+
+| Platform | Plain | Unified, compact | Unified, comfortable / spacious |
+| --- | --- | --- | --- |
+| macOS | 28 | 38 | 52 |
+| Windows | 32 | 40 | 48 |
+| Linux (CSD) | 38 | 38 | 46 |
+
+## Applying density to components (Phase 2)
+
+`Theme::set_density` re-renders everything; components read
+`cx.theme().density`:
+
+- Buttons, fields, selects and chips take height, padding and radius from
+  `ControlMetrics` (table above), including Toolbar and Button Group
+  plates.
+- Rows (Menu, Dropdown, Context Menu, Sidebar, Tree, Command) add
+  `theme.row_inset()` = (row height − 32) / 2 to their vertical padding:
+  −3 compact, 0 comfortable (pixel-identical to web), +4 spacious. Table rows
+  and headers grow by 2 × inset; Tabs use `tab_inset()`.
+- Shell chrome (titlebar, menu bar row, activity bar, status bar) reads
+  `DesktopMetrics` directly.
+
+## When to use which
+
+- **Compact**: IDEs and data-heavy tools, where information density wins.
+- **Comfortable**: the default for productivity apps; identical to web.
+- **Spacious**: touch-capable devices, presentation, accessibility
+  (larger targets).

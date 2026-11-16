@@ -1,0 +1,99 @@
+{
+  "$schema": "../schema.json",
+  "id": "checkbox",
+  "name": "Checkbox",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Checkbox"
+  ],
+  "a11y_role": "checkbox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover border / fill"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on :focus-visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "implemented",
+      "visual": "checked / on: backgroundBrand + foregroundOnBrand"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandActive",
+      "backgroundBrandHover",
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "backgroundSurfaceSelected",
+      "borderDefault",
+      "borderDisabled",
+      "borderFocus",
+      "borderStrong",
+      "borderSubtle",
+      "foregroundDisabled",
+      "foregroundInversed",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "radius": [
+      "roundedCircle",
+      "roundedLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "captionMd",
+      "labelMd"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.fastEase"
+    ],
+    "stroke": [
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "space",
+      "action": "toggle"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

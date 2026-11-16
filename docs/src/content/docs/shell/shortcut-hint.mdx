@@ -1,0 +1,59 @@
+---
+title: Shortcut Hint
+description: "A key combination formatted for the current OS — ⇧⌘P on macOS, Ctrl+Shift+P on Windows and Linux."
+sidebar:
+  order: 56
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+A key combination formatted for the current OS — ⇧⌘P on macOS, Ctrl+Shift+P on Windows and Linux.
+
+<Screenshot id="shortcut-hint" alt="Shortcut Hint variants and states" />
+
+## Usage
+
+- `ShortcutHint::keys("secondary-shift-p")` formats literal keys (`secondary` = ⌘ on macOS, Ctrl elsewhere).
+- `ShortcutHint::action("editor::Save")` looks the binding up in the installed keymap (`KeybindingManager::install`) and renders nothing when the action is unbound.
+- `ShortcutStyle::Keycaps` draws one `Kbd` cap per key; `Text` is the compact inline form used in menus. Tooltips (`Button::tooltip_action`) and menu items show the same label.
+
+```rust
+use refineui::prelude::*;
+
+ShortcutHint::keys("secondary-shift-p");
+ShortcutHint::action("editor::Save").style(ShortcutStyle::Text);
+Button::icon_only("save", IconName::Save).tooltip("Save").tooltip_action("editor::Save");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story shortcut-hint
+```
+
+## API
+
+Source: [`crates/refineui/src/components/shortcut_hint.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/shortcut_hint.rs)
+
+### ShortcutHint
+
+A platform-formatted shortcut. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn keys(keys: impl Into<SharedString>) -> Self` | Raw keys in GPUI syntax (`secondary-` = ⌘ on macOS, Ctrl elsewhere). |
+| `fn action(name: impl Into<SharedString>) -> Self` | The shortcut bound to a GPUI action in the installed keymap. |
+| `fn style(mut self, style: ShortcutStyle) -> Self` | Keycaps or text. |
+| `fn inverted(mut self, inverted: bool) -> Self` | Keycaps for dark surfaces (tooltips). |
+| `fn os(mut self, os: Os) -> Self` | Format for this OS instead of `crate::platform::chrome_os`. |
+| `fn label(&self, cx: &App) -> Option<String>` | The label this hint shows, or `None` when the action is unbound. |
+
+### ShortcutStyle
+
+How a `ShortcutHint` draws.
+
+| Variant | Description |
+| --- | --- |
+| `Keycaps` | Keycaps (`crate::Kbd`). |
+| `Text` | Plain tertiary text. |
+

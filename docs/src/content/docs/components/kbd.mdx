@@ -1,0 +1,42 @@
+---
+title: Kbd
+description: "Keyboard shortcut hint."
+sidebar:
+  order: 26
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Keyboard shortcut hint.
+
+<Screenshot id="kbd" alt="Kbd variants and states" />
+
+## Usage
+
+- Use `inverted(true)` on dark surfaces such as tooltips.
+
+```rust
+use refineui::prelude::*;
+
+Kbd::new("⌘K");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story kbd
+```
+
+## API
+
+Source: [`crates/refineui/src/components/kbd.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/kbd.rs)
+
+### Kbd
+
+A keycap label like `⌘K`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(keys: impl Into<SharedString>) -> Self` | New keycap. |
+| `fn inverted(mut self, inverted: bool) -> Self` | Use on dark surfaces (tooltips). |
+

@@ -1,0 +1,53 @@
+---
+title: Switch
+description: "Immediate on/off setting with an animated thumb."
+sidebar:
+  order: 15
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Immediate on/off setting with an animated thumb.
+
+<Screenshot id="switch" alt="Switch variants and states" />
+
+## Usage
+
+- Use a switch when the change applies immediately; use a checkbox inside forms that are submitted.
+
+```rust
+use refineui::prelude::*;
+
+Switch::new("wifi", self.wifi)
+    .label("Wi-Fi")
+    .on_change(cx.listener(|this, on: &bool, _, cx| {
+        this.wifi = *on;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story switch
+```
+
+## Motion
+
+Thumb slides and the track recolors over `duration-medium`.
+
+## API
+
+Source: [`crates/refineui/src/components/switch.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/switch.rs)
+
+### Switch
+
+An on/off switch (web `Toggle` / `Switch`). Toggles on click, Enter or Space.  44×24 track, 20px thumb with `shadow-2`; the thumb slides `switchThumb` (20px) and the track color transitions over `duration-medium`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, on: bool) -> Self` | New switch. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Label shown to the right. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn on_change(mut self, f: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self` | Called with the new value. |
+

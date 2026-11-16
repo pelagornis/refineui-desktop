@@ -1,0 +1,64 @@
+---
+title: Scroll Area
+description: "Scrollable region with an overlay scrollbar and edge blur."
+sidebar:
+  order: 48
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Scrollable region with an overlay scrollbar and edge blur.
+
+<Screenshot id="scroll-area" alt="Scroll Area variants and states" />
+
+## Usage
+
+- The 10px rail floats over the content (inset 2px) and shows while hovered, dragging, or for a moment after scrolling.
+- Edge blur: rows wrapped in `scroll_edge_item` (web `data-scroll-edge-item`) soften as they cross the outer 25% of the viewport on an edge that hides more content; each edge ramps in over the first 25% of scroll distance. GPUI has no blur filter, so a row fades instead of blurring. Turn it off with `edge_blur(false)`.
+
+```rust
+use refineui::prelude::*;
+
+div().h(px(256.)).child(
+    ScrollArea::new("tags").children(tags.iter().map(|t| {
+        scroll_edge_item(
+            t.clone(),
+            div().px(px(16.)).py(px(10.)).border_b_1().child(Text::new(t.clone())),
+        )
+    })),
+)
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story scroll-area
+```
+
+## Motion
+
+The overlay scrollbar fades in and out over `duration-fast`; edge blur follows the scroll position.
+
+## API
+
+Source: [`crates/refineui/src/components/scroll_area.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/scroll_area.rs)
+
+### ScrollArea
+
+Scrollable region with a thin themed overlay scrollbar.  Web `ScrollArea`: the 10px rail floats over the content (inset 2px) and shows while hovered, dragging or scrolling (fading over `duration-fast`).  Edge softening (web `data-scroll-edge-item` + `refineui-scroll-edge-falloff`): rows wrapped in `ScrollEdgeItem` soften as they cross the outer 25% of the viewport on an edge that **hides more content**. Like the web, the amount is per row (from the row's `view()` cover progress: 1 at 0% / 100%, 0 at 25% / 75%), scaled by that edge's factor, which ramps 0 → 1 over the first 25% of scroll distance, so a list parked at its top is untouched at the top and lists that do not scroll are never touched. Rows never shift or shrink. GPUI has no `filter: blur`, so the row's `blur(2px)` is approximated by fading the whole row (no colored overlay).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | New scroll area (fills its parent's height unless `Self::max_height` is set). |
+| `fn scrollbar(mut self, style: crate::platform::ScrollbarStyle) -> Self` | Scrollbar behaviour; defaults to the platform's (`crate::platform::PlatformAdapter::scrollbar`: overlay on macOS / Linux, persistent on Windows). |
+| `fn edge_blur(mut self, on: bool) -> Self` | Edge softening of `ScrollEdgeItem` rows on / off (default on). |
+| `fn max_height(mut self, h: Pixels) -> Self` | Cap the height. |
+
+### ScrollEdgeItem
+
+A row that softens at a `ScrollArea` edge (web `data-scroll-edge-item`). Put it anywhere inside a scroll area's content; outside one it is a plain wrapper.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, child: impl IntoElement) -> Self` | Wrap `child`; `id` must be unique within the scroll area. |
+

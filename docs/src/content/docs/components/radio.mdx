@@ -1,0 +1,64 @@
+---
+title: Radio
+description: "Single choice from a small set of options."
+sidebar:
+  order: 14
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Single choice from a small set of options.
+
+<Screenshot id="radio" alt="Radio variants and states" />
+
+## Usage
+
+- `RadioGroup` handles arrow-key navigation; use `Radio` directly for custom layouts.
+
+```rust
+use refineui::prelude::*;
+
+RadioGroup::new("theme", ["System", "Light", "Dark"], Some(self.theme))
+    .on_change(cx.listener(|this, ix: &usize, _, cx| {
+        this.theme = *ix;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story radio
+```
+
+## Motion
+
+The inner dot grows over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/radio.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/radio.rs)
+
+### RadioGroup
+
+A set of mutually exclusive `Radio`s.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, options: impl IntoIterator<Item = impl Into<SharedString>>, selected: Option<usize>) -> Self` | New vertical group. |
+| `fn horizontal(mut self) -> Self` | Lay out horizontally. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disable every option. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the chosen index. |
+
+### Radio
+
+A single radio button. Usually rendered by `RadioGroup`.  20px circle with a 1px `borderDefault`; when checked the circle fills with `foregroundPrimary` and a 10px `backgroundPrimary` dot scales in over `duration-fast` ease-out. Keyboard focus draws a 2px `borderStrong` ring.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, selected: bool) -> Self` | New radio. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Label (`labelMd`). |
+| `fn description(mut self, description: impl Into<SharedString>) -> Self` | Helper text under the label (`captionMd`). |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn on_select(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Called when chosen. |
+

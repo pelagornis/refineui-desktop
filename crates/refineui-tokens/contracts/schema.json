@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pelagornis/refineui-gpui/contracts/schema.json",
+  "title": "RefineUI Desktop component contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "layer", "status", "phase", "rust_types", "a11y_role", "states", "sizes", "tokens", "keyboard", "focus", "pointer"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+    "name": { "type": "string" },
+    "summary": { "type": "string" },
+    "layer": { "enum": ["foundation", "interaction", "components", "composition", "application", "platform"] },
+    "status": {
+      "description": "exists = desktop-ready; adapt = exists, needs desktop adaptation; new = not built yet; optional = behind a cargo feature (web-oriented)",
+      "enum": ["exists", "adapt", "new", "optional"]
+    },
+    "phase": { "type": "integer", "minimum": 1, "maximum": 6 },
+    "feature": { "type": ["string", "null"], "description": "Cargo feature that gates the component (null = default build)" },
+    "desktop_target": { "type": ["string", "null"], "description": "Desktop component this one becomes (brief §5 name)" },
+    "rust_types": { "type": "array", "items": { "type": "string" } },
+    "a11y_role": { "type": "string", "description": "AccessKit / ARIA role name" },
+    "states": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default", "hovered", "pressed", "focused", "disabled", "loading", "selected", "dragging"],
+      "patternProperties": {
+        "^(default|hovered|pressed|focused|disabled|loading|selected|dragging)$": { "$ref": "#/$defs/state" }
+      }
+    },
+    "sizes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric"],
+      "properties": {
+        "metric": { "enum": ["button", "field", "select", "chip", "row", "desktop", "fixed", "content"] },
+        "sizes": { "type": "array", "items": { "enum": ["sm", "md", "lg"] } },
+        "compact": { "type": "object" },
+        "comfortable": { "type": "object" },
+        "spacious": { "type": "object" }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "color": { "type": "array", "items": { "type": "string" } },
+        "radius": { "type": "array", "items": { "type": "string" } },
+        "spacing": { "type": "array", "items": { "type": "string" } },
+        "typography": { "type": "array", "items": { "type": "string" } },
+        "motion": { "type": "array", "items": { "type": "string" } },
+        "elevation": { "type": "array", "items": { "type": "string" } },
+        "stroke": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "keyboard": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["keys", "action"],
+        "properties": {
+          "keys": { "type": "string", "description": "GPUI keystroke syntax; `secondary` = cmd on macOS, ctrl elsewhere" },
+          "action": { "type": "string" },
+          "when": { "type": "string" }
+        }
+      }
+    },
+    "focus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tab_stop", "ring"],
+      "properties": {
+        "tab_stop": { "enum": ["none", "single", "roving", "container", "trap"] },
+        "ring": { "enum": ["focusRing", "inset", "none"] },
+        "restores_focus": { "type": "boolean" },
+        "notes": { "type": "string" }
+      }
+    },
+    "pointer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cursor"],
+      "properties": {
+        "cursor": { "enum": ["default", "pointer", "text", "grab", "resize-col", "resize-row", "not-allowed"] },
+        "context_menu": { "type": "boolean" },
+        "hover_only": { "type": "boolean", "const": false, "description": "Brief §7: no action may be reachable by hover alone" }
+      }
+    }
+  },
+  "$defs": {
+    "state": {
+      "oneOf": [
+        { "type": "null", "description": "Not applicable" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["implemented", "planned"] },
+            "visual": { "type": "string" }
+          }
+        }
+      ]
+    }
+  }
+}

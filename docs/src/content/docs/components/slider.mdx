@@ -1,0 +1,56 @@
+---
+title: Slider
+description: "Pick a value from a continuous or stepped range by dragging, clicking or with the keyboard."
+sidebar:
+  order: 16
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Pick a value from a continuous or stepped range by dragging, clicking or with the keyboard.
+
+<Screenshot id="slider" alt="Slider variants and states" />
+
+## Usage
+
+- Arrow keys move by one step, Page Up/Down by ten, Home/End jump to the bounds.
+
+```rust
+use refineui::prelude::*;
+
+Slider::new("volume", self.volume)
+    .range(0., 100.)
+    .step(1.)
+    .on_change(cx.listener(|this, v: &f32, _, cx| {
+        this.volume = *v;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story slider
+```
+
+## Motion
+
+Thumb grows on hover and recolors over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/slider.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/slider.rs)
+
+### Slider
+
+Horizontal range input.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, value: f32) -> Self` | Slider over `0.0..=1.0`. |
+| `fn range(mut self, min: f32, max: f32) -> Self` | Range. |
+| `fn step(mut self, step: f32) -> Self` | Step for keyboard and snapping. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn small(mut self, small: bool) -> Self` | 2px track (web `size="sm"`). |
+| `fn on_change(mut self, f: impl Fn(&f32, &mut Window, &mut App) + 'static) -> Self` | Called with the new value. |
+

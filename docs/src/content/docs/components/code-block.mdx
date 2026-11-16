@@ -1,0 +1,57 @@
+---
+title: Code Block
+description: "Syntax-highlighted code with title, line numbers, highlighted lines and a copy button (web `CodeBlock`)."
+sidebar:
+  order: 70
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Syntax-highlighted code with title, line numbers, highlighted lines and a copy button (web `CodeBlock`).
+
+<Screenshot id="code-block" alt="Code Block variants and states" />
+
+## Usage
+
+- `.language("rust")` colours tokens with the Night Owl Light / Night Owl themes the web docs use through Shiki (light / dark follow the theme). Highlighting runs on `syntect` (default feature `syntax-highlight`) and is cached per code string.
+- Languages: rust, ts / tsx / js, sh, json, css, html, python, yaml, markdown, c / c++, go, java, sql, diff. Unknown languages (or the feature turned off) fall back to plain text.
+- The copy button writes to the clipboard and shows a check for 1.6s.
+
+```rust
+use refineui::prelude::*;
+
+CodeBlock::new("snippet", "fn main() {\n    println!(\"hi\");\n}")
+    .title("main.rs")
+    .language("rust")
+    .line_numbers(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story code-block
+```
+
+## Motion
+
+The copy glyph swaps to a check for 1.6s.
+
+## API
+
+Source: [`crates/refineui/src/components/code_block.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/code_block.rs)
+
+### CodeBlock
+
+A titled, copyable block of code.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, code: impl Into<SharedString>) -> Self` | New block for `code`. |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Header title (file name, language). |
+| `fn icon(mut self, icon: IconName) -> Self` | Header icon. |
+| `fn line_numbers(mut self, on: bool) -> Self` | Show 1-based line numbers. |
+| `fn highlight(mut self, lines: impl IntoIterator<Item = usize>) -> Self` | Highlight these 1-based lines (web `CodeBlockLine variant="highlighted"`). |
+| `fn wrap(mut self, wrap: bool) -> Self` | Wrap long lines instead of scrolling. |
+| `fn language(mut self, lang: impl Into<SharedString>) -> Self` | Syntax-highlight as `lang` (`rust`, `ts`, `tsx`, `js`, `sh`, `json`, `css`, `html`, `py`, `yaml`, `md`, …) with the web docs' Night Owl Light / Night Owl colours. Unknown languages render plain. |
+| `fn copy_button(mut self, on: bool) -> Self` | Show the copy button (default `true`). |
+

@@ -1,0 +1,68 @@
+---
+title: Dialog
+description: "Modal dialog for focused tasks."
+sidebar:
+  order: 45
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Modal dialog for focused tasks.
+
+<Screenshot id="dialog" alt="Dialog variants and states" />
+
+## Usage
+
+- Keep the dialog rendered and drive `open(bool)` so the exit transition can play; clear your flag in `on_close` (scrim click, × or Escape).
+
+```rust
+use refineui::prelude::*;
+
+Dialog::new("discard", "Discard changes?")
+    .description("This cannot be undone.")
+    .size(DialogSize::Small)
+    .footer(Button::new("ok", "Discard"))
+    .open(self.confirm_open)
+    .on_close(cx.listener(|this, _, _, cx| {
+        this.confirm_open = false;
+        cx.notify();
+    }))
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story dialog
+```
+
+## Motion
+
+Scrim fades over 280ms and the panel fades and rises 8px over `duration-panel`; both reverse on close.
+
+## API
+
+Source: [`crates/refineui/src/components/dialog.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/dialog.rs)
+
+### Dialog
+
+A centered modal dialog.  Panel: `backgroundPrimary`, `roundedXXLarge`, `sizeXXLarge` (24px) padding, `shadow-8`; title `subtitleLg`, description `bodyXs` in `foregroundSecondary`; ghost `sm` close button.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self` | New dialog. |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Supporting text under the title. |
+| `fn size(mut self, size: DialogSize) -> Self` | Width. |
+| `fn footer(mut self, footer: impl IntoElement) -> Self` | Footer (usually buttons, right-aligned). |
+| `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Close handler (× button, scrim click, Escape). |
+| `fn open(mut self, open: bool) -> Self` | Open state (default `true`). Keep rendering with `open(false)` to play the exit animation; the dialog unmounts itself when it finishes. |
+| `fn inline(mut self, inline: bool) -> Self` | Render only the panel, in flow (docs / previews). |
+
+### DialogSize
+
+Dialog width (web `size`).
+
+| Variant | Description |
+| --- | --- |
+| `Small` | `dialogWidthSm` — 300px. |
+| `Large` | `dialogMaxWidth` — up to 600px (default). |
+

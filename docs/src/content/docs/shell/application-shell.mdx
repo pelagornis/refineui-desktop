@@ -1,0 +1,122 @@
+---
+title: Application Shell
+description: "The window-level layout: titlebar (with a unified toolbar), menu bar, activity bar, docks, workspace and status bar, laid out per OS."
+sidebar:
+  order: 50
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The window-level layout: titlebar (with a unified toolbar), menu bar, activity bar, docks, workspace and status bar, laid out per OS.
+
+<Screenshot id="application-shell" alt="Application Shell variants and states" />
+
+## Usage
+
+- Compose the parts in one builder; every slot is optional. Per-OS metrics (titlebar height, traffic-light reserve, menu bar) come from the `PlatformAdapter` and the current `Density`.
+- On macOS the menus go to the system menu bar (call `set_system_menus` once); on Windows / Linux the same `AppMenu` model renders as an in-window `MenuBar`.
+- **F6 / Shift-F6** cycle focus between regions (menu bar → toolbar → activity bar → docks → workspace → status bar); Tab then moves inside the region. **F10** (and Alt on Windows / Linux) focuses the menu bar. A region gets an inset `borderFocus` outline only for keyboard focus.
+- On Linux the shell wraps itself in `WindowFrame` (client-side decorations: rounded corners, shadow, resize edges). Use `.embedded(true)` and `.os(..)` for previews inside another window.
+- Run the full demo: `cargo run -p refineui-gallery --bin refineui-shell`.
+
+```rust
+use refineui::prelude::*;
+
+ApplicationShell::new("app")
+    .title("refineui-gpui")
+    .subtitle("main.rs")
+    .menus(menus)                       // Vec<AppMenu>
+    .toolbar(Toolbar::new("tb").fill(true).button(sidebar).spacer().button(run))
+    .activity_bar(ActivityBar::new("activity").items(items).selected("explorer"))
+    .left_dock(ShellDock::new(explorer, 248.))
+    .center(editor)
+    .bottom_dock(ShellDock::new(terminal, 180.))
+    .status_bar(StatusBar::new("status").leading(StatusItem::text("branch", "main")))
+    .overlay(self.palette.clone());
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story application-shell
+```
+
+## The shell demo
+
+A complete desktop app built only from these parts — titlebar with a unified toolbar, menu bar (the system menu bar on macOS), activity bar, explorer sidebar, editor placeholder with tabs, bottom panel, status bar and the command palette. Window placement is restored on the next launch.
+
+<Screenshot id="shell-demo" alt="The refineui-shell demo window" />
+
+```sh
+cargo run -p refineui-gallery --bin refineui-shell
+```
+
+Or press **Shell demo** in the gallery's top bar.
+
+## API
+
+Source: [`crates/refineui/src/shell/app_shell.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/app_shell.rs)
+
+### ApplicationShell
+
+The application shell. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty shell with the default spec. |
+| `fn os(mut self, os: platform::Os) -> Self` | Lay out and draw chrome for this OS (previews). |
+| `fn embedded(mut self, embedded: bool) -> Self` | A static preview inside another window: the titlebar does not move or close the window and no client-side frame is drawn. |
+| `fn bind_keys(cx: &mut App)` | Bind F6 / Shift-F6 to region cycling (also done by `crate::init`). |
+| `fn spec(mut self, spec: ShellSpec) -> Self` | Shell configuration. |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Window title (titlebar). |
+| `fn subtitle(mut self, t: impl Into<SharedString>) -> Self` | Titlebar subtitle. |
+| `fn buttons(mut self, b: impl Into<ControlButtons>) -> Self` | Window buttons (`ControlButtons::from(preset)`). |
+| `fn titlebar_leading(mut self, e: impl IntoElement) -> Self` | Extra element at the titlebar's leading edge. |
+| `fn titlebar_trailing(mut self, e: impl IntoElement) -> Self` | Extra element at the titlebar's trailing edge. |
+| `fn menus(mut self, menus: Vec<AppMenu>) -> Self` | Application menus (in-window bar on Windows / Linux). |
+| `fn toolbar(mut self, e: impl IntoElement) -> Self` | Toolbar (a `Toolbar::new(..).fill(true)`), placed per `ShellSpec::toolbar`. |
+| `fn activity_bar(mut self, e: impl IntoElement) -> Self` | Activity bar / navigation rail. |
+| `fn left_dock(mut self, dock: ShellDock) -> Self` | Leading dock (sidebar). |
+| `fn right_dock(mut self, dock: ShellDock) -> Self` | Trailing dock (inspector). |
+| `fn bottom_dock(mut self, dock: ShellDock) -> Self` | Bottom dock (terminal, problems). |
+| `fn center(mut self, e: impl IntoElement) -> Self` | Center workspace. |
+| `fn status_bar(mut self, bar: StatusBar) -> Self` | Status bar. |
+| `fn overlay(mut self, e: impl IntoElement) -> Self` | Element painted over the shell (command palette, toasts). |
+
+### ShellDock
+
+A docked pane and its size (width for side docks, height for the bottom dock).
+
+| Method | Description |
+| --- | --- |
+| `fn new(element: impl IntoElement, size: f32) -> Self` | Dock `element` at `size` px. |
+
+### ShellSpec
+
+Shell configuration (application choice; persisted with the layout).
+
+| Method | Description |
+| --- | --- |
+| `fn in_window_menu(&self, platform: &dyn PlatformAdapter) -> bool` | Is the menu bar drawn inside the window on `platform`? |
+| `fn regions(&self, platform: &dyn PlatformAdapter) -> Vec<ShellRegion>` | Regions top-to-bottom / leading-to-trailing. |
+| `fn metrics(&self, platform: &dyn PlatformAdapter, density: Density) -> ShellMetrics` | Chrome sizes for `platform` at `density`. |
+
+### ToolbarPlacement
+
+Where the toolbar goes.
+
+| Variant | Description |
+| --- | --- |
+| `Unified` | Merged into the titlebar (macOS unified style; default). |
+| `Separate` | Its own row under the titlebar / menu bar. |
+| `None` | No toolbar. |
+
+### RailEdge
+
+Which edge the activity bar sits on.
+
+| Variant | Description |
+| --- | --- |
+| `Leading` | Leading edge (default). |
+| `Trailing` | Trailing edge. |
+

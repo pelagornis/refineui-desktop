@@ -1,0 +1,75 @@
+---
+title: Icon
+description: "RefineUI System Icons in regular and filled styles."
+sidebar:
+  order: 3
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+RefineUI System Icons in regular and filled styles.
+
+<Screenshot id="icon" alt="Icon variants and states" />
+
+## Usage
+
+- Icons are embedded SVGs served by `refineui::Assets`; register it with `Application::new().with_assets(refineui::Assets)`.
+- Add icons with `python3 scripts/gen_icons.py <name>…`.
+
+```rust
+use refineui::prelude::*;
+
+Icon::new(IconName::Settings).size(IconSize::Large).color(cx.theme().colors.foreground_secondary);
+Icon::new(IconName::Star).style(IconStyle::Filled);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story icon
+```
+
+## API
+
+Source: [`crates/refineui/src/icon.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/icon.rs)
+
+### Icon
+
+A monochrome SVG icon from the RefineUI System Icons set.
+
+| Method | Description |
+| --- | --- |
+| `fn new(name: IconName) -> Self` | New icon (regular style, 16px, current text color). |
+| `fn style(mut self, style: IconStyle) -> Self` | Filled / regular. |
+| `fn size(mut self, size: IconSize) -> Self` | Size. |
+| `fn color(mut self, color: impl Into<Hsla>) -> Self` | Color (defaults to `foreground_primary`). |
+| `fn transform(mut self, transformation: Transformation) -> Self` | Rotation / scale transform. |
+
+### IconSize
+
+Icon size steps — `iconSizes` (`global/sizes.ts`).
+
+| Variant | Description |
+| --- | --- |
+| `XXSmall` | `xxsmall` — 12px |
+| `XSmall` | `xsmall` — 16px (default) |
+| `Small` | `small` — 20px |
+| `Medium` | `medium` — 24px |
+| `Large` | `large` — 28px |
+| `XLarge` | `xlarge` — 32px |
+| `XXLarge` | `xxlarge` — 48px |
+| `Custom(Pixels)` | Explicit size. |
+
+| Method | Description |
+| --- | --- |
+| `fn px(self) -> Pixels` | Size in pixels. |
+
+### IconStyle
+
+Icon outline style.
+
+| Variant | Description |
+| --- | --- |
+| `Regular` | Outline (default). |
+| `Filled` | Solid. |
+

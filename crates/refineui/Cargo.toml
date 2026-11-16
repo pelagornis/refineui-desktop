@@ -1,0 +1,47 @@
+[package]
+name = "refineui"
+description = "RefineUI Desktop — a desktop-native GPUI design system: foundation, interaction, components, workspace composition, application shell and platform adapters."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors.workspace = true
+include = ["src/**/*", "assets/**/*", "Cargo.toml", "README.md"]
+
+[features]
+default = ["bundled-fonts", "syntax-highlight"]
+# Embed Inter (OFL) so text renders identically on every machine.
+bundled-fonts = []
+# CodeBlock syntax colours (syntect with the pure-Rust fancy-regex engine, no onig).
+syntax-highlight = ["dep:syntect"]
+# Web-oriented components kept out of Desktop Core (brief §5): Carousel,
+# Footer, NavigationMenu, Link (URL) and the page `container()`. Optional
+# for desktop apps that genuinely need them.
+web-extras = []
+# `serde` derives for workspace layout state (persistence).
+serde = ["dep:serde"]
+# Compile the macOS vibrancy AppKit glue on any host, for `cargo check`
+# only (CI on Linux). Never enable it in a build that runs.
+typecheck-macos-vibrancy = ["dep:objc"]
+
+[dependencies]
+gpui.workspace = true
+refineui-tokens.workspace = true
+smallvec.workspace = true
+unicode-segmentation.workspace = true
+raw-window-handle = "0.6"
+syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"], optional = true }
+objc = { version = "0.2", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+gpui = { workspace = true, features = ["test-support"] }
+serde_json = "1"

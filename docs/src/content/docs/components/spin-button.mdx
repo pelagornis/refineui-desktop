@@ -1,0 +1,57 @@
+---
+title: Spin Button
+description: "Numeric stepper with increment / decrement buttons and keyboard support."
+sidebar:
+  order: 17
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Numeric stepper with increment / decrement buttons and keyboard support.
+
+<Screenshot id="spin-button" alt="Spin Button variants and states" />
+
+## Usage
+
+- Values are clamped to `range` and rounded to `precision` decimals.
+
+```rust
+use refineui::prelude::*;
+
+SpinButton::new("delay", self.delay)
+    .range(0., 10.)
+    .step(0.25)
+    .precision(2)
+    .suffix(" s")
+    .on_change(cx.listener(|this, v: &f64, _, cx| {
+        this.delay = *v;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story spin-button
+```
+
+## API
+
+Source: [`crates/refineui/src/components/spin_button.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/spin_button.rs)
+
+### SpinButton
+
+Numeric stepper.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, value: f64) -> Self` | New stepper (0..=100, step 1). |
+| `fn range(mut self, min: f64, max: f64) -> Self` | Range. |
+| `fn step(mut self, step: f64) -> Self` | Step. |
+| `fn precision(mut self, precision: usize) -> Self` | Decimal places shown. |
+| `fn suffix(mut self, suffix: impl Into<SharedString>) -> Self` | Unit suffix (e.g. "px"). |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn width(mut self, width: gpui::Pixels) -> Self` | Fixed width (default 160px; the web field fills its container). |
+| `fn on_change(mut self, f: impl Fn(&f64, &mut Window, &mut App) + 'static) -> Self` | Called with the new value. |
+

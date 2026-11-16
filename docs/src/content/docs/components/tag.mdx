@@ -1,0 +1,63 @@
+---
+title: Tag
+description: "Tag — an alias of Chip, exactly like the web (`Tag` re-exports `Chip`)."
+sidebar:
+  order: 65
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Tag — an alias of Chip, exactly like the web (`Tag` re-exports `Chip`).
+
+<Screenshot id="tag" alt="Tag variants and states" />
+
+## Usage
+
+- `Tag` / `TagVariant` are type aliases of `Chip` / `ChipVariant`; `Chip::tag` is the same as `Chip::new`.
+
+```rust
+use refineui::prelude::*;
+
+Tag::tag("rust", "Rust").variant(TagVariant::Outline);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story tag
+```
+
+## API
+
+Source: [`crates/refineui/src/components/chip.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/chip.rs)
+
+### Chip
+
+Compact label for filters, selections and metadata.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | New pill chip. |
+| `fn tag(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | Same as `Chip::new` (web `Tag` re-exports `Chip`). |
+| `fn variant(mut self, variant: ChipVariant) -> Self` | Variant. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn selected(mut self, selected: bool) -> Self` | Selected (filter-chip style). |
+| `fn on_click(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Make the chip clickable. |
+| `fn on_remove(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Show a remove (×) button. |
+
+### ChipVariant
+
+Chip / Tag variant.
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Subtle fill (default). |
+| `Outline` | Bordered. |
+| `Filled` | Brand fill. |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+

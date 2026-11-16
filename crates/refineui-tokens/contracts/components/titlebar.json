@@ -1,0 +1,113 @@
+{
+  "$schema": "../schema.json",
+  "id": "titlebar",
+  "name": "Titlebar",
+  "layer": "application",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Titlebar",
+  "rust_types": [
+    "Titlebar",
+    "WindowFrame"
+  ],
+  "a11y_role": "banner",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "desktop",
+    "compact": {
+      "row_height": 26,
+      "tree_row_height": 22,
+      "tab_height": 28,
+      "toolbar_height": 32,
+      "status_bar_height": 22,
+      "panel_header_height": 28,
+      "activity_bar_width": 40,
+      "activity_item": 32,
+      "panel_padding": 8,
+      "gap": 4,
+      "icon": 16,
+      "splitter_hit": 4
+    },
+    "comfortable": {
+      "row_height": 32,
+      "tree_row_height": 28,
+      "tab_height": 36,
+      "toolbar_height": 40,
+      "status_bar_height": 24,
+      "panel_header_height": 36,
+      "activity_bar_width": 48,
+      "activity_item": 36,
+      "panel_padding": 10,
+      "gap": 6,
+      "icon": 16,
+      "splitter_hit": 6
+    },
+    "spacious": {
+      "row_height": 40,
+      "tree_row_height": 32,
+      "tab_height": 40,
+      "toolbar_height": 48,
+      "status_bar_height": 28,
+      "panel_header_height": 44,
+      "activity_bar_width": 56,
+      "activity_item": 44,
+      "panel_padding": 16,
+      "gap": 8,
+      "icon": 20,
+      "splitter_hit": 8
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "backgroundSurface",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceHover",
+      "borderDefault",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary",
+      "surfaceSunken"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm",
+      "captionMd"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

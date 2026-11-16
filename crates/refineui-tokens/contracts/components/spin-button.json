@@ -1,0 +1,175 @@
+{
+  "$schema": "../schema.json",
+  "id": "spin-button",
+  "name": "Spin Button",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "SpinButton"
+  ],
+  "a11y_role": "spinbutton",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "borderHover"
+    },
+    "pressed": null,
+    "focused": {
+      "status": "implemented",
+      "visual": "borderFocus + focusRing; caret visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "backgroundSurfaceDisabled, foregroundDisabled"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "trailing spinner (async validation / search)"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "text selection uses the selection highlight"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "field",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 24,
+        "padding_x": 8,
+        "padding_y": 4,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 36,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 20
+      },
+      "md": {
+        "height": 44,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 12,
+        "text_size": 14,
+        "icon": 24
+      },
+      "lg": {
+        "height": 52,
+        "padding_x": 20,
+        "padding_y": 16,
+        "radius": 16,
+        "text_size": 16,
+        "icon": 28
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 40,
+        "padding_x": 10,
+        "padding_y": 8,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 20
+      },
+      "md": {
+        "height": 48,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 24
+      },
+      "lg": {
+        "height": 56,
+        "padding_x": 20,
+        "padding_y": 16,
+        "radius": 16,
+        "text_size": 16,
+        "icon": 28
+      }
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceDisabled",
+      "backgroundSurfaceHover",
+      "borderDefault",
+      "borderDisabled",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "spacing": [
+      "sizeXSmall"
+    ],
+    "motion": [
+      "motion.fastEase"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "up",
+      "action": "increment"
+    },
+    {
+      "keys": "down",
+      "action": "decrement"
+    },
+    {
+      "keys": "pageup",
+      "action": "increment ×10"
+    },
+    {
+      "keys": "pagedown",
+      "action": "decrement ×10"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "text",
+    "hover_only": false
+  }
+}

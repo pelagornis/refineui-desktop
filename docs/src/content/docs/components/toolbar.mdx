@@ -1,0 +1,74 @@
+---
+title: Toolbar
+description: "A row of ghost buttons and toggles with groups and dividers (web `Toolbar`)."
+sidebar:
+  order: 61
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+A row of ghost buttons and toggles with groups and dividers (web `Toolbar`).
+
+<Screenshot id="toolbar" alt="Toolbar variants and states" />
+
+## Usage
+
+- Buttons default to `Ghost` and inherit the toolbar size (default `Small`).
+- `attached(true)` (default) draws the floating bar: hairline `borderSubtle`, `backgroundSurface`, 4px padding, raised shadow.
+- ← / → move focus between the toolbar items.
+
+```rust
+use refineui::prelude::*;
+
+Toolbar::new("format")
+    .label("Formatting")
+    .group(ToolbarGroup::new()
+        .toggle(ToggleButton::icon_only("bold", IconName::Edit, self.bold)))
+    .divider()
+    .button(Button::icon_only("copy", IconName::Copy).tooltip("Copy"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story toolbar
+```
+
+## Motion
+
+Buttons and toggles keep their own press and plate motion.
+
+## API
+
+Source: [`crates/refineui/src/components/toolbar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/toolbar.rs)
+
+### Toolbar
+
+An action bar.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | New horizontal toolbar (web default `size="sm"`). |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Accessible name (web `label` → `aria-label`). |
+| `fn attached(mut self, attached: bool) -> Self` | Raised surface with full rounding — a floating action bar. |
+| `fn orientation(mut self, orientation: Axis) -> Self` | Arrow-key axis and layout direction. |
+| `fn size(mut self, size: ControlSize) -> Self` | Control size cascaded to the buttons inside. |
+| `fn button(mut self, b: Button) -> Self` | Add a button (web `ToolbarButton`). |
+| `fn toggle(mut self, t: ToggleButton) -> Self` | Add a toggle button (web `ToolbarToggleButton`). |
+| `fn group(mut self, g: ToolbarGroup) -> Self` | Add a group (web `ToolbarGroup`). |
+| `fn divider(mut self) -> Self` | Add a divider (web `ToolbarDivider`). |
+| `fn spacer(mut self) -> Self` | Flexible space: pushes the following items to the trailing edge (use with `Self::fill`). |
+| `fn fill(mut self, fill: bool) -> Self` | Take the parent's free width (desktop chrome rows: titlebar, toolbar row) instead of hugging the items. |
+| `fn child(mut self, e: impl IntoElement) -> Self` | Add any element (Input, Select, …). |
+
+### ToolbarGroup
+
+A tube of related toolbar buttons (web `ToolbarGroup`).
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Empty group. |
+| `fn button(mut self, b: Button) -> Self` | Add a button. |
+| `fn toggle(mut self, t: ToggleButton) -> Self` | Add a toggle button (web `ToolbarToggleButton`). |
+| `fn orientation(mut self, o: Axis) -> Self` | Override the direction inherited from the toolbar. |
+

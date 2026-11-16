@@ -1,0 +1,54 @@
+---
+title: Accordion
+description: "Stacked disclosure sections; the open item gets a soft plate."
+sidebar:
+  order: 39
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Stacked disclosure sections; the open item gets a soft plate.
+
+<Screenshot id="accordion" alt="Accordion variants and states" />
+
+## Usage
+
+- Only one item is open at a time unless `multiple(true)`.
+- `item_with_icon` adds a leading icon; sizes change trigger and content typography.
+
+```rust
+use refineui::prelude::*;
+
+Accordion::new("faq")
+    .item("Does it support dark mode?", |_, _| Text::new("Yes.").into_any_element())
+    .default_open([0]);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story accordion
+```
+
+## Motion
+
+Height animates over 380ms with the panel curve while content fades and slides 6px; the chevron rotates 180°.
+
+## API
+
+Source: [`crates/refineui/src/components/accordion.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/accordion.rs)
+
+### Accordion
+
+Vertically stacked disclosure sections. Uncontrolled: remembers which are open.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | New accordion (single-open, `md`). |
+| `fn item(mut self, title: impl Into<SharedString>, content: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self` | Add a section. |
+| `fn item_with_icon(mut self, icon: IconName, title: impl Into<SharedString>, content: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self` | Add a section with a leading icon. |
+| `fn disabled_item(mut self, title: impl Into<SharedString>) -> Self` | Add a disabled section. |
+| `fn multiple(mut self, multiple: bool) -> Self` | Allow several open sections (web `type="multiple"`). |
+| `fn default_open(mut self, ix: impl IntoIterator<Item = usize>) -> Self` | Sections open initially. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size (`sm \| md \| lg`). |
+

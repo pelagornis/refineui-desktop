@@ -1,0 +1,94 @@
+---
+title: Command
+description: "Searchable command list with groups, shortcuts and keyboard navigation (web `Command`)."
+sidebar:
+  order: 77
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Searchable command list with groups, shortcuts and keyboard navigation (web `Command`).
+
+<Screenshot id="command" alt="Command variants and states" />
+
+## Usage
+
+- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
+- `Command` is an entity; subscribe to `CommandEvent::Select`.
+- Typing filters items by every word of the label, value or keywords; ↑ / ↓ move the indicator and Enter selects.
+- Put it in a `Dialog` for a ⌘K palette.
+
+```rust
+use refineui::prelude::*;
+
+let palette = cx.new(|cx| Command::new(window, cx)
+    .group(CommandGroup::new("Suggestions")
+        .item(CommandItem::new("Calendar").icon(IconName::Calendar))
+        .item(CommandItem::new("Search files").shortcut("⌘P"))));
+cx.subscribe(&palette, |this, _, CommandEvent::Select(value), cx| {
+    this.run(value, cx);
+})
+.detach();
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story command
+```
+
+## Motion
+
+A `surfaceHover` indicator slides between items over `duration-medium` (emphasized); rows press to 0.96; the empty state fades.
+
+## API
+
+Source: [`crates/refineui/src/components/command.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/command.rs)
+
+### Command
+
+The command palette (an entity: create with `cx.new(\|cx\| Command::new(window, cx))`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self` | New palette with a "Type a command or search…" field. |
+| `fn group(mut self, g: CommandGroup) -> Self` | Add a group. |
+| `fn set_groups(&mut self, groups: Vec<CommandGroup>, cx: &mut Context<Self>)` | Replace every group (e.g. to refresh shortcut labels) and keep the selection valid. |
+| `fn reset(&mut self, cx: &mut Context<Self>)` | Clear the search query. |
+| `fn size(mut self, size: ControlSize) -> Self` | Row size (web `size`, default `md`). |
+| `fn empty_text(mut self, t: impl Into<SharedString>) -> Self` | Empty-state text. |
+| `fn search(&self) -> &Entity<TextInput>` | The search field entity (to focus it, read the query…). |
+| `fn selected(&self) -> Option<&SharedString>` | Currently selected item value. |
+
+### CommandGroup
+
+A headed group of items (web `CommandGroup`); `None` heading for none.
+
+| Method | Description |
+| --- | --- |
+| `fn new(heading: impl Into<SharedString>) -> Self` | New group. |
+| `fn untitled() -> Self` | Group without a heading. |
+| `fn item(mut self, item: CommandItem) -> Self` | Add an item. |
+
+### CommandItem
+
+One runnable entry.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Item whose value is its label. |
+| `fn value(mut self, v: impl Into<SharedString>) -> Self` | Stable value reported on select (defaults to the label). |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn shortcut(mut self, s: impl Into<SharedString>) -> Self` | Shortcut hint. |
+| `fn keywords(mut self, k: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Extra search terms. |
+| `fn disabled(mut self, d: bool) -> Self` | Disabled (shown, not selectable). |
+| `fn matches(&self, query: &str) -> bool` | cmdk-style match: every query word appears in the label or a keyword. |
+
+### CommandEvent
+
+Emitted by `Command`.
+
+| Variant | Description |
+| --- | --- |
+| `Select(SharedString)` | An item was run (Enter or click); carries its value. |
+

@@ -1,0 +1,120 @@
+---
+title: Component inventory
+description: Every Desktop component from the brief with its layer, status and target phase.
+sidebar:
+  order: 9
+---
+
+Status: **exists** = ready as is (contract may still list planned states); **adapt** = built on an existing component that needs desktop work; **new** = not built yet; **optional** = kept behind the `web-extras` feature. Phases follow the [phase plan](/architecture/overview/#phase-plan).
+
+Components that exist today but are not named in the brief stay in Desktop Core: Breadcrumb (becomes a path bar), Bubble, Message, Calendar, Date and Time Input, Input OTP, Card, Chart, Code Block, Marker, Pagination, Progress Stepper, Stepper, Segmented Control, Sidebar (becomes a navigation Panel), Text and Icon. Each has a contract.
+
+
+## Preserve and adapt
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Button | Components | exists | 4 | `Button`; all 8 states except dragging |
+| Button Group | Components | exists | 4 | `ButtonGroup`; roving focus planned |
+| Input | Components | exists | 4 | `TextInput` |
+| Textarea | Components | exists | 4 | `TextInput::multiline` |
+| Checkbox | Components | exists | 4 | `Checkbox` |
+| Radio | Components | exists | 4 | `Radio`, `RadioGroup` |
+| Switch | Components | exists | 4 | `Switch` |
+| Select | Components | exists | 4 | `Select`; native frost pop-up on macOS |
+| Slider | Components | exists | 4 | `Slider` |
+| Spin Button | Components | exists | 4 | `SpinButton` |
+| Field | Components | exists | 4 | `Field` |
+| Label | Components | exists | 4 | `Label` |
+| Badge | Components | exists | 4 | `Badge` |
+| Tag | Components | exists | 4 | `Chip` |
+| Avatar | Components | exists | 4 | `Avatar`, `Avatars` |
+| Tooltip | Components | adapt | 4 | `Tooltip`; add a shortcut hint from the keymap and a shared delay group |
+| Progress | Components | exists | 4 | `Progress` |
+| Spinner | Components | exists | 4 | `Spinner` |
+| Skeleton | Components | exists | 4 | `Skeleton` |
+| Toast | Components | adapt | 4 | `Toast`, `Toaster`; feeds the Notification Center (P5) |
+| Alert | Components | exists | 4 | `Alert` |
+| Dialog | Components | adapt | 4 | `Dialog`; add window-modal sheet (macOS) and focus trap / restore |
+| Popover | Components | exists | 4 | `Popover` |
+| Menu | Components | adapt | 2/4 | `Menu`, `DropdownMenu`; shared model with the Menu Bar |
+| Context Menu | Components | exists | 4 | `ContextMenu` |
+| Divider | Components | exists | 4 | `Divider` |
+| Scroll Area | Components | exists | 2 | `ScrollArea`; `ScrollbarStyle` per platform (overlay on macOS / Linux, persistent on Windows), `.scrollbar(..)` override |
+| Table | Components | adapt | 4 | `Table`; virtualization, column resize, multi-select |
+| Tree | Components | adapt | 4 | `Tree`; virtualization, multi-select, DnD |
+| Tabs | Components | adapt | 3 | `Tabs`; base of the Tab Bar |
+| Accordion | Components | exists | 4 | `Accordion` |
+| Collapsible | Components | exists | 4 | `Collapsible` |
+
+## Removed from Desktop Core
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Web Container | Components | optional | — | `container()`, `container_with()` behind `web-extras` |
+| Footer | Components | optional | — | `Footer` behind `web-extras` |
+| Carousel | Components | optional | — | `Carousel` behind `web-extras` |
+| Responsive Navigation | Components | optional | — | `NavigationMenu` behind `web-extras` |
+| URL-centric Link | Components | optional | — | `Link` behind `web-extras`; desktop uses Button `link` style for in-app actions |
+| Mobile Drawer patterns | Components | adapt | 4 | `Drawer` stays as an edge **Sheet**; mobile-style footer stacks to be removed |
+
+## Application
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Window | Application | exists | 2 | `WindowPreset`, `WindowSpec` → `window_options`, `WindowState` restore (`track_window_state`, off-screen sanitizing) |
+| Titlebar | Application | exists | 2 | `Titlebar`, `WindowFrame` (Linux CSD); traffic-light inset, unified toolbar |
+| Window Controls | Platform | exists | 2 | `WindowControls`: native traffic lights, drawn caption buttons with `WindowControlArea`, Linux header-bar buttons |
+| Menu Bar | Application | exists | 2 | `AppMenu` model → `MenuBar` (in-window) or `set_system_menus` (macOS) |
+| Toolbar | Application | exists | 2 | `Toolbar` with `spacer()` / `fill(true)` for the unified titlebar; overflow menu in Phase 3 |
+| Status Bar | Application | exists | 2 | `StatusBar`, `StatusItem` (text / button / progress / custom) |
+| Activity Bar | Application | exists | 2 | `ActivityBar` (replaces `SideDock`; `ActivityBar::rail` keeps its look) |
+| Navigation Rail | Application | exists | 2 | `ActivityBar::navigation_rail`, `LabelMode::{Below, Beside}` |
+| Application Shell | Application | exists | 2 | `ApplicationShell`: regions, F6 cycling, per-OS chrome |
+
+## Workspace
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Workspace | Composition | new | 3 | Owns `WorkspaceLayout` |
+| Split View | Composition | adapt | 3 | From `ResizablePanelGroup` |
+| Panel | Composition | new | 3 |  |
+| Panel Group | Composition | adapt | 3 | From `ResizablePanelGroup` / `Accordion` |
+| Dock | Composition | new | 3 |  |
+| Dock Area | Composition | new | 3 | `DockState` |
+| Inspector | Composition | new | 3 |  |
+| Editor | Composition | new | 3 | Chrome host; content comes from the app |
+| Tab Bar | Composition | adapt | 3 | From `Tabs` |
+| Tab Group | Composition | new | 3 | `TabGroupState` |
+| Document Tab | Composition | new | 3 |  |
+| Floating Panel | Composition | new | 3 | In-window, or a native pop-up (vibrancy infrastructure) |
+| Resizable Handle | Composition | adapt | 3 | From `ResizablePanelGroup` handle |
+
+## Interaction
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Command Palette | Interaction | exists | 2 | `CommandPalette` (built on `Command`), `ToggleCommandPalette` |
+| Keybinding Manager | Interaction | exists | 2 | `KeybindingManager::install` → GPUI `KeyBinding`s; `shortcut_for(action)` |
+| Shortcut Hint | Interaction | exists | 2 | `ShortcutHint`; shortcuts in `Tooltip::for_action` and `MenuItem::action` |
+| Drag Handle | Interaction | exists | 2 | `DragHandle` |
+| Drag Preview | Interaction | exists | 2 | `DragPreview` |
+| Drop Zone | Interaction | exists | 2 | `DropZone`, `DropIndicator` over `dnd::dock_zone` / `drop_edge` |
+| Selection Box | Interaction | exists | 2 | `SelectionArea` (marquee, click / toggle / extend, keyboard) |
+| Multi Selection | Interaction | exists | 2 | `SelectionModel` (multiple), used by `SelectionArea` |
+| Range Selection | Interaction | exists | 2 | `SelectionModel::extend_to` (Shift-click / Shift-arrows) |
+| Window Switcher | Interaction | new | 5 |  |
+
+## System
+
+| Component | Layer | Status | Phase | Source / notes |
+| --- | --- | --- | --- | --- |
+| Notification Center | Application | adapt | 5 | From `Toaster` |
+| Preferences | Application | new | 5 | Settings window with sections |
+| File Picker Integration | Platform | new | 5 | GPUI `prompt_for_paths` / `prompt_for_new_path` |
+| Color Picker | Components | new | 5 |  |
+| Font Picker | Components | new | 5 |  |
+| Shortcut Recorder | Interaction | new | 5 | Writes to the keymap; shows conflicts |
+| Progress Dialog | Components | new | 5 | From `Dialog` + `Progress` |
+| Empty State | Components | adapt | 4 | From `ResultView` |
+| Error State | Components | adapt | 4 | From `ResultView` |

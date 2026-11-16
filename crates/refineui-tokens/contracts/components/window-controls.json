@@ -1,0 +1,79 @@
+{
+  "$schema": "../schema.json",
+  "id": "window-controls",
+  "name": "Window Controls",
+  "layer": "platform",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Window Controls",
+  "rust_types": [
+    "WindowControls"
+  ],
+  "a11y_role": "group",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover fill (`*Hover` alias) over duration-fast"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill (`*Active` alias)"
+    },
+    "focused": null,
+    "disabled": {
+      "status": "planned",
+      "visual": "foregroundDisabled / backgroundSurfaceDisabled, no pointer"
+    },
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "backgroundSurface",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceHover",
+      "borderDefault",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary",
+      "surfaceSunken"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm",
+      "captionMd"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

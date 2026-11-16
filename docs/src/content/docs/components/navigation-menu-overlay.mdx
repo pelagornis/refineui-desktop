@@ -1,0 +1,51 @@
+---
+title: Navigation Menu · Overlay
+description: "Full-width sheet from the bar edge over a scrim (web `NavigationMenuContent layout=\"overlay\"`)."
+sidebar:
+  order: 75
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Full-width sheet from the bar edge over a scrim (web `NavigationMenuContent layout="overlay"`).
+
+<Screenshot id="navigation-menu-overlay" alt="Navigation Menu · Overlay variants and states" />
+
+## Usage
+
+- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
+- Spans the window from the bar's bottom edge; the rest of the window is covered by the `surfaceOverlay` scrim.
+- Hovering or clicking the scrim closes the sheet (web pointer-enter close).
+- No rounding; hairline bottom border; content centred.
+
+```rust
+use refineui::prelude::*;
+
+NavigationMenu::new("nav")
+    .panel("Products", NavigationLayout::Overlay, |_, cx| mega_columns(cx).into_any_element());
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story navigation-menu-overlay
+```
+
+## Motion
+
+The sheet grows to its content height while the scrim fades in, both over `duration-panel` (panel curve); reverses on close.
+
+## API
+
+Source: [`crates/refineui/src/components/navigation_menu.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/navigation_menu.rs)
+
+### NavigationLayout
+
+Panel treatment (web `NavigationMenuContent layout`).
+
+| Variant | Description |
+| --- | --- |
+| `Dropdown` | Compact frosted panel under the trigger (default). |
+| `Floating` | Wide "mega" panel centred in the window under the bar, ≤ 1000px (`navigationMenuMegaWidth`), on `backgroundPrimary`; fades and rises 6px over `duration-normal` (emphasized). |
+| `Overlay` | Full-width sheet from the bar's bottom edge over a scrim; its height grows over `duration-panel` (panel curve). Hovering or clicking the scrim closes it. |
+

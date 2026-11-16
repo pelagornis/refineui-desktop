@@ -1,0 +1,71 @@
+---
+title: Checkbox
+description: "Checked, unchecked and indeterminate checkboxes with optional label and description."
+sidebar:
+  order: 13
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Checked, unchecked and indeterminate checkboxes with optional label and description.
+
+<Screenshot id="checkbox" alt="Checkbox variants and states" />
+
+## Usage
+
+- Pass a `bool` or a `CheckState`; clicking an indeterminate box reports `true`.
+
+```rust
+use refineui::prelude::*;
+
+Checkbox::new("sync", self.sync)
+    .label("Sync settings")
+    .description("Keep preferences in sync across devices.")
+    .on_change(cx.listener(|this, on: &bool, _, cx| {
+        this.sync = *on;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story checkbox
+```
+
+## Motion
+
+Fill and check mark fade in over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/checkbox.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/checkbox.rs)
+
+### Checkbox
+
+A checkbox with optional label. Toggles on click, Enter or Space.  States follow `refineui.css`: unchecked hover → `borderSubtle`, pressed → `borderStrong`; checked → brand / brandHover / brandActive; keyboard focus → 2px `borderStrong` (checked: `brandActive` fill + `borderFocus`). Colors transition over `duration-fast`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, state: impl Into<CheckState>) -> Self` | New checkbox. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Label (`labelMd`). |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Helper text below the label (`captionMd`). |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn variant(mut self, variant: CheckboxVariant) -> Self` | Shape variant. |
+| `fn circular(mut self, circular: bool) -> Self` | Round indicator (web `variant="circular"`). |
+| `fn on_change(mut self, f: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self` | Called with the new value. |
+
+### CheckState
+
+Tri-state check value.
+
+| Variant | Description |
+| --- | --- |
+| `Unchecked` | Unchecked (default). |
+| `Checked` | Checked. |
+| `Indeterminate` | Mixed. |
+
+| Method | Description |
+| --- | --- |
+| `fn is_checked(self) -> bool` | `true` when checked. |
+

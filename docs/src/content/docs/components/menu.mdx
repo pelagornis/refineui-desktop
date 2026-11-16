@@ -1,0 +1,87 @@
+---
+title: Menu
+description: "Action list anchored to a trigger (web `Menu` / `MenuPopover`)."
+sidebar:
+  order: 42
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Action list anchored to a trigger (web `Menu` / `MenuPopover`).
+
+<Screenshot id="menu" alt="Menu variants and states" />
+
+## Usage
+
+- Menus close on selection, Escape or a click outside. ↑/↓ move, Enter activates.
+- Rows: `p sizeSmall`, radius large, gap `sizeXSmall`; titles `bodyMd`, shortcuts `bodyXs` tertiary; the panel is `min-w 200`, `p4`, radius 16 on the frosted surface.
+- `Menu::submenu(item, menu)` adds a hover-opened submenu (chevron row).
+- For right click at the pointer, use [Context Menu](/components/context-menu/).
+
+```rust
+use refineui::prelude::*;
+
+DropdownMenu::new(
+    "file",
+    Button::new("file-btn", "Open").variant(ButtonVariant::Secondary),
+    Menu::new("file-menu")
+        .label("File")
+        .item(MenuItem::new("New").icon(IconName::Add).shortcut("⌘N").on_click(|_, _| {}))
+        .divider()
+        .item(MenuItem::new("Delete").icon(IconName::Delete).shortcut("⌘⌫")),
+);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story menu
+```
+
+## Motion
+
+Panel fades in (frosted motion); one hover plate slides between rows over `duration-medium` (emphasized) — fading in where it first lands, out in place; rows scale to 0.98 when pressed; submenus open on hover.
+
+## API
+
+Source: [`crates/refineui/src/components/menu.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/menu.rs)
+
+### Menu
+
+A menu panel (static). Use `DropdownMenu` / `ContextMenu` for popups.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty menu. |
+| `fn item(mut self, item: MenuItem) -> Self` | Add an item. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Add a group label. |
+| `fn divider(mut self) -> Self` | Add a divider line (web `MenuDivider`). |
+| `fn separator(self) -> Self` | Deprecated name of `Self::divider`. |
+| `fn submenu(mut self, item: MenuItem, menu: Menu) -> Self` | Add a row that opens `menu` to its side on hover (web `ContextMenuSub` + `SubTrigger` + `SubContent`): placed at the row's right edge, flipping left when it would leave the window. |
+| `fn width(mut self, width: Pixels) -> Self` | Panel width. |
+
+### MenuItem
+
+Clickable menu row.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | New item. |
+| `fn action(mut self, name: impl Into<SharedString>) -> Self` | Run a GPUI action by name (`"workspace::Save"`, built from GPUI's action registry and dispatched to the focused element) and show its shortcut from the installed `crate::interaction::keymap::Keymap` unless `Self::shortcut` overrides it. An explicit `Self::on_click` runs instead of the dispatch. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn description(mut self, description: impl Into<SharedString>) -> Self` | Secondary line under the label (`bodyXs`, `foregroundTertiary`). |
+| `fn shortcut(mut self, s: impl Into<SharedString>) -> Self` | Shortcut hint (`⌘C`). |
+| `fn checked(mut self, checked: bool) -> Self` | Check mark. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn danger(mut self, danger: bool) -> Self` | Destructive styling. |
+| `fn on_click(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Activation handler. |
+
+### DropdownMenu
+
+A trigger that opens a `Menu` below it.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, trigger: impl IntoElement, menu: Menu) -> Self` | New dropdown. `trigger` is any element (usually a `crate::Button` with `icon_end(ChevronDown)`). |
+| `fn align_end(mut self) -> Self` | Align the menu's right edge with the trigger. |
+

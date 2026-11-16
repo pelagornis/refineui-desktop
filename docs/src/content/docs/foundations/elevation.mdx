@@ -1,0 +1,62 @@
+---
+title: Elevation
+description: "Shadow (key + ambient) and radius tokens."
+sidebar:
+  order: 2
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Shadow (key + ambient) and radius tokens.
+
+<Screenshot id="elevation" alt="Elevation variants and states" />
+
+## Usage
+
+- Use `cx.theme().shadow(Elevation::FLOATING)` or the `StyledExt::elevation` helper.
+
+```rust
+use refineui::prelude::*;
+
+div().rounded(px(12.)).shadow(cx.theme().shadow(Elevation::RAISED))
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story elevation
+```
+
+## API
+
+Source: [`crates/refineui/src/theme.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/theme.rs)
+
+### Theme
+
+The active RefineUI theme. Read it with `ActiveTheme::theme`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(appearance: Appearance) -> Self` | A theme for an explicit appearance. |
+| `fn init(cx: &mut App)` | Install the default (light, system-following) theme if none is set. |
+| `fn is_dark(&self) -> bool` | Whether the theme is dark. |
+| `fn set_appearance(appearance: Appearance, cx: &mut App)` | Switch appearance and repaint every window. |
+| `fn toggle_appearance(cx: &mut App)` | Toggle between light and dark. |
+| `fn desktop(&self) -> refineui_tokens::size::DesktopMetrics` | Shell / workspace metrics for the current density. |
+| `fn set_density(density: Density, cx: &mut App)` | Change density and repaint. |
+| `fn sync_system_appearance(window: &Window, cx: &mut App)` | If `Self::follow_system` is set, adopt the window's OS appearance. Call from a `cx.observe_window_appearance` callback. |
+| `fn shadow(&self, elevation: Elevation) -> Vec<BoxShadow>` | GPUI box shadows for an elevation step in the current appearance. |
+| `fn focus_ring(&self) -> Vec<BoxShadow>` | Focus ring — `outline: 2px solid var(--refineui-focus-color)` with a 2px offset (`semantic/focus.ts`). GPUI has no outlines, so it is drawn as two zero-blur shadows: the ring, then a gap in the page background on top. |
+| `fn focus_ring_color(&self, color: Hsla) -> Vec<BoxShadow>` | Focus ring in a specific color (2px, 2px offset) — e.g. Switch / Slider use `borderFocus`. |
+| `fn ring(&self, color: Hsla, width: f32) -> Vec<BoxShadow>` | A ring hugging the element (no offset) — inputs' 0.5px focus halo, inset rings. |
+| `fn floating_fill(&self) -> Hsla` | The one fill for every frosted floating surface (Menu and its submenus, ContextMenu, Dropdown, Select, Popover, Tooltip, SidebarPeek): web `surfaceFrosted` pre-composited over `backgroundPrimary`. GPUI cannot blur what is behind a panel (`backdrop-filter`), so a raw translucent fill would show the content behind sharply; this is the color the frost produces over a plain page, and it is always fully opaque. |
+| `fn frosted_fill(&self) -> Hsla` | Alias of `Self::floating_fill`. |
+| `fn focus_color(&self) -> Hsla` | `--refineui-focus-color`: primary black (light) / neutral white (dark). |
+| `fn button_metrics(&self, size: ControlSize) -> ControlMetrics` | Button metrics for a size in the current density. |
+| `fn field_metrics(&self, size: ControlSize) -> ControlMetrics` | Text-field metrics (Input, SpinButton, SearchField, Textarea). |
+| `fn select_metrics(&self, size: ControlSize) -> ControlMetrics` | Select trigger metrics. |
+| `fn chip_metrics(&self, size: ControlSize) -> ControlMetrics` | Chip metrics. |
+| `fn row_inset(&self) -> f32` | Extra vertical padding (per side) that turns a web-parity row (Comfortable, 32px) into this density's row: −3 compact, 0 comfortable, +4 spacious. Rows apply it on top of their web padding, so Comfortable stays pixel-identical to the web. |
+| `fn tab_inset(&self) -> f32` | Same as `Self::row_inset` for tabs (desktop `tab_height`). |
+| `fn row_height(&self) -> Pixels` | List / menu row height. |
+

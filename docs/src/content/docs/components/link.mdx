@@ -1,0 +1,51 @@
+---
+title: Link
+description: "Inline text link that opens a URL or runs a handler."
+sidebar:
+  order: 7
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Inline text link that opens a URL or runs a handler.
+
+<Screenshot id="link" alt="Link variants and states" />
+
+## Usage
+
+- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
+- With `href` the link opens the URL in the default browser via `cx.open_url`.
+
+```rust
+use refineui::prelude::*;
+
+Link::new("docs", "Read the docs").href("https://github.com/pelagornis/refineui-gpui");
+Link::new("gpui", "GPUI").href("https://gpui.rs").external(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story link
+```
+
+## Motion
+
+Color and underline change over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/link.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/link.rs)
+
+### Link
+
+Inline text link.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | New link. |
+| `fn href(mut self, href: impl Into<SharedString>) -> Self` | URL opened with `cx.open_url` when clicked. |
+| `fn external(mut self, external: bool) -> Self` | Show the "opens externally" glyph. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Custom click handler (instead of / in addition to `href`). Disabled (`foregroundDisabled`, no underline, not clickable). |
+| `fn on_click(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Click handler (runs before `href` opens). |
+

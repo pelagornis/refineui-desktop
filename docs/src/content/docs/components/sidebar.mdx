@@ -1,0 +1,96 @@
+---
+title: Sidebar
+description: "App navigation landmark with a brand header, scrolling groups, footer, trigger and edge peek."
+sidebar:
+  order: 37
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+App navigation landmark with a brand header, scrolling groups, footer, trigger and edge peek.
+
+<Screenshot id="sidebar" alt="Sidebar variants and states" />
+
+## Usage
+
+- Inside a `ResizablePanel` use `.fill()`; standalone, `.width(px)` + `.collapsed(bool)` animates the width to 0 with the rail frozen.
+- `sidebar_trigger(id, open, on_toggle)` is the web `SidebarTrigger` (secondary, `panel-left`).
+- `SidebarPeek` floats a frosted copy in from the left edge while the sidebar is collapsed (hover the 12px edge for `duration-medium`).
+- The content region is a `ScrollArea`, so group rows get the edge blur; footer rows do not.
+
+```rust
+use refineui::prelude::*;
+
+ResizablePanelGroup::new("app")
+    .panel(
+        ResizablePanel::new().size(32.).min_size(0.).max_size(48.).child(
+            Sidebar::new("nav")
+                .fill()
+                .brand("RefineUI")
+                .group(Some("Product"), [SidebarItem::new("overview", "Overview").icon(IconName::Search)])
+                .footer_item(SidebarItem::new("account", "Pelagornis").icon(IconName::Person))
+                .selected(self.route.clone())
+                .on_select(cx.listener(|this, id: &SharedString, _, cx| {
+                    this.route = id.clone();
+                    cx.notify();
+                })),
+        ),
+    )
+    .handle(ResizableHandle::new().with_handle(true))
+    .panel(ResizablePanel::new().size(68.).min_size(30.).child(main))
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story sidebar
+```
+
+## Motion
+
+A hover plate slides between links over `duration-medium` (emphasized); link color and the active plate tween over `duration-fast`; collapsing animates the width over `duration-panel` (panel curve) with the rail frozen; the peek panel slides in over `duration-overlay` (standard).
+
+## API
+
+Source: [`crates/refineui/src/components/sidebar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/sidebar.rs)
+
+### Sidebar
+
+App navigation landmark.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | New sidebar, 256px wide (`sidebarWidth`). Use `Self::fill` inside a resizable panel, like the web demo. |
+| `fn header(mut self, el: impl IntoElement) -> Self` | Custom header content (inside `SidebarHeader`). |
+| `fn brand(mut self, text: impl Into<SharedString>) -> Self` | `SidebarBrand` text in the header. |
+| `fn footer(mut self, el: impl IntoElement) -> Self` | Custom footer content (inside `SidebarFooter`). |
+| `fn footer_item(mut self, item: SidebarItem) -> Self` | A link row in the footer (web demo: the account row). |
+| `fn group(mut self, label: Option<&str>, items: impl IntoIterator<Item = SidebarItem>) -> Self` | Add a group (`SidebarGroup` with an optional `SidebarGroupLabel`). |
+| `fn selected(mut self, id: impl Into<SharedString>) -> Self` | Current page (`active` link). |
+| `fn width(mut self, w: Pixels) -> Self` | Fixed width. |
+| `fn fill(mut self) -> Self` | Fill the parent (web `w-full flex-1`), e.g. inside a `crate::ResizablePanel`. |
+| `fn collapsed(mut self, collapsed: bool) -> Self` | Collapse a fixed-width sidebar to 0 (`duration-panel`, panel easing). The rail keeps its width while the edge closes over it, like the web demo's frozen rail. |
+| `fn embedded(mut self, embedded: bool) -> Self` | Inside a `SidebarPeek` panel: transparent, no end border. |
+| `fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Link click. |
+
+### SidebarItem
+
+One navigation item (web `SidebarLink`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | New item. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading glyph (`iconSizes.small`). |
+| `fn badge(mut self, badge: impl Into<SharedString>) -> Self` | Trailing badge. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled link (`aria-disabled`). |
+
+### SidebarPeek
+
+Web `SidebarPeek` (contained mode): while the docked sidebar is collapsed, resting on the 12px left edge for `duration-medium` slides a floating frosted copy in (`duration-overlay`, standard easing). Leaving both the edge and the panel closes it after `duration-medium`. The panel has a pin button (ghost `panel-left`) that re-docks the sidebar.  Put it in a `relative()` container over the main area; it renders the edge strip and the floating panel as absolute children.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, enabled: bool, width: Pixels) -> Self` | New peek layer, `width` = flyout width. |
+| `fn panel(mut self, el: impl IntoElement) -> Self` | The sidebar to show (use `Sidebar::embedded` + `Sidebar::fill`). |
+| `fn on_pin(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Pin button handler (re-dock). |
+

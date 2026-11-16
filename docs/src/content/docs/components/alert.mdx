@@ -1,0 +1,65 @@
+---
+title: Alert
+description: "Inline message banner for info, success, warning and danger states."
+sidebar:
+  order: 24
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Inline message banner for info, success, warning and danger states.
+
+<Screenshot id="alert" alt="Alert variants and states" />
+
+## Usage
+
+- Default variant is `Info`. Add an `action` button or an `on_close` dismiss handler.
+
+```rust
+use refineui::prelude::*;
+
+Alert::new("offline", "You are offline")
+    .variant(AlertVariant::Warning)
+    .description("Changes will sync when you reconnect.");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story alert
+```
+
+## API
+
+Source: [`crates/refineui/src/components/alert.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/alert.rs)
+
+### Alert
+
+Inline status message.  Web anatomy: `backgroundPrimary` root with a thin `borderDefault` border, `roundedXLarge`, `sizeLarge × sizeMedium` padding; a 24px circular icon slot in the variant color; title + description in `captionLg` medium; optional ghost `sm` close button; actions are primary `sm` buttons right-aligned beneath. Default variant is `info`, as on the web.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self` | New alert (`info`). |
+| `fn variant(mut self, variant: AlertVariant) -> Self` | Intent. |
+| `fn icon(mut self, icon: IconName) -> Self` | Replace the variant icon. |
+| `fn description(mut self, description: impl Into<SharedString>) -> Self` | Secondary text. |
+| `fn action(mut self, action: impl IntoElement) -> Self` | Action row element (web `AlertAction`: a primary `sm` `crate::Button`). |
+| `fn on_close(mut self, f: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Show a close button. |
+
+### AlertVariant
+
+Alert intent.
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Neutral. |
+| `Info` | Blue (default). |
+| `Success` | Green. |
+| `Warning` | Yellow. |
+| `Danger` | Red. |
+| `Custom` | Purple (`discovery`). |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+

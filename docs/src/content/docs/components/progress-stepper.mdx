@@ -1,0 +1,62 @@
+---
+title: Progress Stepper
+description: "Multi-step process completion indicator."
+sidebar:
+  order: 29
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Multi-step process completion indicator.
+
+<Screenshot id="progress-stepper" alt="Progress Stepper variants and states" />
+
+## Usage
+
+- A 16px pill track whose fill ends just past the current pip; pips are inset 8px from each end.
+- Steps before `current` are complete. With `on_change` steps are clickable and focusable (Enter or Space activates); `disabled_step` dims a step and makes it inert.
+
+```rust
+use refineui::prelude::*;
+
+ProgressStepper::new("checkout", ["Cart", "Shipping", "Payment", "Review"], self.step)
+    .on_change(cx.listener(|this, ix: &usize, _, cx| {
+        this.step = *ix;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story progress-stepper
+```
+
+## Motion
+
+The fill width moves with `duration-panel` (emphasized); pips and labels recolor over `duration-fast`, and upcoming steps preview `foregroundSecondary` on hover.
+
+## API
+
+Source: [`crates/refineui/src/components/progress_stepper.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/progress_stepper.rs)
+
+### ProgressStepper
+
+Compact pill-track step progress (web `ProgressStepper`).  ```ignore ProgressStepper::new("checkout", ["Cart", "Shipping", "Payment", "Review"], self.step) .on_change(cx.listener(\|this, ix, _, cx\| { this.step = *ix; cx.notify(); })); ```
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, steps: impl IntoIterator<Item = impl Into<SharedString>>, current: usize) -> Self` | Steps with `current` (0-based) active. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Make steps clickable (web `onValueChange`); Enter / Space activate the focused step. |
+| `fn disabled_step(mut self, ix: usize) -> Self` | Disable step `ix` (web `ProgressStepperItem disabled`): half opacity, not clickable. |
+
+### StepState
+
+Step state relative to the current step (web `ProgressStepperState`).
+
+| Variant | Description |
+| --- | --- |
+| `Complete` | Before the current step. |
+| `Current` | The current step. |
+| `Upcoming` | After the current step. |
+

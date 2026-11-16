@@ -1,0 +1,66 @@
+---
+title: Calendar
+description: "Month grid date picker with month navigation."
+sidebar:
+  order: 41
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Month grid date picker with month navigation.
+
+<Screenshot id="calendar" alt="Calendar variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Calendar::new("due", Date::new(2026, 11, 1))
+    .today(Date::new(2026, 11, 10))
+    .selected(self.due)
+    .on_select(cx.listener(|this, d: &Date, _, cx| {
+        this.due = Some(*d);
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story calendar
+```
+
+## Motion
+
+Day plates tween over `duration-normal` (emphasized) and press to 0.96; range mode shows two months with an endpoint band.
+
+## API
+
+Source: [`crates/refineui/src/components/calendar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/calendar.rs)
+
+### Calendar
+
+Month view with previous/next navigation. Uncontrolled month, controlled selection.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, month: Date) -> Self` | Calendar initially showing `month`. |
+| `fn selected(mut self, d: Option<Date>) -> Self` | Selected date. |
+| `fn range(mut self, start: Option<Date>, end: Option<Date>) -> Self` | Range mode with the current `start` / `end` (web `mode="range"`). |
+| `fn today(mut self, d: Date) -> Self` | Highlight "today". |
+| `fn on_select(mut self, f: impl Fn(&Date, &mut Window, &mut App) + 'static) -> Self` | Date click. |
+| `fn on_range_change(mut self, f: impl Fn(Option<Date>, Option<Date>, &mut Window, &mut App) + 'static) -> Self` | Range change (range mode), see `next_range`. |
+| `fn bare(mut self, bare: bool) -> Self` | Drop the root border / fill (web `calendarContent` inside DateInput). |
+
+### Date
+
+A calendar date (proleptic Gregorian).
+
+| Method | Description |
+| --- | --- |
+| `fn new(year: i32, month: u32, day: u32) -> Self` | New date (not validated beyond clamping the day). |
+| `fn weekday(self) -> u32` | Day of week, 0 = Sunday. |
+| `fn add_months(self, delta: i32) -> Self` | First day of the month `delta` months away. |
+

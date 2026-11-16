@@ -1,0 +1,62 @@
+---
+title: Tree
+description: "Expandable hierarchical list (file trees, outlines)."
+sidebar:
+  order: 38
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Expandable hierarchical list (file trees, outlines).
+
+<Screenshot id="tree" alt="Tree variants and states" />
+
+## Usage
+
+- Expansion state is kept internally; seed it with `default_expanded`.
+- Sizes map to `bodySm / bodyMd / bodyLg`; each depth indents by 22px.
+
+```rust
+use refineui::prelude::*;
+
+Tree::new("files", vec![
+    TreeNode::branch("src", "src", vec![TreeNode::leaf("lib", "lib.rs")]),
+])
+.default_expanded(["src"]);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story tree
+```
+
+## Motion
+
+A hover plate slides between rows over `duration-medium` (emphasized). Chevron rotates 90° over `duration-medium` (emphasized); children expand with the accordion panel motion.
+
+## API
+
+Source: [`crates/refineui/src/components/tree.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/tree.rs)
+
+### Tree
+
+Expandable hierarchy. Uncontrolled: remembers expansion and selection.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, nodes: Vec<TreeNode>) -> Self` | New tree. |
+| `fn default_expanded(mut self, ids: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Node ids expanded initially. |
+| `fn size(mut self, size: ControlSize) -> Self` | Selection callback (node id). Row size (`sm \| md \| lg` → `bodySm / bodyMd / bodyLg`). |
+| `fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Called with the selected node id. |
+
+### TreeNode
+
+A tree node.
+
+| Method | Description |
+| --- | --- |
+| `fn leaf(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | Leaf node. |
+| `fn branch(id: impl Into<SharedString>, label: impl Into<SharedString>, children: Vec<TreeNode>) -> Self` | Branch node. |
+| `fn icon(mut self, icon: IconName) -> Self` | Custom icon. |
+

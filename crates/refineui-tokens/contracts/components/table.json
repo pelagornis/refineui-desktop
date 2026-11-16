@@ -1,0 +1,117 @@
+{
+  "$schema": "../schema.json",
+  "id": "table",
+  "name": "Table",
+  "layer": "components",
+  "status": "adapt",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Table (virtualized, multi-select)",
+  "rust_types": [
+    "Table"
+  ],
+  "a11y_role": "grid",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "planned",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "row",
+    "compact": {
+      "row_height": 26
+    },
+    "comfortable": {
+      "row_height": 32
+    },
+    "spacious": {
+      "row_height": 40
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceHover",
+      "backgroundSurfaceSelected",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm"
+    ],
+    "motion": [
+      "motion.fast"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next row"
+    },
+    {
+      "keys": "up",
+      "action": "previous row"
+    },
+    {
+      "keys": "shift-down",
+      "action": "extend selection"
+    },
+    {
+      "keys": "secondary-a",
+      "action": "select all"
+    },
+    {
+      "keys": "enter",
+      "action": "open row"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

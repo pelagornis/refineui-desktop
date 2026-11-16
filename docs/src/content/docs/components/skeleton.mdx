@@ -1,0 +1,58 @@
+---
+title: Skeleton
+description: "Pulsing loading placeholder shapes."
+sidebar:
+  order: 30
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Pulsing loading placeholder shapes.
+
+<Screenshot id="skeleton" alt="Skeleton variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Skeleton::new().shape(SkeletonShape::Text).width(px(240.));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story skeleton
+```
+
+## Motion
+
+Opacity pulses 1 → 0.5 → 1 every 1.5s; static under reduced motion.
+
+## API
+
+Source: [`crates/refineui/src/components/skeleton.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/skeleton.rs)
+
+### Skeleton
+
+Loading placeholder.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Default rectangle (full width, 20px tall). |
+| `fn shape(mut self, shape: SkeletonShape) -> Self` | Shape. |
+| `fn width(mut self, w: Pixels) -> Self` | Width. |
+| `fn height(mut self, h: Pixels) -> Self` | Height. |
+| `fn animate(mut self, animate: bool) -> Self` | Disable the pulse (e.g. for reduced motion or screenshots). |
+
+### SkeletonShape
+
+Shape.
+
+| Variant | Description |
+| --- | --- |
+| `Rect` | Rounded rectangle (default). |
+| `Circle` | Circle (avatar placeholder). |
+| `Text` | Single text line. |
+

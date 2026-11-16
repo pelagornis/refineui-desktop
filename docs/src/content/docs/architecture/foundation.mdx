@@ -1,0 +1,37 @@
+---
+title: Foundation
+description: Tokens, theme, density, elevation, motion, blur, layers and cursor — what is shared and what is GPUI-specific.
+sidebar:
+  order: 3
+---
+
+## Preserved from web (`refineui-tokens`)
+
+Color (palette + 69 semantic aliases, light/dark), typography (16 styles,
+21 roles), spacing, sizing (`componentSizes`, icon sizes), radius, border
+(`stroke`), elevation (`shadow` / `Elevation`), opacity, motion (durations,
+easings, distances), blur (`blur`, `blur::role`). `scripts/sync_tokens.py`
+keeps colors in sync with the web `@refineui/tokens` source. The other
+values are checked against the web package by the token audit.
+
+## Extended / redesigned
+
+| Concern | Desktop decision |
+| --- | --- |
+| Layout | Split views, docks and panels replace responsive breakpoints. Size constraints come from `DesktopMetrics` and per-panel min/max sizes. The page `container()` is optional (`web-extras`). |
+| Z-index / layers | `z_index::DESKTOP_ORDER`: content < sticky < floating panel < overlay < popup < messages < tooltip < drag preview < debug. GPUI has no z-index; `foundation::LayerOrder::priority()` feeds `layer(..).priority(..)`. |
+
+## Introduced
+
+| Concern | Where | Notes |
+| --- | --- | --- |
+| Density | `Density::{Compact, Comfortable, Spacious}`, `Density::desktop()` | See [Density](/architecture/density/). |
+| Focus | `Theme::focus_ring`, `interaction::focus` | 2px `borderFocus` ring on keyboard focus only. Regions cycle with F6. |
+| Keyboard | `interaction::keymap` | Contexts, conflicts, platform labels. |
+| Interaction states | `contracts::InteractionState` | Default, hovered, pressed, focused, disabled, loading, selected, dragging. |
+| Window metrics | `refineui_tokens::window`, `platform` | Titlebar heights, controls, resize hit areas, minimum window size. |
+| Pointer and cursor | `foundation::CursorRole` | Desktop convention: arrow on buttons, hand only on links. |
+| Scroll behaviour | `ScrollArea` | Overlay scrollbars on macOS. Phase 2 adds a legacy (always-visible) style on Windows via the adapter. |
+| Selection | `interaction::selection` | See [Interaction model](/architecture/interaction/). |
+| Drag and drop | `interaction::dnd` | Drop edges, dock zones, reorder. |
+| Accessibility | contracts `a11y_role`, focus rules | Roles map to AccessKit when GPUI exposes it. Until then, keyboard and focus contracts are enforced. |

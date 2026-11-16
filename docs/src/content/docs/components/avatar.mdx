@@ -1,0 +1,133 @@
+---
+title: Avatar
+description: "Person initials, icon or image with presence glyphs, and stacked / spread groups."
+sidebar:
+  order: 22
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Person initials, icon or image with presence glyphs, and stacked / spread groups.
+
+<Screenshot id="avatar" alt="Avatar variants and states" />
+
+## Usage
+
+- Nine sizes from 16 to 60px (default 32). Initials use the neutral palette unless a `color` is set.
+- Presence draws the web glyphs: online dot, away crescent, unavailable bar, offline dot.
+
+```rust
+use refineui::prelude::*;
+
+Avatar::new("Grace Hopper").size(AvatarSize::Large).presence(Presence::Online);
+Avatars::new(["Ada", "Grace", "Alan", "Linus"]).max(3);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story avatar
+```
+
+## API
+
+Source: [`crates/refineui/src/components/avatar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/avatar.rs)
+
+### Avatar
+
+A user / entity picture with initials or icon fallback.
+
+| Method | Description |
+| --- | --- |
+| `fn new(name: impl Into<SharedString>) -> Self` | Avatar for `name` (initials fallback; empty name → person icon). |
+| `fn image(mut self, source: impl Into<ImageSource>) -> Self` | Picture (layout `image`). |
+| `fn size(mut self, size: AvatarSize) -> Self` | Size. |
+| `fn color(mut self, color: AvatarColor) -> Self` | Tint for icon / initials layouts. |
+| `fn layout(mut self, layout: AvatarLayout) -> Self` | Force a layout. |
+| `fn icon(mut self, icon: IconName) -> Self` | Glyph for the icon layout (default `Person`). |
+| `fn presence(mut self, presence: Presence) -> Self` | Status glyph at the bottom-end corner (web `showStatus` + `status`). |
+
+### AvatarSize
+
+Avatar size (web `3xs \| 2xs \| xs \| sm \| md \| lg \| xl \| 2xl \| 3xl`).
+
+| Variant | Description |
+| --- | --- |
+| `XXXSmall` | 16px |
+| `XXSmall` | 20px |
+| `XSmall` | 24px |
+| `Small` | 28px |
+| `Medium` | 32px (default) |
+| `Large` | 36px |
+| `XLarge` | 48px |
+| `XXLarge` | 54px |
+| `XXXLarge` | 60px |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Web alias (`md`, `2xl`, …). |
+| `fn px(self) -> f32` | Diameter in px. |
+
+### AvatarColor
+
+Global tint for icon / initials avatars (web `color`).
+
+| Variant | Description |
+| --- | --- |
+| `Neutral` | `neutral300` / `neutral850` (default) |
+| `Blue` | Blue |
+| `Green` | Green |
+| `Lime` | Lime |
+| `Magenta` | Magenta |
+| `Orange` | Orange |
+| `Purple` | Purple |
+| `Red` | Red |
+| `Teal` | Teal |
+| `Yellow` | Yellow |
+
+| Method | Description |
+| --- | --- |
+| `fn colors(self) -> (Hsla, Hsla)` | `(shell background, glyph / initials ink)` — `avatar.shell.background.*` (`*100`) and `avatar.icon.*` (`*1000`). |
+
+### AvatarLayout
+
+Avatar layout (web `layout`).
+
+| Variant | Description |
+| --- | --- |
+| `Initials` | Initials from the name. |
+| `Icon` | Person glyph. |
+
+### Presence
+
+Presence status (Web Kit `Avatar/Status`).
+
+| Variant | Description |
+| --- | --- |
+| `Online` | `green500` dot. |
+| `Away` | `yellow300` crescent. |
+| `Unavailable` | `red500` dot with a white bar. |
+| `Offline` | `neutral300` dot. |
+
+### Avatars
+
+A row of avatars with a `+N` count bubble — web `Avatars`: `stack` overlaps each avatar by `--avatar-stack-overlap` (4–12px by size; md = 6) with later avatars painted on top (ascending `z-index`) and the same overlap as trailing padding; `spread` uses the size's gap (md = 10). No extra ring — each avatar keeps its 1px `borderSubtle` shell. The count bubble is a thin `borderDefault` circle on `backgroundPrimary`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(names: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Group of initials avatars for these names. |
+| `fn from_avatars(avatars: impl IntoIterator<Item = Avatar>) -> Self` | Group of prepared avatars (images, icons, colors). Their size is overridden by `Self::size`. |
+| `fn size(mut self, size: AvatarSize) -> Self` | Size. |
+| `fn layout(mut self, layout: AvatarsLayout) -> Self` | Stack or spread. |
+| `fn max(mut self, max: usize) -> Self` | Visible avatars before the `+N` bubble. |
+| `fn total(mut self, total: usize) -> Self` | Total member count when it exceeds the avatars passed in (web `total`). |
+
+### AvatarsLayout
+
+Group layout (web `AvatarGroup layout`).
+
+| Variant | Description |
+| --- | --- |
+| `Stack` | Overlapping (default). |
+| `Spread` | Spaced out. |
+

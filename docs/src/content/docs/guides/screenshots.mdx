@@ -1,0 +1,35 @@
+---
+title: Screenshots
+description: How the component screenshots in these docs are produced.
+---
+
+Every component page shows a capture of its gallery story, in light and dark.
+They are produced by the `refineui-screenshots` binary, which opens each story
+in its own window at a fixed size, captures only that window, trims the empty
+background and writes:
+
+```
+docs/src/assets/components/<story-id>-light.png
+docs/src/assets/components/<story-id>-dark.png
+```
+
+## Regenerate
+
+```sh
+./scripts/screenshots.sh              # every story
+./scripts/screenshots.sh button,input # only these
+```
+
+- **macOS**: uses `screencapture -l <window-id>`. The first run needs the
+  *Screen Recording* permission for your terminal (System Settings → Privacy &
+  Security → Screen Recording); rerun afterwards.
+- **Linux**: uses the X11 server in `$DISPLAY` or starts `Xvfb`, rendering at 2x.
+
+If a capture is missing, the page shows a labelled placeholder instead, so the
+docs always build.
+
+## Add a story
+
+Stories live in `examples/gallery/src/stories/`. Each `Story` has an `id`
+(the docs slug), a group, a summary, a capture size and a render function.
+The same function drives the gallery page and the screenshot.

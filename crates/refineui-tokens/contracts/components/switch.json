@@ -1,0 +1,90 @@
+{
+  "$schema": "../schema.json",
+  "id": "switch",
+  "name": "Switch",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Switch"
+  ],
+  "a11y_role": "switch",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover border / fill"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "active fill"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on :focus-visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "implemented",
+      "visual": "checked / on: backgroundBrand + foregroundOnBrand"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandActive",
+      "backgroundBrandHover",
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundSurfaceDisabled",
+      "backgroundSurfaceSelected",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundPrimary"
+    ],
+    "radius": [
+      "roundedXLarge"
+    ],
+    "spacing": [
+      "sizeSmall"
+    ],
+    "typography": [
+      "labelMd"
+    ],
+    "motion": [
+      "motion.medium"
+    ],
+    "elevation": [
+      "elevation.surface"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "space",
+      "action": "toggle"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

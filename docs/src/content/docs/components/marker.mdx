@@ -1,0 +1,57 @@
+---
+title: Marker
+description: "Timeline marker — inline or as a divider — with an optional live pulse (web `Marker`)."
+sidebar:
+  order: 69
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Timeline marker — inline or as a divider — with an optional live pulse (web `Marker`).
+
+<Screenshot id="marker" alt="Marker variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Marker::new("today", "Today").variant(MarkerVariant::Divider);
+Marker::new("live", "Live").status(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story marker
+```
+
+## Motion
+
+The status dot pulses like Skeleton (1.5s).
+
+## API
+
+Source: [`crates/refineui/src/components/marker.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/marker.rs)
+
+### Marker
+
+An inline conversation annotation.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Self` | New marker. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon (web `MarkerIcon`). |
+| `fn variant(mut self, variant: MarkerVariant) -> Self` | Layout variant. |
+| `fn status(mut self, status: bool) -> Self` | Live status text (web `role="status"`): pulses. |
+
+### MarkerVariant
+
+Marker layout (web `MarkerVariant`).
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Icon + text. |
+| `Divider` | Text centered between two rules. |
+

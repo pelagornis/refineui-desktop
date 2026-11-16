@@ -1,0 +1,44 @@
+---
+title: Label
+description: "Form label in three sizes with a required marker (web `Label`)."
+sidebar:
+  order: 64
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Form label in three sizes with a required marker (web `Label`).
+
+<Screenshot id="label" alt="Label variants and states" />
+
+## Usage
+
+- Use inside `Field` or next to any control.
+
+```rust
+use refineui::prelude::*;
+
+Label::new("Email").required(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story label
+```
+
+## API
+
+Source: [`crates/refineui/src/components/text.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/text.rs)
+
+### Label
+
+Form label — web `Label` (`sm \| md \| lg`, required marker).
+
+| Method | Description |
+| --- | --- |
+| `fn new(text: impl Into<SharedString>) -> Self` | New label. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn required(mut self, required: bool) -> Self` | Append a required `*`. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled color. |
+

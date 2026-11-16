@@ -1,0 +1,60 @@
+---
+title: Selection Box
+description: "Rubber-band (marquee) selection over a grid or list, with click, ⌘/Ctrl-click, Shift-click and keyboard selection."
+sidebar:
+  order: 58
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Rubber-band (marquee) selection over a grid or list, with click, ⌘/Ctrl-click, Shift-click and keyboard selection.
+
+<Screenshot id="selection-box" alt="Selection Box variants and states" />
+
+## Usage
+
+- Press on empty space and drag: items touching the marquee are selected live; Shift or ⌘/Ctrl adds to the previous selection. A press under 4px clears it.
+- Click selects, ⌘/Ctrl-click toggles, Shift-click extends from the anchor. ⌘/Ctrl-A selects all, Escape clears, arrows move (Shift extends).
+- Selected items sit on a `backgroundBrandSubtle` plate with a `borderFocus` hairline; the marquee is `backgroundBrandSubtle` at 60% with a hairline outline.
+
+```rust
+use refineui::prelude::*;
+
+SelectionArea::new("files")
+    .item("a.png", tile("a.png"))
+    .item("b.png", tile("b.png"))
+    .selected(["a.png"])
+    .on_change(|keys, _, _| println!("{} selected", keys.len()));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story selection-box
+```
+
+## API
+
+Source: [`crates/refineui/src/components/selection_box.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/selection_box.rs)
+
+### SelectionArea
+
+Selectable item canvas with a marquee. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty area. |
+| `fn item(mut self, key: impl Into<SharedString>, element: impl IntoElement) -> Self` | Add an item with a unique key. |
+| `fn layout(mut self, layout: SelectionLayout) -> Self` | Item layout. |
+| `fn selected(mut self, keys: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Selection on first render. |
+| `fn on_change(mut self, f: impl Fn(&[SharedString], &mut Window, &mut App) + 'static) -> Self` | Called whenever the selection changes (live while dragging). |
+
+### SelectionLayout
+
+How items are laid out.
+
+| Variant | Description |
+| --- | --- |
+| `Wrap` | Wrapping rows of tiles (icon view). |
+| `Column` | One item per row (list view). |
+

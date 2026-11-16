@@ -1,0 +1,26 @@
+diff --git a/overrides/Footer.astro b/overrides/Footer.astro
+index 513930bf8eed2e3a05b92cd75d22b02e3c014af7..2a82de9e2145847df090b4dc78a4b07741c35d8d 100644
+--- a/overrides/Footer.astro
++++ b/overrides/Footer.astro
+@@ -23,7 +23,7 @@ function localizedPathname(localeCode: string | undefined): string {
+   const htmlExt = ".html";
+   const isRootHtml = baseSegment?.endsWith(htmlExt);
+   const baseSlug = isRootHtml ? baseSegment?.slice(0, -1 * htmlExt.length) : baseSegment;
+-  if (baseSlug && baseSlug in config.locales) {
++  if (baseSlug && config.locales && baseSlug in config.locales) {
+     if (localeCode) url.pathname = url.pathname.replace(baseSlug, localeCode);
+     else if (isRootHtml) url.pathname = "/index.html";
+     else url.pathname = url.pathname.replace("/" + baseSlug, "");
+diff --git a/overrides/LanguageSelect.astro b/overrides/LanguageSelect.astro
+index 79a0c4906112869db2e83db518270e044eb66b16..1ea081ff03c768b8f3cc4321c21a6890045edb5e 100644
+--- a/overrides/LanguageSelect.astro
++++ b/overrides/LanguageSelect.astro
+@@ -17,7 +17,7 @@ function localizedPathname(locale: string | undefined): string {
+   const htmlExt = '.html';
+   const isRootHtml = baseSegment?.endsWith(htmlExt);
+   const baseSlug = isRootHtml ? baseSegment?.slice(0, -1 * htmlExt.length) : baseSegment;
+-  if (baseSlug && baseSlug in config.locales) {
++  if (baseSlug && config.locales && baseSlug in config.locales) {
+     if (locale) url.pathname = url.pathname.replace(baseSlug, locale);
+     else if (isRootHtml) url.pathname = '/index.html';
+     else url.pathname = url.pathname.replace('/' + baseSlug, '');

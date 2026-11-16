@@ -1,0 +1,65 @@
+---
+title: Result
+description: "Outcome screen with an icon, title, description and actions (web `Result`)."
+sidebar:
+  order: 66
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Outcome screen with an icon, title, description and actions (web `Result`).
+
+<Screenshot id="result" alt="Result variants and states" />
+
+## Usage
+
+- Named `ResultView` so it does not shadow `std::result::Result` in glob imports.
+- The variant picks the status icon and color; `figure` replaces the icon with any element.
+
+```rust
+use refineui::prelude::*;
+
+ResultView::new(ResultVariant::Success)
+    .title("Payment received")
+    .description("Your receipt was sent to your email.")
+    .action(Button::new("done", "Done").variant(ButtonVariant::Primary));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story result
+```
+
+## API
+
+Source: [`crates/refineui/src/components/result.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/result.rs)
+
+### ResultView
+
+Outcome panel: figure, title, description and actions.
+
+| Method | Description |
+| --- | --- |
+| `fn new(variant: ResultVariant) -> Self` | New result of a variant. |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Heading. |
+| `fn description(mut self, t: impl Into<SharedString>) -> Self` | Supporting text (newlines are kept, web `whitespace-pre-line`). |
+| `fn icon(mut self, icon: IconName) -> Self` | Replace the variant icon. |
+| `fn figure(mut self, figure: impl IntoElement) -> Self` | Replace the figure with any element (illustration, avatar…). |
+| `fn action(mut self, button: Button) -> Self` | Add a full-width action button (web `ResultButton`). |
+
+### ResultVariant
+
+Outcome tone (web `ResultVariant`, default `Info`).
+
+| Variant | Description |
+| --- | --- |
+| `Success` | Checkmark in `foregroundSuccess`. |
+| `Info` | Info glyph in `foregroundInfo` (default). |
+| `Warning` | Warning glyph in `foregroundWarning`. |
+| `Error` | Error circle in `foregroundError`. |
+
+| Method | Description |
+| --- | --- |
+| `fn icon(self) -> IconName` | Default icon (web `variantIcons`). |
+

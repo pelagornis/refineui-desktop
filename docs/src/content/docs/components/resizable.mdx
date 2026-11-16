@@ -1,0 +1,87 @@
+---
+title: Resizable
+description: "Panel group with draggable separators."
+sidebar:
+  order: 49
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Panel group with draggable separators.
+
+<Screenshot id="resizable" alt="Resizable variants and states" />
+
+## Usage
+
+- Sizes are percentages (`default_size` 50, `min_size` 10, `max_size` 100); a drag moves the boundary between the two neighbours within both limits.
+- `with_handle(true)` draws the 4×32 grip; the 12px hit area has no rule. Arrow keys move 2% (Shift 10%), Home / End jump to the limits.
+- `size(pct)` controls a panel; `on_layout` reports sizes when a drag or key resize settles.
+
+```rust
+use refineui::prelude::*;
+
+ResizablePanelGroup::new("split")
+    .panel(ResizablePanel::new().default_size(35.).min_size(20.).child(sidebar))
+    .handle(ResizableHandle::new().with_handle(true))
+    .panel(ResizablePanel::new().default_size(65.).min_size(30.).child(main))
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story resizable
+```
+
+## Motion
+
+The grip recolors `borderDefault` → `borderStrong` on hover, focus and drag over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/resizable.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/resizable.rs)
+
+### ResizablePanelGroup
+
+Panel group (web `ResizablePanelGroup`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | New horizontal group. |
+| `fn orientation(mut self, o: ResizableOrientation) -> Self` | Direction. |
+| `fn vertical(self) -> Self` | Stack panels vertically. |
+| `fn panel(mut self, p: ResizablePanel) -> Self` | Append a panel. |
+| `fn handle(mut self, h: ResizableHandle) -> Self` | Append a handle (between two panels). |
+| `fn on_layout(mut self, f: impl Fn(&[f32], &mut Window, &mut App) + 'static) -> Self` | Called after a drag / key resize settles with every panel's size (%). |
+
+### ResizablePanel
+
+One panel in a `ResizablePanelGroup`.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | New panel: `defaultSize` 50, `minSize` 10, `maxSize` 100. |
+| `fn default_size(mut self, pct: f32) -> Self` | Initial size (% of the group). |
+| `fn min_size(mut self, pct: f32) -> Self` | Minimum size (%). |
+| `fn max_size(mut self, pct: f32) -> Self` | Maximum size (%). |
+| `fn size(mut self, pct: f32) -> Self` | Controlled size (%). Applied whenever the value changes (drags in between move freely; report them back through `on_layout`). |
+| `fn child(mut self, el: impl IntoElement) -> Self` | Panel content. |
+
+### ResizableHandle
+
+Separator between two panels.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Invisible hit area. |
+| `fn with_handle(mut self, on: bool) -> Self` | Draw the center pill. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disable dragging (`opacity: 0.5`, no pointer). |
+
+### ResizableOrientation
+
+Group direction.
+
+| Variant | Description |
+| --- | --- |
+| `Horizontal` | Panels side by side (vertical handles, `col-resize`). |
+| `Vertical` | Panels stacked (horizontal handles, `row-resize`). |
+

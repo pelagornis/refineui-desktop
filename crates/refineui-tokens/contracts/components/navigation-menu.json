@@ -1,0 +1,125 @@
+{
+  "$schema": "../schema.json",
+  "id": "navigation-menu",
+  "name": "Navigation Menu",
+  "layer": "components",
+  "status": "optional",
+  "phase": 4,
+  "feature": "web-extras",
+  "desktop_target": null,
+  "rust_types": [
+    "NavigationMenu"
+  ],
+  "a11y_role": "navigation",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "planned",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "borderDefault",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary",
+      "surfaceOverlay"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedXLarge",
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "captionLg",
+      "captionMd"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.panel"
+    ],
+    "elevation": [
+      "elevation.raised"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next item"
+    },
+    {
+      "keys": "up",
+      "action": "previous item"
+    },
+    {
+      "keys": "right",
+      "action": "open submenu"
+    },
+    {
+      "keys": "left",
+      "action": "close submenu"
+    },
+    {
+      "keys": "enter",
+      "action": "activate item"
+    },
+    {
+      "keys": "escape",
+      "action": "close"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "pointer",
+    "hover_only": false
+  }
+}

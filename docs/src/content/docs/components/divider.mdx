@@ -1,0 +1,66 @@
+---
+title: Divider
+description: "Horizontal and vertical separators, optionally labelled or with a centered icon."
+sidebar:
+  order: 25
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Horizontal and vertical separators, optionally labelled or with a centered icon.
+
+<Screenshot id="divider" alt="Divider variants and states" />
+
+## Usage
+
+- Labels use `captionMd` in `foregroundBrand`; `align` moves the label to either end.
+
+```rust
+use refineui::prelude::*;
+
+Divider::horizontal().label("or");
+h_stack(8.).h(px(20.)).child("A").child(Divider::vertical()).child("B");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story divider
+```
+
+## API
+
+Source: [`crates/refineui/src/components/divider.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/divider.rs)
+
+### Divider
+
+A separating rule.
+
+| Method | Description |
+| --- | --- |
+| `fn horizontal() -> Self` | Horizontal divider. |
+| `fn vertical() -> Self` | Vertical divider. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Content layout with a label. |
+| `fn icon(mut self) -> Self` | Icon layout (brand ring glyph). |
+| `fn align(mut self, align: DividerAlign) -> Self` | Label / icon alignment. |
+| `fn strong(mut self, strong: bool) -> Self` | Use `borderStrong` (desktop addition for pane splitters). |
+
+### Axis
+
+Divider orientation.
+
+| Variant | Description |
+| --- | --- |
+| `Horizontal` | Full-width rule (default). |
+| `Vertical` | Full-height rule (desktop toolbars / split panes). |
+
+### DividerAlign
+
+Where the label / icon sits on a horizontal divider (web `align`).
+
+| Variant | Description |
+| --- | --- |
+| `Center` | Centered (default). |
+| `Left` | Short 8px leading segment. |
+| `Right` | Short 8px trailing segment. |
+

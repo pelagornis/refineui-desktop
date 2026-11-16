@@ -1,0 +1,49 @@
+---
+title: Textarea
+description: "Multi-line text input with soft wrap (web `Textarea`)."
+sidebar:
+  order: 9
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Multi-line text input with soft wrap (web `Textarea`).
+
+<Screenshot id="textarea" alt="Textarea variants and states" />
+
+## Usage
+
+- `Textarea::new(cx)` returns a multi-line `TextInput`; Enter inserts a newline.
+- Body text is `bodyMd`, the shell is `roundedLarge` with an 80px minimum height.
+
+```rust
+use refineui::prelude::*;
+
+let notes = cx.new(|cx| Textarea::new(cx).placeholder("Write a message…"));
+
+// in render():
+div().w(px(320.)).child(self.notes.clone())
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story textarea
+```
+
+## Motion
+
+Border and focus halo tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/input.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/input.rs)
+
+### Textarea
+
+Web `Textarea` — a multi-line `TextInput`. `cx.new(\|cx\| Textarea::new(cx))`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(cx: &mut Context<TextInput>) -> TextInput` | New multi-line input. |
+

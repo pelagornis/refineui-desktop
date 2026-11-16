@@ -1,0 +1,93 @@
+{
+  "$schema": "../schema.json",
+  "id": "accordion",
+  "name": "Accordion",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Accordion"
+  ],
+  "a11y_role": "region",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "trigger hover fill"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "trigger active fill"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on the trigger"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "trigger disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "implemented",
+      "visual": "expanded / open"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "radius": [
+      "roundedXLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyMd",
+      "bodySm",
+      "labelMd",
+      "subtitleLg"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.fastEase"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "toggle"
+    },
+    {
+      "keys": "space",
+      "action": "toggle"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

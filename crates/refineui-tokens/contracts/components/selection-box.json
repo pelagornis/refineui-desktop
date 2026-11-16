@@ -1,0 +1,102 @@
+{
+  "$schema": "../schema.json",
+  "id": "selection-box",
+  "name": "Selection Box",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Selection Box",
+  "rust_types": [
+    "SelectionArea"
+  ],
+  "a11y_role": "listbox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "implemented",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrandSubtle",
+      "borderFocus"
+    ],
+    "radius": [
+      "roundedLarge"
+    ],
+    "spacing": [
+      "sizeXSmall",
+      "sizeXxxSmall"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "secondary-a",
+      "action": "select all"
+    },
+    {
+      "keys": "escape",
+      "action": "clear selection"
+    },
+    {
+      "keys": "right",
+      "action": "next item"
+    },
+    {
+      "keys": "left",
+      "action": "previous item"
+    },
+    {
+      "keys": "shift-right",
+      "action": "extend selection"
+    },
+    {
+      "keys": "shift-left",
+      "action": "extend selection"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

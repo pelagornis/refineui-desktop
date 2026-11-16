@@ -1,0 +1,55 @@
+---
+title: Stepper
+description: "Numbered steps with checkmarks and animated connecting rails."
+sidebar:
+  order: 32
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Numbered steps with checkmarks and animated connecting rails.
+
+<Screenshot id="stepper" alt="Stepper variants and states" />
+
+## Usage
+
+- Steps before `current` are complete; clicking a step reports its index through `on_change`.
+
+```rust
+use refineui::prelude::*;
+
+Stepper::new("checkout", self.step)
+    .step_with_description("Account", "Create login")
+    .step("Billing")
+    .step("Done")
+    .on_change(cx.listener(|this, ix: &usize, _, cx| {
+        this.step = *ix;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story stepper
+```
+
+## Motion
+
+Indicators recolor over `duration-medium`; each connector is one rail between neighbouring markers that fills left → right over `duration-panel` (emphasized).
+
+## API
+
+Source: [`crates/refineui/src/components/stepper.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/stepper.rs)
+
+### Stepper
+
+Multi-step progress with numbered indicators.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, current: usize) -> Self` | New stepper with `current` (0-based) active. |
+| `fn step(mut self, title: impl Into<SharedString>) -> Self` | Add a step. |
+| `fn step_with_description(mut self, title: impl Into<SharedString>, description: impl Into<SharedString>) -> Self` | Add a step with a description. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Make steps clickable. |
+

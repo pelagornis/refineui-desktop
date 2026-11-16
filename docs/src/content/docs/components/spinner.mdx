@@ -1,0 +1,64 @@
+---
+title: Spinner
+description: "Indeterminate activity indicator."
+sidebar:
+  order: 27
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Indeterminate activity indicator.
+
+<Screenshot id="spinner" alt="Spinner variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Spinner::new().size(SpinnerSize::Medium).label("Loading…");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story spinner
+```
+
+## Motion
+
+A brand arc rotates every 800ms on a `brandSubtle` ring.
+
+## API
+
+Source: [`crates/refineui/src/components/spinner.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/spinner.rs)
+
+### Spinner
+
+An indeterminate progress ring. Indeterminate loading ring: `brandSubtle` ring with a `brand` top quarter, rotating once per `duration-spinner` (800ms, linear).
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Medium spinner in the brand color. |
+| `fn size(mut self, size: SpinnerSize) -> Self` | Size. |
+| `fn color(mut self, color: impl Into<Hsla>) -> Self` | Arc color. |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Text beside the ring (`foregroundPrimary`, size-matched typography). |
+
+### SpinnerSize
+
+Spinner sizes (`spinnerSize*` tokens: 16 / 20 / 24 / 28 / 32 / 48).
+
+| Variant | Description |
+| --- | --- |
+| `XSmall` | 16px |
+| `Small` | 20px |
+| `Medium` | 24px (default) |
+| `Large` | 28px |
+| `XLarge` | 32px |
+| `XXLarge` | 48px |
+
+| Method | Description |
+| --- | --- |
+| `fn px(self) -> f32` | Diameter in px (16 / 20 / 24 / 28 / 32 / 48). |
+

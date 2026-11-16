@@ -1,0 +1,57 @@
+---
+title: Workspace composition
+description: Split views, panel groups, dock areas, tab groups, floating panels, and the persisted layout model.
+sidebar:
+  order: 6
+---
+
+## Building blocks
+
+| Component | Role |
+| --- | --- |
+| **Split View** | Two or more panes along an axis with **Resizable Handles**. Ratios are fractions; each pane has a min size. |
+| **Panel** | A titled tool surface (header: title, actions, overflow menu). Lives in a dock, a panel group or a floating panel. |
+| **Panel Group** | Panels stacked in one dock slot. Collapsible headers, or tabs at narrow sizes. |
+| **Dock / Dock Area** | The left, right and bottom window edges. Each holds panels, can be shown or hidden, is resizable, and remembers its size. |
+| **Tab Group** | Documents in one pane: **Tab Bar** + content. Tabs are **Document Tabs** (dirty dot, pinned, close button visible on hover *and* on focus / active). |
+| **Inspector** | A right-dock panel that shows the selection's properties. |
+| **Floating Panel** | A panel outside the docks, either inside the window (`LayerOrder::FloatingPanel`) or as its own native pop-up window (reuses the vibrancy pop-up infrastructure). |
+| **Editor** | The center content host for a document type, provided by the app. RefineUI supplies the chrome. |
+
+## Layout state vs transient state
+
+```text
+App state (persisted, serde)          Component state (transient)
+──────────────────────────────        ──────────────────────────────
+WorkspaceLayout                        hover / pressed plates
+ ├ center: PaneNode                    drag in flight, drop indicator
+ │   ├ Split { axis, children, ratios} splitter being dragged
+ │   └ Tabs(TabGroupState)             scroll offsets
+ ├ docks: left / right / bottom        animation progress
+ │   DockState { visible, size,
+ │               panels, active }
+ ├ floating: [FloatingPanelState]
+ └ active_group
+```
+
+`refineui::workspace::layout` implements the left column today. It is
+serializable with the `serde` feature and carries a `version`.
+`WorkspaceLayout::normalize()` repairs whatever a stale file left behind:
+NaN or zero ratios, empty splits, nested same-axis splits, out-of-range
+active indices, negative dock sizes and a missing active group. `split()`
+and `close_group()` are the first mutations; Phase 3 adds move-tab,
+dock / undock and float.
+
+## Rules
+
+- **User arrangements win.** When the window shrinks, docks keep their
+  size until the center would go below its minimum. Then the *largest*
+  dock shrinks first, and docks auto-hide (still reachable from the
+  activity bar) below a threshold. Resizing back restores the saved sizes.
+- **Persistence.** Save the layout on change (debounced) and on window
+  close; restore before the first frame.
+- **Docking by drag.** Dropping a tab or panel on a pane uses
+  `dnd::dock_zone`. The center zone joins, an edge zone splits.
+- **Keyboard.** Moving focus between panes (⌘/Ctrl-K then arrows), moving
+  tabs (⌘/Ctrl-Shift-PageUp/PageDown), toggling docks (⌘/Ctrl-B, J) and
+  resizing a focused splitter (arrows) are all bindable through the keymap.

@@ -1,0 +1,21 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Docs (Astro)
+docs/node_modules/
+docs/dist/
+docs/.astro/
+node_modules/
+
+# Screenshot scratch output (final PNGs live in docs/src/assets/components/)
+/screenshots-tmp/

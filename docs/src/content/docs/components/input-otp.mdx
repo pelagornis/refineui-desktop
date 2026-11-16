@@ -1,0 +1,55 @@
+---
+title: Input OTP
+description: "One-time-code input made of independent soft square cells."
+sidebar:
+  order: 11
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+One-time-code input made of independent soft square cells.
+
+<Screenshot id="input-otp" alt="Input OTP variants and states" />
+
+## Usage
+
+- Cells are `controlHeight` squares (36 / 44 / 52) with title-scale digits.
+- Digits fill the next empty cell, Backspace clears, ⌘V / Ctrl-V pastes; `on_complete` fires once every cell is filled.
+
+```rust
+use refineui::prelude::*;
+
+InputOtp::new("code")
+    .length(6)
+    .on_complete(cx.listener(|this, code: &SharedString, _, cx| this.verify(code, cx)));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story input-otp
+```
+
+## Motion
+
+Empty cells pulse like Skeleton, staggered by `index × duration-fast`; plates and borders tween over `duration-fast` (emphasized). Respects reduced motion.
+
+## API
+
+Source: [`crates/refineui/src/components/input_otp.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/input_otp.rs)
+
+### InputOtp
+
+One-time-code input.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Six-cell numeric code input. |
+| `fn length(mut self, n: usize) -> Self` | Number of cells (web `maxLength`). |
+| `fn size(mut self, size: ControlSize) -> Self` | `sm \| md \| lg` (web default `lg`). |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disable. |
+| `fn alphanumeric(mut self) -> Self` | Accept letters as well as digits. |
+| `fn default_value(mut self, v: impl Into<SharedString>) -> Self` | Initial value. |
+| `fn on_change(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Called on every change. |
+| `fn on_complete(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Called once every cell is filled. |
+

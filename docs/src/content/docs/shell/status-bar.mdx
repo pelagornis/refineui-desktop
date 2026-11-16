@@ -1,0 +1,76 @@
+---
+title: Status Bar
+description: "The strip at the bottom of the window: leading and trailing groups of text, buttons, progress and custom items."
+sidebar:
+  order: 54
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The strip at the bottom of the window: leading and trailing groups of text, buttons, progress and custom items.
+
+<Screenshot id="status-bar" alt="Status Bar variants and states" />
+
+## Usage
+
+- Height follows density (`status_bar_height`: 22 / 24 / 28); items use `captionMd` text and 12px icons.
+- Buttons are quiet (fill on hover only) and can carry a tooltip with a keymap shortcut: `.tooltip("Toggle Panel", Some("workspace::TogglePanel"))`.
+- `accent(true)` paints the bar `backgroundBrand` (e.g. while debugging or connected to a remote).
+
+```rust
+use refineui::prelude::*;
+
+StatusBar::new("status")
+    .leading(StatusItem::button("branch", "main", |_, _| {}).icon(IconName::Git))
+    .leading(StatusItem::text("problems", "2 warnings").icon(IconName::Warning).tone(StatusTone::Warning))
+    .leading(StatusItem::progress("index", "Indexing", 0.6))
+    .trailing(StatusItem::text("pos", "Ln 12, Col 4"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story status-bar
+```
+
+## API
+
+Source: [`crates/refineui/src/shell/status_bar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/status_bar.rs)
+
+### StatusBar
+
+The status bar. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty bar. |
+| `fn leading(mut self, item: StatusItem) -> Self` | Add to the leading group. |
+| `fn trailing(mut self, item: StatusItem) -> Self` | Add to the trailing group. |
+| `fn accent(mut self, accent: bool) -> Self` | Brand-coloured bar. |
+
+### StatusItem
+
+One status-bar item.
+
+| Method | Description |
+| --- | --- |
+| `fn text(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | Static label. |
+| `fn button(id: impl Into<SharedString>, label: impl Into<SharedString>, on_click: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Clickable item. |
+| `fn progress(id: impl Into<SharedString>, label: impl Into<SharedString>, value: f32) -> Self` | Label with a determinate progress bar (`0.0..=1.0`). |
+| `fn custom(id: impl Into<SharedString>, element: impl IntoElement) -> Self` | Any element. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn tone(mut self, tone: StatusTone) -> Self` | Tint. |
+| `fn tooltip(mut self, text: impl Into<SharedString>, action: Option<&str>) -> Self` | Hover tooltip, with the shortcut of `action` when given. |
+
+### StatusTone
+
+Semantic tint of a status item.
+
+| Variant | Description |
+| --- | --- |
+| `Neutral` | Secondary foreground. |
+| `Success` | Success foreground. |
+| `Warning` | Warning foreground. |
+| `Danger` | Error foreground. |
+| `Accent` | Brand foreground. |
+

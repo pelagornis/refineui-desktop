@@ -1,0 +1,70 @@
+---
+title: Titlebar
+description: "The window titlebar: draggable, double-click to zoom, with title / subtitle, leading and trailing slots or a unified toolbar."
+sidebar:
+  order: 51
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The window titlebar: draggable, double-click to zoom, with title / subtitle, leading and trailing slots or a unified toolbar.
+
+<Screenshot id="titlebar" alt="Titlebar variants and states" />
+
+## Usage
+
+- **macOS** — transparent titlebar (`appears_transparent`), AppKit traffic lights inset to the titlebar centre (`traffic_light_position`), 52px unified / 38px plain; the leading reserve disappears in full screen.
+- **Windows** — caption buttons drawn by RefineUI (46 × titlebar height) tagged with `WindowControlArea::{Min, Max, Close}` so the system hit test handles them (snap layouts on maximize hover). The rest of the bar is `WindowControlArea::Drag`.
+- **Linux** — client-side decorations: round header-bar buttons, `start_window_move` on press, right-click opens the window menu, `WindowFrame` draws the rounded frame, shadow and resize edges.
+- Double-click follows the platform: `titlebar_double_click` on macOS (respects the user preference), maximize toggle elsewhere. Interactive children are occluded so they never start a window drag.
+- Window options come from `window_options(&WindowSpec, cx)`, which sets the transparent titlebar, traffic-light point, min size and decorations to match.
+
+```rust
+use refineui::prelude::*;
+
+let spec = WindowSpec::new(WindowPreset::Main, "My App").restore(WindowState::load(&path));
+cx.open_window(window_options(&spec, cx), |window, cx| { /* … */ })?;
+
+Titlebar::new("titlebar")
+    .title("refineui-gpui")
+    .subtitle("main.rs")
+    .trailing(Button::icon_only("share", IconName::Share).variant(ButtonVariant::Ghost));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story titlebar
+```
+
+## API
+
+Source: [`crates/refineui/src/shell/titlebar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/titlebar.rs)
+
+### Titlebar
+
+The window's titlebar. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty titlebar (unified height). |
+| `fn os(mut self, os: Os) -> Self` | Draw for this OS instead of `crate::platform::chrome_os`. |
+| `fn interactive(mut self, interactive: bool) -> Self` | `false`: a static preview (no window drag, zoom or controls) — for titlebars drawn inside another window (docs, galleries). |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Centred window title (`bodySm` semibold). |
+| `fn subtitle(mut self, t: impl Into<SharedString>) -> Self` | Second line / trailing detail under the title (`captionMd` tertiary), e.g. the document path. |
+| `fn leading(mut self, e: impl IntoElement) -> Self` | Element at the leading edge (after macOS traffic lights). |
+| `fn trailing(mut self, e: impl IntoElement) -> Self` | Element at the trailing edge (before Windows / Linux controls). |
+| `fn content(mut self, e: impl IntoElement) -> Self` | Full-width content between the controls (a unified toolbar); replaces the title. |
+| `fn unified(mut self, unified: bool) -> Self` | `false`: plain (title-only) height instead of unified. |
+| `fn height(mut self, h: f32) -> Self` | Explicit height. |
+| `fn buttons(mut self, b: impl Into<ControlButtons>) -> Self` | Window buttons to show. |
+| `fn on_double_click(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Replace the default double-click (zoom) behaviour. |
+
+### WindowFrame
+
+Client-side window frame (Linux CSD). See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(child: impl IntoElement) -> Self` | Frame `child` (the window's root content). |
+

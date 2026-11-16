@@ -1,0 +1,86 @@
+---
+title: Component contracts
+description: The machine-readable contract format, its schema and the validator.
+sidebar:
+  order: 10
+---
+
+Every public component has a JSON contract in
+`crates/refineui-tokens/contracts/components/<id>.json`, validated against
+`contracts/schema.json`. The files are embedded in the GPUI-free
+`refineui-tokens` crate (`refineui_tokens::contracts::{ALL, get, SCHEMA,
+DENSITY}`), so any renderer or tool (docs, a linter, an MCP server) can
+read them.
+
+## Fields
+
+| Field | Meaning |
+| --- | --- |
+| `id`, `name` | Kebab-case id (file stem) and display name |
+| `layer` | `foundation` · `interaction` · `components` · `composition` · `application` · `platform` |
+| `status` | `exists` · `adapt` · `new` · `optional` |
+| `phase` | Target phase (1–6) |
+| `feature` | Cargo feature that gates it (`web-extras`) or `null` |
+| `desktop_target` | The brief §5 desktop component it becomes (e.g. Kbd → Shortcut Hint) |
+| `rust_types` | Public types the contract covers |
+| `a11y_role` | AccessKit / ARIA role |
+| `states` | All eight interaction states. Each is `null` (not applicable) or `{status: implemented / planned, visual}` |
+| `sizes` | `metric` (`button`, `field`, `select`, `chip`, `row`, `desktop`, `fixed`, `content`) plus the resolved numbers for `compact`, `comfortable` and `spacious` |
+| `tokens` | Tokens used, by group (`color`, `radius`, `spacing`, `typography`, `motion`, `elevation`, `stroke`), in web token names |
+| `keyboard` | `[{keys, action}]` in GPUI keystroke syntax (`secondary-` = ⌘ / Ctrl) |
+| `focus` | `tab_stop` (`none`, `single`, `roving`, `container`, `trap`), `ring`, `restores_focus` |
+| `pointer` | `cursor`, `hover_only` (must be `false`, brief §7) |
+
+Example (abridged):
+
+```json
+{
+  "id": "button",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "rust_types": ["Button"],
+  "a11y_role": "button",
+  "states": {
+    "default":  { "status": "implemented", "visual": "resting tokens" },
+    "hovered":  { "status": "implemented", "visual": "hover fill (`*Hover` alias) over duration-fast" },
+    "loading":  { "status": "implemented", "visual": "spinner replaces the leading icon; not operable" },
+    "dragging": null
+  },
+  "sizes": { "metric": "button", "compact": { "md": { "height": 28 } }, "comfortable": { "md": { "height": 36 } }, "spacious": { "md": { "height": 40 } } },
+  "tokens": { "color": ["backgroundBrand", "backgroundBrandHover", "borderFocus"], "radius": ["roundedLarge"] },
+  "keyboard": [{ "keys": "enter", "action": "activate" }, { "keys": "space", "action": "activate" }],
+  "focus": { "tab_stop": "single", "ring": "focusRing", "restores_focus": false },
+  "pointer": { "cursor": "pointer", "hover_only": false }
+}
+```
+
+## Validation
+
+`cargo test` checks:
+
+- **Shape**: required keys, no unknown keys, and every enum value matches
+  `schema.json`. Optional components name their feature.
+- **Coverage**: every public component type in `crates/refineui/src` (a
+  `pub struct` deriving `IntoElement` or implementing `Render`) appears in
+  some contract's `rust_types`, and every listed type exists.
+- **Sizes**: embedded size numbers equal `Density::{button, field, select,
+  chip, desktop}`. `contracts/density.json` equals `density_json()`
+  (regenerate with `UPDATE_CONTRACTS=1 cargo test -p refineui-tokens`).
+- **Rules**: no `hover_only`. Focusable components (`single`, `roving`)
+  define keys. Non-focusable components have no `focused` state.
+- **Index**: every file is embedded (`contracts/index.rs`).
+
+## Maintaining
+
+The JSON is canonical and hand-edited. `scripts/contracts.py` helps:
+
+```sh
+python3 scripts/contracts.py bootstrap   # create contracts for new components
+python3 scripts/contracts.py refresh     # re-derive tokens, sizes and state status from the source
+python3 scripts/contracts.py index       # rewrite contracts/index.rs
+```
+
+`refresh` scans the component source, so a state's `implemented` /
+`planned` flag is a **heuristic** until the component is reworked in its
+phase. When you adapt a component, confirm its states by hand.

@@ -1,0 +1,168 @@
+{
+  "$schema": "../schema.json",
+  "id": "date-input",
+  "name": "Date Input",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "DateInput"
+  ],
+  "a11y_role": "combobox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "planned",
+      "visual": "borderHover"
+    },
+    "pressed": null,
+    "focused": {
+      "status": "planned",
+      "visual": "borderFocus + focusRing; caret visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "backgroundSurfaceDisabled, foregroundDisabled"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "trailing spinner (async validation / search)"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "text selection uses the selection highlight"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "field",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 24,
+        "padding_x": 8,
+        "padding_y": 4,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 36,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 20
+      },
+      "md": {
+        "height": 44,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 12,
+        "text_size": 14,
+        "icon": 24
+      },
+      "lg": {
+        "height": 52,
+        "padding_x": 20,
+        "padding_y": 16,
+        "radius": 16,
+        "text_size": 16,
+        "icon": 28
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 40,
+        "padding_x": 10,
+        "padding_y": 8,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 20
+      },
+      "md": {
+        "height": 48,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 24
+      },
+      "lg": {
+        "height": 56,
+        "padding_x": 20,
+        "padding_y": 16,
+        "radius": 16,
+        "text_size": 16,
+        "icon": 28
+      }
+    }
+  },
+  "tokens": {},
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous day"
+    },
+    {
+      "keys": "right",
+      "action": "next day"
+    },
+    {
+      "keys": "up",
+      "action": "previous week"
+    },
+    {
+      "keys": "down",
+      "action": "next week"
+    },
+    {
+      "keys": "pageup",
+      "action": "previous month"
+    },
+    {
+      "keys": "pagedown",
+      "action": "next month"
+    },
+    {
+      "keys": "enter",
+      "action": "choose day"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "text",
+    "hover_only": false
+  }
+}

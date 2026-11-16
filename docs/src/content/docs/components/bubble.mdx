@@ -1,0 +1,96 @@
+---
+title: Bubble
+description: "Chat bubble in seven variants with grouped corners and reactions (web `Bubble`)."
+sidebar:
+  order: 68
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Chat bubble in seven variants with grouped corners and reactions (web `Bubble`).
+
+<Screenshot id="bubble" alt="Bubble variants and states" />
+
+## Usage
+
+- `BubbleGroup` flattens the sender-side corners of consecutive bubbles (16px → 8px), like the web group.
+- Reactions sit in a pill that overlaps the bubble edge by 75% of its height.
+- A bubble fills its row (`w_full`) and aligns its content start or end.
+
+```rust
+use refineui::prelude::*;
+
+BubbleGroup::new([
+    Bubble::new("Shipped in 0.5.0").variant(BubbleVariant::Tinted).align(BubbleAlign::End),
+    Bubble::new("Docs are up").align(BubbleAlign::End).reactions(["🎉"]),
+]);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story bubble
+```
+
+## API
+
+Source: [`crates/refineui/src/components/bubble.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/bubble.rs)
+
+### Bubble
+
+One chat bubble.
+
+| Method | Description |
+| --- | --- |
+| `fn new(text: impl Into<SharedString>) -> Self` | Text bubble. |
+| `fn empty() -> Self` | Bubble without content; add with `Self::child`. |
+| `fn child(mut self, e: impl IntoElement) -> Self` | Add content. |
+| `fn variant(mut self, v: BubbleVariant) -> Self` | Fill variant. |
+| `fn align(mut self, a: BubbleAlign) -> Self` | Sender side. |
+| `fn reactions(mut self, r: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Reactions pill (emoji / counts). |
+| `fn reactions_side(mut self, side: BubbleReactionsSide) -> Self` | Which edge the reactions overlap. |
+
+### BubbleVariant
+
+Bubble fill (web `BubbleVariant`).
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Brand fill, inversed text (outgoing). |
+| `Secondary` | `surfaceSelected` fill (incoming). |
+| `Muted` | Same fill as secondary. |
+| `Tinted` | Brand-subtle fill, `borderStrong` stroke, brand text. |
+| `Outline` | Surface fill, `borderStrong` stroke. |
+| `Ghost` | No surface (assistant prose). |
+| `Destructive` | Error fill. |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+
+### BubbleAlign
+
+Sender side (web `BubbleAlign`).
+
+| Variant | Description |
+| --- | --- |
+| `Start` | Incoming (left). |
+| `End` | Outgoing (right). |
+
+### BubbleReactionsSide
+
+Edge the reactions pill overlaps (web `BubbleReactionsSide`).
+
+| Variant | Description |
+| --- | --- |
+| `Top` | Above the bubble. |
+| `Bottom` | Below the bubble (default). |
+
+### BubbleGroup
+
+Consecutive bubbles from one sender (web `BubbleGroup`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(bubbles: impl IntoIterator<Item = Bubble>) -> Self` | New group. |
+

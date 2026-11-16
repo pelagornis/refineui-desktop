@@ -1,0 +1,78 @@
+{
+  "$schema": "../schema.json",
+  "id": "badge",
+  "name": "Badge",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Badge"
+  ],
+  "a11y_role": "status",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandActive",
+      "backgroundBrandHover",
+      "backgroundBrandSubtle",
+      "backgroundError",
+      "backgroundErrorHover",
+      "backgroundErrorSubtle",
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "backgroundSuccess",
+      "backgroundSuccessHover",
+      "backgroundSuccessSubtle",
+      "backgroundWarning",
+      "backgroundWarningHover",
+      "backgroundWarningSubtle",
+      "borderDefault",
+      "borderStrong",
+      "foregroundBrandStrong",
+      "foregroundInversed",
+      "foregroundPrimary"
+    ],
+    "radius": [
+      "roundedMedium"
+    ],
+    "spacing": [
+      "sizeSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "captionMd"
+    ],
+    "motion": [
+      "motion.fastEase"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

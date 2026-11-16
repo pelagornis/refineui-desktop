@@ -1,0 +1,61 @@
+---
+title: Search Field
+description: "Filled search input with a leading search icon and clear button (web `SearchField`)."
+sidebar:
+  order: 10
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Filled search input with a leading search icon and clear button (web `SearchField`).
+
+<Screenshot id="search-field" alt="Search Field variants and states" />
+
+## Usage
+
+- `SearchField::new(cx)` returns a filled `TextInput`: `backgroundSurfaceHover` plate, `backgroundSurfaceActive` on hover, a thin `borderDefault` while focused.
+- Escape clears the text; the leading icon is small / medium / large per size.
+
+```rust
+use refineui::prelude::*;
+
+let search = cx.new(|cx| SearchField::new(cx).placeholder("Search components"));
+cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
+    if let InputEvent::Change(query) = event {
+        this.filter(query, cx);
+    }
+})
+.detach();
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story search-field
+```
+
+## Motion
+
+Plate and border tween over `duration-fast` (emphasized).
+
+## API
+
+Source: [`crates/refineui/src/components/input.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/input.rs)
+
+### SearchField
+
+Web `SearchField` — a `TextInput` preset (filled plate, search icon, clear button, Esc clears). `cx.new(\|cx\| SearchField::new(cx))`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(cx: &mut Context<TextInput>) -> TextInput` | New search field input. |
+
+### InputAppearance
+
+Field chrome (web `Input` vs `SearchField appearance="filled"`).
+
+| Variant | Description |
+| --- | --- |
+| `Outline` | 1px `borderDefault` on `backgroundPrimary` (web `Input`, default). |
+| `Filled` | Borderless `backgroundSurfaceHover` plate (web `SearchField`). |
+

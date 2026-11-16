@@ -1,0 +1,56 @@
+---
+title: Toggle Button
+description: "A two-state toolbar button; pressed uses the selected plate."
+sidebar:
+  order: 5
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+A two-state toolbar button; pressed uses the selected plate.
+
+<Screenshot id="toggle-button" alt="Toggle Button variants and states" />
+
+## Usage
+
+- ToggleButton is controlled: pass the current state and update it in `on_change`.
+- The web `Toggle` (an on/off switch) is `Switch` here; `Toggle` is kept as an alias of `Switch`.
+
+```rust
+use refineui::prelude::*;
+
+ToggleButton::new("bold", "Bold", self.bold)
+    .on_change(cx.listener(|this, on: &bool, _, cx| {
+        this.bold = *on;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story toggle-button
+```
+
+## Motion
+
+Pressed / hover plates tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/toggle.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/toggle.rs)
+
+### ToggleButton
+
+A two-state button (e.g. **B** / *I* in a toolbar).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, label: impl Into<SharedString>, pressed: bool) -> Self` | Labelled toggle. |
+| `fn icon_only(id: impl Into<ElementId>, icon: IconName, pressed: bool) -> Self` | Icon-only toggle. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn tooltip(mut self, t: impl Into<SharedString>) -> Self` | Tooltip. |
+| `fn on_change(mut self, f: impl Fn(&bool, &mut Window, &mut App) + 'static) -> Self` | Called with the new pressed state. |
+

@@ -1,0 +1,60 @@
+---
+title: Platform adapters
+description: How OS-specific behaviour is isolated behind PlatformAdapter.
+sidebar:
+  order: 8
+---
+
+Components and the shell never branch on `cfg(target_os)` for design
+decisions. They ask `refineui::platform::current()`:
+
+```rust
+pub trait PlatformAdapter: Send + Sync {
+    fn os(&self) -> Os;
+    fn controls(&self) -> WindowControlsMetrics;   // side, button size, reserved width
+    fn titlebar(&self) -> TitlebarMetrics;         // plain / unified heights
+    fn menu_bar(&self) -> MenuBarPlacement;        // Global (macOS) / InWindow
+    fn primary_modifier(&self) -> Modifier;        // Cmd / Ctrl (`secondary-`)
+    fn native_blur(&self) -> bool;                 // compositor blur available
+    fn scrollbar(&self) -> ScrollbarStyle;         // Overlay (macOS / Linux) / Persistent (Windows)
+    fn client_decorations(&self) -> bool;          // Linux: we draw the frame (CSD)
+    fn traffic_light_position(&self, titlebar_h: f32) -> Option<(f32, f32)>; // macOS only
+    fn controls_reserved(&self, titlebar_h: f32) -> f32; // titlebar space the controls take
+    fn titlebar_height(&self, unified: bool, density: Density) -> f32;
+    fn shortcut_label(&self, keys: &str) -> String; // ⇧⌘P vs Ctrl+Shift+P
+}
+```
+
+| | `MacOsAdapter` | `WindowsAdapter` | `LinuxAdapter` |
+| --- | --- | --- | --- |
+| Controls | Leading traffic lights | Trailing caption buttons | Trailing header-bar buttons |
+| Menu bar | Global | In-window | In-window |
+| `secondary-` | ⌘ | Ctrl | Ctrl |
+| Shortcut labels | Symbols `⌃⌥⇧⌘` | `Ctrl+Alt+Shift+Key` | `Ctrl+Alt+Shift+Key` |
+| Native blur | Yes (`NSVisualEffectView`, see the Blur guide) | Later (Mica / Acrylic) | No |
+| Scrollbars | Overlay (thumb on hover / scroll) | Persistent | Overlay |
+| Decorations | Native, transparent titlebar | Drawn caption buttons + `WindowControlArea` hit test | Client-side (`WindowFrame`) |
+
+`for_os(Os)` returns any adapter, so tests and docs can render another
+platform's chrome; `set_chrome_preview(Some(os), cx)` makes every chrome
+part (titlebar, controls, shortcut labels) draw as that OS app-wide
+(`chrome_os(cx)`) — for galleries and screenshots only, behaviour stays
+native. Per element, `Titlebar::os`, `WindowControls::os`,
+`ShortcutHint::os` and `ApplicationShell::os` do the same.
+
+Native glue stays in `cfg`-gated modules owned by the adapter: the AppKit
+code (NSWindow lookup, `NSVisualEffectView` shaping, debug dump) lives in
+`platform::macos` (since Phase 2); `refineui::vibrancy` is the public,
+cross-platform API on top of it. Win32 glue (Mica / Acrylic) will live in
+`platform::windows`.
+
+## Cursors
+
+Desktop controls keep the **arrow** cursor; only links (web content) use
+the hand. Components call `StyledExt::cursor_action()` (arrow) or
+`cursor_role(CursorRole::…)` — `Text`, `Grab` / `Grabbing` (drag handles),
+`ResizeColumn` / `ResizeRow` (splitters), `NotAllowed` (disabled).
+
+Validation (brief §9 step 9, Phase 5): each adapter gets a manual checklist
+(controls hit-test, drag, double-click, menu, shortcuts, focus, blur) run
+on macOS and Windows.

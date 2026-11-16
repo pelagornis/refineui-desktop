@@ -1,0 +1,65 @@
+---
+title: Popover
+description: "Anchored floating panel with rich content and a beak."
+sidebar:
+  order: 44
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Anchored floating panel with rich content and a beak.
+
+<Screenshot id="popover" alt="Popover variants and states" />
+
+## Usage
+
+- The content closure receives a `close` callback.
+- Opens below the trigger, centered by default (`align_end()` / `.align(...)` for start / end); the 24×12 beak is part of the same outline as the panel.
+
+```rust
+use refineui::prelude::*;
+
+Popover::new("dims", Button::new("open", "Open").variant(ButtonVariant::Secondary), |close, _, _| {
+    v_stack(16.)
+        .child(Text::new("Dimensions"))
+        .child(Button::new("done", "Done").on_click(move |_, _, cx| close(cx)))
+        .into_any_element()
+});
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story popover
+```
+
+## Motion
+
+Fades in and slides 6px away from the trigger over `duration-fast` (emphasized), like the web `useFloatingPresence` (the web 0.96 scale is not reproducible in GPUI).
+
+## API
+
+Source: [`crates/refineui/src/components/popover.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/popover.rs)
+
+### Popover
+
+Floating panel anchored to a trigger.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, trigger: impl IntoElement, content: impl Fn(Rc<dyn Fn(&mut App)>, &mut Window, &mut App) -> AnyElement + 'static) -> Self` | New popover (bottom placement, centered — web defaults). |
+| `fn title(mut self, title: impl Into<SharedString>) -> Self` | Optional heading with a close button. |
+| `fn align(mut self, align: PopoverAlign) -> Self` | Panel alignment (web `align`, default `center`). |
+| `fn align_end(self) -> Self` | Align the panel's end edge with the trigger (`align("end")`). |
+| `fn force_open(mut self) -> Self` | Render the panel open, in flow (for docs / screenshots). |
+
+### PopoverAlign
+
+Panel alignment against the trigger — web `PopoverAlign`.
+
+| Variant | Description |
+| --- | --- |
+| `Start` | Panel start edge flush with the trigger's start edge. |
+| `Center` | Panel centered under the trigger (web default). |
+| `End` | Panel end edge flush with the trigger's end edge. |
+

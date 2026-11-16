@@ -1,0 +1,43 @@
+---
+title: Colors
+description: "Semantic color aliases from RefineUI, resolved for the current appearance."
+sidebar:
+  order: 0
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Semantic color aliases from RefineUI, resolved for the current appearance.
+
+<Screenshot id="colors" alt="Colors variants and states" />
+
+## Usage
+
+- Read colors with `cx.theme().colors`. Never hard-code hex values in components.
+- Regenerate from the web tokens with `python3 scripts/sync_tokens.py`.
+
+```rust
+use refineui::prelude::*;
+
+let c = cx.theme().colors;
+div().bg(c.background_surface).border_1().border_color(c.border_subtle).text_color(c.foreground_secondary)
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story colors
+```
+
+## API
+
+Source: [`crates/refineui/src/theme_colors.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/theme_colors.rs)
+
+### ThemeColors
+
+Semantic colors resolved to `Hsla` for the active appearance.
+
+| Method | Description |
+| --- | --- |
+| `fn from_tokens(c: &SemanticColors) -> Self` | Convert token colors into GPUI colors. |
+

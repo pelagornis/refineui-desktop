@@ -1,0 +1,80 @@
+---
+title: Visual identity
+description: The RefineUI visual rules RefineUI Desktop must preserve.
+sidebar:
+  order: 2
+---
+
+Source: [DESIGN.md](https://ui.pelagornis.com/DESIGN.md),
+[llms.txt](https://ui.pelagornis.com/llms.txt) and the `@refineui/tokens`
+package. RefineUI is **precise, neutral and product-first**: high-contrast
+ink on clean surfaces, restrained radius, and semantic color roles instead
+of decoration. Desktop keeps all of this and changes only *layout* and
+*interaction*.
+
+## Color
+
+- **Brand ink is near-black** (`primaryBlack` #212121 light; inverted in
+  dark). It marks primary actions and strong emphasis (`backgroundBrand`,
+  `foregroundBrand`), with `foregroundOnBrand` on top.
+- **Secondary** (#6C6C6C) is for supporting copy and quieter chrome
+  (`foregroundSecondary` / `foregroundTertiary`).
+- **Tertiary blue** (#7694FF) means info and links. It is not a second
+  brand color.
+- **Surfaces** are `backgroundPrimary` / `backgroundSurface` (white),
+  `surfaceSunken` (#F0F0F0) for recessed wells, and `borderDefault`
+  (#DBDBDB) for dividers and outlines.
+- **Status colors** (error, success, warning, discovery) are for status and
+  accent roles only, never decoration.
+- Light and dark use the **same semantic names**. Product code never
+  hard-codes hex.
+- The focus color is `primaryBlack` / white (`borderFocus`).
+
+## Typography
+
+- One family: **Inter**.
+- Use semantic roles (`displayLg`, `headingMd`, `titleMd`, `subtitleMd`,
+  `bodyMd`, `bodySm`, `captionMd`, `labelMd`), not raw sizes.
+- Body and controls are 14px (medium for UI, regular for reading).
+  Captions and labels are 12–14px.
+- Desktop chrome (titlebar, tabs, status bar, menus) uses `bodySm`,
+  `captionLg` and `captionMd`. Display and heading roles are for content.
+
+## Spacing and sizing
+
+- T-shirt spacing scale: 0, 2, 4, 6, 8, 10, 16, 20, 24, 32.
+- Component sizes come from `componentSizes` / `Density`. Never use
+  arbitrary px.
+
+## Radius
+
+- Restrained: 2, 4, 6, **8** (default for interactive controls), **12**
+  (cards and panels), 16 (large surfaces), plus circle.
+- Desktop: window-level surfaces (panels, docks, tab bars) are **square to
+  the window**. Radius goes on floating things (menus, popovers, cards,
+  controls, floating panels).
+
+## Elevation
+
+- Semantic shadow steps (`shadow2` … `shadow64`) with separate light and
+  dark recipes. Use the **lowest step** that establishes hierarchy and
+  never stack custom multi-layer shadows.
+- Scrims use `surfaceOverlay`, never ad-hoc rgba.
+- Desktop: docked regions are separated by **hairline borders**, not
+  shadows. Shadows are for floating layers (`LayerOrder::FloatingPanel` and
+  above).
+
+## Motion
+
+- Short durations (`fast` 100–150ms for state changes, `normal` / `medium`
+  for panels) with emphasized / standard easings.
+- Honor reduced motion. State feedback is never motion-only.
+
+## Blur / frost
+
+- Blur and tint are separate tokens: `surfaceFrost` (16px) pairs with the
+  translucent `surfaceFrosted` fill on floating panels (Menu family,
+  SidebarPeek). Docked sidebars stay **opaque** `backgroundPrimary`.
+- GPUI cannot blur in-window, so frost is either pre-composited (opaque,
+  the default) or native OS vibrancy in a pop-up window (macOS; see the
+  [Blur guide](/guides/blur/)).

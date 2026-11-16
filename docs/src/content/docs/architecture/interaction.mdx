@@ -1,0 +1,120 @@
+---
+title: Interaction model
+description: Focus order, the keybinding manager (contexts, conflicts), the selection model and drag and drop.
+sidebar:
+  order: 5
+---
+
+Interaction logic lives in `refineui::interaction` as **plain state
+machines** with unit tests. Components drive them from GPUI events, so a
+Tree, a Table and a List select, focus and drop in exactly the same way.
+
+## States
+
+Every interactive component defines the eight states
+(`contracts::InteractionState`): **default, hovered, pressed, focused,
+disabled, loading, selected, dragging** (where applicable). Contracts record
+each one as `implemented`, `planned` or `null` (not applicable). Hover is
+never the only way to reach an action: every hover-revealed action also has
+a keyboard path and is visible on focus.
+
+## Focus order
+
+1. Tab follows **regions** in reading order: titlebar → menu bar →
+   toolbar → activity bar → left dock → workspace → bottom dock → right
+   dock → status bar. **F6 / Shift-F6** jumps between regions.
+2. Composite widgets (lists, trees, tables, tabs, toolbars, menus, radio
+   groups, segmented controls) are **one Tab stop**. Arrows move a roving
+   cursor (`interaction::focus::RovingFocus`). Menus wrap; lists and trees
+   stop at the ends; disabled items are skipped.
+3. Modal surfaces (Dialog, Sheet) **trap** focus and restore it to the
+   opener on close. Popovers and menus return focus to their trigger.
+4. The focus ring (`borderFocus`, 2px) shows for keyboard focus only.
+
+## Keybinding manager
+
+`interaction::keymap::KeybindingManager` is the single source of truth for
+shortcuts:
+
+```rust
+let mut keys = KeybindingManager::new();
+keys.context("Workspace", None).context("Editor", Some("Workspace"));
+keys.bind("secondary-shift-p", "command_palette::Toggle", Some("Workspace"))
+    .bind("secondary-w", "pane::CloseActiveItem", Some("Workspace"))
+    .bind("secondary-w", "editor::CloseSplit", Some("Editor"));
+
+keys.resolve("cmd-w", Os::MacOs, &["Editor", "Workspace"]); // editor::CloseSplit
+keys.conflicts(Os::Windows); // Duplicate / Shadowed / Prefix
+platform::current().shortcut_label("secondary-shift-p"); // ⇧⌘P or Ctrl+Shift+P
+```
+
+- **Syntax**: GPUI keystrokes. `secondary-` means ⌘ on macOS and Ctrl
+  elsewhere. Chords are space-separated (`ctrl-k ctrl-s`).
+- **Contexts** form a tree that mirrors GPUI `key_context`s. The innermost
+  active context wins.
+- **Conflicts**:
+  - `Duplicate`: same keys, same context, different actions. This is a bug.
+  - `Shadowed`: an inner context hides an outer binding. Allowed, but it
+    should be a conscious choice.
+  - `Prefix`: a single stroke is also the start of a chord, which delays
+    it.
+- **Platform-only bindings** use `bind_for(Os::MacOs, …)`.
+- **GPUI binding (Phase 2)**: `KeybindingManager::install(cx)` turns every
+  binding for the current OS into a GPUI `KeyBinding` (contexts become
+  `KeyBindingContextPredicate`s), stores the manager as the `Keymap`
+  global and returns problems (unknown actions, bad contexts, `Duplicate`
+  conflicts). `shortcut_for("editor::Save", cx)` then feeds
+  `ShortcutHint::action`, `Tooltip::for_action` / `Button::tooltip_action`,
+  `MenuItem::action`, `MenuBar`, the macOS system menu key equivalents and
+  `CommandPalette` — one source of truth. A Shortcut Recorder follows in
+  Phase 5.
+
+## Focus regions (F6)
+
+`ApplicationShell` makes each region (menu bar, toolbar, activity bar,
+docks, workspace, status bar) a focus container. **F6 / Shift-F6** move
+between regions in `ShellSpec::regions` order
+(`interaction::focus::cycle_region`), Tab / Shift-Tab move inside one,
+**F10** (and Alt on Windows / Linux) jumps to the menu bar. The focused
+region shows an inset `borderFocus` outline only after keyboard input
+(focus-visible).
+
+## Selection model
+
+`interaction::selection::SelectionModel<K>` stores **keys, not indices**, so
+it survives sorting, filtering and virtualization:
+
+| Gesture | Effect |
+| --- | --- |
+| Click / Enter | Select only this item (it becomes the anchor). |
+| ⌘-click (macOS) / Ctrl-click | Toggle the item. |
+| Shift-click | Select the range anchor → item, replacing the last range. |
+| ⌘/Ctrl-Shift-click | Add the range to the selection. |
+| ↑ / ↓ | Move and select. Shift extends from the anchor. |
+| ⌘/Ctrl-A | Select all (multiple mode). |
+
+## Drag and drop
+
+GPUI provides the transport (`on_drag(value, preview)`,
+`drag_over::<T>`, `on_drop::<T>`). `interaction::dnd` decides where a drop
+lands:
+
+- `drop_edge(offset, extent, allow_inside)` returns Before, Inside or
+  After. Rows split into quarters when "inside" is allowed (tree folders,
+  tab groups), otherwise into halves.
+- `dock_zone(x, y, w, h, 0.25)` returns Center (join the tab group) or
+  Left, Right, Top, Bottom (split).
+- `insertion_index` + `reorder` move items consistently.
+- Drag previews paint on `LayerOrder::DragPreview`; drop indicators use
+  `borderFocus`; the source shows the *dragging* state (reduced opacity).
+- Visual parts (Phase 2): `DragHandle`, `DragPreview`, `DropIndicator`
+  and `DropZone` — see [Drag and Drop](/shell/drag-and-drop/).
+  `ActivityBar::on_reorder` is the first built-in consumer (drag or ⌥↑ / ⌥↓).
+
+## Selection box
+
+`SelectionArea` runs the marquee: a press on empty space that moves more
+than `MARQUEE_THRESHOLD` (4px) draws the box and selects every item it
+touches (`interaction::selection::marquee_hits` over the laid-out item
+bounds), live; Shift or ⌘/Ctrl keeps the earlier selection. Item clicks
+use the `SelectionModel` gestures above.

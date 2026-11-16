@@ -1,0 +1,110 @@
+{
+  "$schema": "../schema.json",
+  "id": "slider",
+  "name": "Slider",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Slider"
+  ],
+  "a11y_role": "slider",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "thumb hover"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "thumb grabbed"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on the thumb"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": null,
+    "selected": null,
+    "dragging": {
+      "status": "implemented",
+      "visual": "thumb follows the pointer"
+    }
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "backgroundSurfaceDisabled",
+      "borderDefault",
+      "borderDisabled",
+      "borderFocus",
+      "borderStrong",
+      "foregroundDisabled"
+    ],
+    "motion": [
+      "motion.fast"
+    ],
+    "elevation": [
+      "elevation.surface"
+    ],
+    "stroke": [
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "right",
+      "action": "increase step"
+    },
+    {
+      "keys": "left",
+      "action": "decrease step"
+    },
+    {
+      "keys": "up",
+      "action": "increase step"
+    },
+    {
+      "keys": "down",
+      "action": "decrease step"
+    },
+    {
+      "keys": "pageup",
+      "action": "increase 10 steps"
+    },
+    {
+      "keys": "pagedown",
+      "action": "decrease 10 steps"
+    },
+    {
+      "keys": "home",
+      "action": "minimum"
+    },
+    {
+      "keys": "end",
+      "action": "maximum"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

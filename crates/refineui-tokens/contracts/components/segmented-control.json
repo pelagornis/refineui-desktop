@@ -1,0 +1,185 @@
+{
+  "$schema": "../schema.json",
+  "id": "segmented-control",
+  "name": "Segmented Control",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "SegmentedControl"
+  ],
+  "a11y_role": "radiogroup",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover border / fill"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "active fill"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing on :focus-visible"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "implemented",
+      "visual": "checked / on: backgroundBrand + foregroundOnBrand"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "button",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 22,
+        "padding_x": 8,
+        "padding_y": 2,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 16,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 4,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "md": {
+        "height": 36,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 20
+      },
+      "lg": {
+        "height": 48,
+        "padding_x": 16,
+        "padding_y": 10,
+        "radius": 16,
+        "text_size": 20,
+        "icon": 24
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      },
+      "md": {
+        "height": 40,
+        "padding_x": 16,
+        "padding_y": 8,
+        "radius": 12,
+        "text_size": 16,
+        "icon": 20
+      },
+      "lg": {
+        "height": 52,
+        "padding_x": 20,
+        "padding_y": 10,
+        "radius": 16,
+        "text_size": 20,
+        "icon": 24
+      }
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandHover",
+      "backgroundBrandSubtle",
+      "backgroundSurfaceDisabled",
+      "borderDefault",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundOnBrand",
+      "foregroundPrimary",
+      "foregroundSecondary"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "captionLg"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.indicator",
+      "motion.indicatorWidth"
+    ],
+    "elevation": [
+      "elevation.surface"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous tab"
+    },
+    {
+      "keys": "right",
+      "action": "next tab"
+    },
+    {
+      "keys": "home",
+      "action": "first tab"
+    },
+    {
+      "keys": "end",
+      "action": "last tab"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

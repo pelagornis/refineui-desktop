@@ -1,0 +1,60 @@
+{
+  "$schema": "../schema.json",
+  "id": "result",
+  "name": "Result",
+  "layer": "components",
+  "status": "adapt",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Empty State / Error State",
+  "rust_types": [
+    "ResultView"
+  ],
+  "a11y_role": "status",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "foregroundError",
+      "foregroundInfo",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundSuccess",
+      "foregroundWarning"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeSmall",
+      "sizeXxLarge",
+      "sizeXxxLarge"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyMd"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

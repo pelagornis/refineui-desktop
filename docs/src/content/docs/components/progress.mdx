@@ -1,0 +1,50 @@
+---
+title: Progress
+description: "Determinate and indeterminate progress bars."
+sidebar:
+  order: 28
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Determinate and indeterminate progress bars.
+
+<Screenshot id="progress" alt="Progress variants and states" />
+
+## Usage
+
+- For step-by-step completion use Progress Stepper.
+
+```rust
+use refineui::prelude::*;
+
+Progress::new("upload", 0.3).label("Uploading").show_value(true);
+Progress::indeterminate("indexing");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story progress
+```
+
+## Motion
+
+The fill grows from 0 over `duration-progress`; the indeterminate bar sweeps with ease-in-out.
+
+## API
+
+Source: [`crates/refineui/src/components/progress.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/progress.rs)
+
+### Progress
+
+Linear progress bar.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, value: f32) -> Self` | Determinate bar, `value` in `0..=1`. |
+| `fn indeterminate(id: impl Into<ElementId>) -> Self` | Indeterminate bar (desktop addition: a brand segment sweeps the track). |
+| `fn large(mut self, large: bool) -> Self` | `lg` track (4px) instead of `sm` (2px). |
+| `fn label(mut self, label: impl Into<SharedString>) -> Self` | Caption above the bar (desktop addition). |
+| `fn show_value(mut self, show: bool) -> Self` | Show the percentage next to the label. |
+

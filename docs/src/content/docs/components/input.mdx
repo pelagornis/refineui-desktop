@@ -1,0 +1,82 @@
+---
+title: Input
+description: "Single-line text input with selection, clipboard, IME, placeholder, search and password modes."
+sidebar:
+  order: 8
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Single-line text input with selection, clipboard, IME, placeholder, search and password modes.
+
+<Screenshot id="input" alt="Input variants and states" />
+
+## Usage
+
+- `TextInput` is an entity: create it once with `cx.new(|cx| TextInput::new(cx))` and keep it in your view.
+- Subscribe to `InputEvent::Change` / `InputEvent::Submit` with `cx.subscribe`.
+- Key bindings (arrows, Home/End, ⌘A, ⌘C/⌘X/⌘V, Enter, Escape) live in the `RefineUITextInput` key context.
+
+```rust
+use refineui::prelude::*;
+
+let name = cx.new(|cx| TextInput::new(cx).placeholder("Project name"));
+cx.subscribe(&name, |this, input, event: &InputEvent, cx| {
+    if let InputEvent::Submit = event {
+        this.create(input.read(cx).text(), cx);
+    }
+})
+.detach();
+
+// in render():
+div().w(px(240.)).child(self.name.clone())
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story input
+```
+
+## Motion
+
+Border and focus halo tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/input.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/input.rs)
+
+### TextInput
+
+Editable text field: single line (web `Input` / `SearchField`) or multi-line with soft wrap (`TextInput::multiline`, web `Textarea`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(cx: &mut Context<Self>) -> Self` | Empty input. |
+| `fn multiline(cx: &mut Context<Self>) -> Self` | Multi-line field with soft wrap (web `Textarea`): `bodyMd`, `roundedLarge`, 80px minimum height, Enter inserts a newline. |
+| `fn search(cx: &mut Context<Self>) -> Self` | Search field preset (web `SearchField`): search icon, clear button, Esc clears. |
+| `fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self` | Placeholder text. |
+| `fn default_value(mut self, value: impl Into<SharedString>) -> Self` | Initial value. |
+| `fn size(mut self, size: ControlSize) -> Self` | Control size. |
+| `fn leading_icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn clearable(mut self, clearable: bool) -> Self` | Show a clear (×) button when non-empty. |
+| `fn masked(mut self, masked: bool) -> Self` | Password field: render bullets. |
+| `fn text(&self) -> SharedString` | Current text. |
+| `fn set_text(&mut self, text: impl Into<SharedString>, cx: &mut Context<Self>)` | Replace the text (emits `InputEvent::Change`). |
+| `fn set_disabled(&mut self, disabled: bool, cx: &mut Context<Self>)` | Enable / disable. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Builder form of `Self::set_disabled`. |
+| `fn set_invalid(&mut self, invalid: bool, cx: &mut Context<Self>)` | Mark as invalid (error border), e.g. from `crate::Field` validation. |
+| `fn invalid(mut self, invalid: bool) -> Self` | Builder form of `Self::set_invalid`. |
+| `fn set_success(&mut self, success: bool, cx: &mut Context<Self>)` | Mark as valid (success border, web `data-success`). |
+| `fn success(mut self, success: bool) -> Self` | Builder form of `Self::set_success`. |
+| `fn appearance(mut self, appearance: InputAppearance) -> Self` | Field chrome. |
+
+### InputEvent
+
+Events emitted by `TextInput`.
+
+| Variant | Description |
+| --- | --- |
+| `Change(SharedString)` | The text changed. |
+| `Submit(SharedString)` | Enter was pressed. |
+

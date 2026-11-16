@@ -1,0 +1,101 @@
+---
+title: Drag and Drop
+description: "The visual parts of drag and drop: a grip, the chip that follows the pointer, the insertion line and docking drop zones."
+sidebar:
+  order: 57
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The visual parts of drag and drop: a grip, the chip that follows the pointer, the insertion line and docking drop zones.
+
+<Screenshot id="drag-and-drop" alt="Drag and Drop variants and states" />
+
+## Usage
+
+- GPUI owns the gesture (`on_drag`, `on_drag_move`, `on_drop`); these are the visuals, and `interaction::dnd` is the geometry (`drop_edge`, `insertion_index`, `reorder`, `dock_zone`).
+- `DragHandle` — 2 × 3 dot grip, `grab` cursor; keyboard reordering is ⌥↑ / ⌥↓ on the focused row instead of a handle tab stop.
+- `DragPreview` — frosted popover chip with an icon and a count badge for multi-item drags; return it from `on_drag`.
+- `DropIndicator` — 2px `borderFocus` line with a ring cap between rows or tabs. `DropZone` — `backgroundBrandSubtle` overlay on the half / whole pane a docking drop would occupy.
+
+```rust
+use refineui::prelude::*;
+
+div()
+    .child(DragHandle::new("grip"))
+    .on_drag(RowDrag { from: ix }, |d, _, _, cx| cx.new(|_| DragPreview::new("Keymap").icon(IconName::Document)))
+    .on_drop(|d: &RowDrag, _, cx| { /* reorder(&mut items, d.from, to) */ });
+
+// In a pane:
+div().relative().child(content).child(DropZone::new(self.hover_zone));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story drag-and-drop
+```
+
+## API
+
+Source: [`crates/refineui/src/components/drag.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/drag.rs)
+
+### DragHandle
+
+A grip that starts a drag. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Vertical grip (2 columns × 3 rows of dots) for rows. |
+| `fn axis(mut self, axis: Axis) -> Self` | `Horizontal`: 3 columns × 2 rows, for tabs and cards. |
+
+### DragPreview
+
+The chip that follows the pointer during a drag. Use it as the `on_drag` view: `.on_drag(payload, \|p, _, _, cx\| cx.new(\|_\| DragPreview::new(p.label())))`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Preview showing `label`. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn count(mut self, count: usize) -> Self` | Number of dragged items; above 1 a count badge shows. |
+| `fn element(&self, cx: &App) -> gpui::Div` | The chip as a plain element (docs, screenshots). |
+
+### DropIndicator
+
+Insertion line between rows (vertical lists) or tabs (horizontal strips).
+
+| Method | Description |
+| --- | --- |
+| `fn between_rows() -> Self` | Line for a vertical list (horizontal line between rows). |
+| `fn between_tabs() -> Self` | Line for a horizontal strip (vertical line between tabs). |
+
+### DropZone
+
+Docking overlay: put it as the last child of a `relative` pane; it highlights where a drop at `zone` lands (`None` hides it).
+
+| Method | Description |
+| --- | --- |
+| `fn new(zone: Option<DockZone>) -> Self` | Overlay for `zone`. |
+
+### DockZone
+
+Where a panel / document dropped on a pane goes.
+
+| Variant | Description |
+| --- | --- |
+| `Center` | Join the pane's tab group. |
+| `Left` | Split the pane; the new part goes left. |
+| `Right` | Split; new part right. |
+| `Top` | Split; new part on top. |
+| `Bottom` | Split; new part at the bottom. |
+
+### DropEdge
+
+Where a dragged item lands relative to a row / tab.
+
+| Variant | Description |
+| --- | --- |
+| `Before` | Before the target (above a row, left of a tab). |
+| `Inside` | Into the target (tree folder, tab group). |
+| `After` | After the target. |
+

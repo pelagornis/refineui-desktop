@@ -1,0 +1,69 @@
+---
+title: Navigation Menu
+description: "Top navigation with links and dropdown panels (web `NavigationMenu`)."
+sidebar:
+  order: 73
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Top navigation with links and dropdown panels (web `NavigationMenu`).
+
+<Screenshot id="navigation-menu" alt="Navigation Menu variants and states" />
+
+## Usage
+
+- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
+- While a panel is open, hovering another trigger switches to it.
+- `menu` builds the compact frosted dropdown; `panel(label, layout, content)` takes any content in a `NavigationLayout` — `Dropdown`, `Floating` (mega panel, see Navigation Menu · Mega) or `Overlay` (full-width sheet, see Navigation Menu · Overlay).
+- `default_open(index)` opens an entry on first render (previews).
+
+```rust
+use refineui::prelude::*;
+
+NavigationMenu::new("nav")
+    .link("Overview", true, |_, _| {})
+    .menu("Products", [
+        NavigationLink::new("Design system").description("Tokens and components"),
+        NavigationLink::new("Icons"),
+    ]);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story navigation-menu
+```
+
+## Motion
+
+Panels fade and slide in over `duration-normal` (emphasized); the chevron turns 180° over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/navigation_menu.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/navigation_menu.rs)
+
+### NavigationMenu
+
+Top navigation bar.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty bar. |
+| `fn default_open(mut self, index: usize) -> Self` | Open the menu entry at `index` (0-based over all entries) on first render — handy for previews and screenshots. |
+| `fn link(mut self, label: impl Into<SharedString>, active: bool, on_click: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Plain top-level link; `active` marks the current page. |
+| `fn disabled_link(mut self, label: impl Into<SharedString>) -> Self` | Disabled top-level link. |
+| `fn menu(mut self, label: impl Into<SharedString>, links: impl IntoIterator<Item = NavigationLink>) -> Self` | Trigger with a dropdown of `links`. |
+| `fn panel(mut self, label: impl Into<SharedString>, layout: NavigationLayout, content: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self` | Trigger with a custom panel (web `NavigationMenuContent` children) in the given `layout` — e.g. a `NavigationLayout::Floating` mega menu. |
+
+### NavigationLink
+
+A row inside a navigation dropdown.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Row labelled `label`. |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Secondary line under the label. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn on_click(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Activation handler (the panel closes afterwards). |
+

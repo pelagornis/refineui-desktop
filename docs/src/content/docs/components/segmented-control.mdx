@@ -1,0 +1,65 @@
+---
+title: Segmented Control
+description: "Mutually exclusive segments for switching views or modes."
+sidebar:
+  order: 6
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Mutually exclusive segments for switching views or modes.
+
+<Screenshot id="segmented-control" alt="Segmented Control variants and states" />
+
+## Usage
+
+- Segments accept plain strings or `Segment::with_icon`.
+- Arrow keys move the selection when the control is focused.
+
+```rust
+use refineui::prelude::*;
+
+SegmentedControl::new("view", [
+    Segment::with_icon("List", IconName::Document),
+    Segment::with_icon("Grid", IconName::Grid),
+], self.view)
+.on_change(cx.listener(|this, ix: &usize, _, cx| {
+    this.view = *ix;
+    cx.notify();
+}));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story segmented-control
+```
+
+## Motion
+
+The thumb slides over `duration-medium` while its width follows over `duration-slow` (both emphasized), so the trailing edge stretches when it travels.
+
+## API
+
+Source: [`crates/refineui/src/components/segmented_control.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/segmented_control.rs)
+
+### SegmentedControl
+
+A row of mutually exclusive segments (web `SegmentedControl`).  Pill track (`backgroundBrandSubtle`, 1px `borderDefault`) with a brand indicator (`shadow-2`) that slides to the selected item — transform over `duration-medium`, width over `duration-slow`, both emphasized. Selected text is `foregroundOnBrand`; others `foregroundSecondary`, hover `foregroundPrimary`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, segments: impl IntoIterator<Item = impl Into<Segment>>, selected: usize) -> Self` | New control. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size (`md` is the web control; `sm` / `lg` adjust block padding). |
+| `fn full_width(mut self, full: bool) -> Self` | Stretch segments to fill the width. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disable every segment. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the chosen index. |
+
+### Segment
+
+One segment.
+
+| Method | Description |
+| --- | --- |
+| `fn with_icon(label: impl Into<SharedString>, icon: IconName) -> Self` | Segment with an icon. |
+

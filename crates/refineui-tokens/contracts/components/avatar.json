@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema.json",
+  "id": "avatar",
+  "name": "Avatar",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Avatar",
+    "Avatars"
+  ],
+  "a11y_role": "img",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "borderDefault",
+      "foregroundSecondary"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeXLarge",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyMd",
+      "bodyXs",
+      "captionLg",
+      "captionMd",
+      "captionSm",
+      "subtitleLg",
+      "titleMd",
+      "titleSm"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

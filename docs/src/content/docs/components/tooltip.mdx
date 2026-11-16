@@ -1,0 +1,48 @@
+---
+title: Tooltip
+description: "Hover hint with an optional shortcut."
+sidebar:
+  order: 31
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Hover hint with an optional shortcut.
+
+<Screenshot id="tooltip" alt="Tooltip variants and states" />
+
+## Usage
+
+- Attach to any stateful element with `.tooltip(Tooltip::text("…"))`; `Button` and `Toggle` have a `.tooltip(text)` shorthand.
+
+```rust
+use refineui::prelude::*;
+
+div().id("save").child("Save").tooltip(Tooltip::with_shortcut("Save", "⌘S"));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story tooltip
+```
+
+## Motion
+
+Fades in and slides 6px away from the pointer over `duration-fast` (emphasized); the beak is part of the bubble outline.
+
+## API
+
+Source: [`crates/refineui/src/components/tooltip.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/tooltip.rs)
+
+### Tooltip
+
+Tooltip content view.
+
+| Method | Description |
+| --- | --- |
+| `fn text(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Builder usable directly with `.tooltip(...)` on any stateful element. |
+| `fn with_shortcut(text: impl Into<SharedString>, shortcut: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Tooltip with a keyboard shortcut hint, e.g. `Tooltip::with_shortcut("Save", "⌘S")`. |
+| `fn for_action(text: impl Into<SharedString>, action: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Tooltip for a control bound to a GPUI action: the shortcut comes from the installed `crate::interaction::keymap::Keymap` in the platform's notation (`⇧⌘P` / `Ctrl+Shift+P`); no hint when unbound. |
+| `fn bubble(text: impl Into<SharedString>, cx: &App) -> gpui::Div` | Render a static tooltip bubble (used by docs / screenshots). |
+

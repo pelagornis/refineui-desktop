@@ -1,0 +1,59 @@
+---
+title: Typography
+description: "The RefineUI type scale (Inter, with Menlo for code)."
+sidebar:
+  order: 1
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The RefineUI type scale (Inter, with Menlo for code).
+
+<Screenshot id="typography" alt="Typography variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Text::new("Section title").variant(TextVariant::SubTitle1);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story typography
+```
+
+## API
+
+Source: [`crates/refineui/src/components/text.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/text.rs)
+
+### TextVariant
+
+Typography roles (web `typographys.ts`).
+
+| Variant | Description |
+| --- | --- |
+| `Heading1` | 64 / 86 heavy |
+| `Heading2` | 40 / 60 bold |
+| `Heading3` | 32 / 40 bold |
+| `Heading4` | 28 / 36 semibold |
+| `Title1` | 32 / 40 semibold |
+| `Title2` | 28 / 36 semibold |
+| `Title3` | 24 / 32 semibold |
+| `SubTitle1` | 20 / 28 semibold |
+| `SubTitle2` | 16 / 24 semibold |
+| `Body1` | 16 / 24 medium |
+| `Body2` | 14 / 20 medium |
+| `Body3` | 14 / 20 regular (default) |
+| `Body4` | 12 / 16 regular |
+| `Caption1` | 12 / 16 medium |
+| `Caption2` | 12 / 16 regular |
+| `Caption3` | 10 / 14 regular |
+
+| Method | Description |
+| --- | --- |
+| `fn token(self) -> TextStyle` | Underlying token. |
+

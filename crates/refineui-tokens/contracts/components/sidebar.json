@@ -1,0 +1,162 @@
+{
+  "$schema": "../schema.json",
+  "id": "sidebar",
+  "name": "Sidebar",
+  "layer": "composition",
+  "status": "adapt",
+  "phase": 3,
+  "feature": null,
+  "desktop_target": "Panel (navigation)",
+  "rust_types": [
+    "Sidebar",
+    "SidebarPeek"
+  ],
+  "a11y_role": "navigation",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "desktop",
+    "compact": {
+      "row_height": 26,
+      "tree_row_height": 22,
+      "tab_height": 28,
+      "toolbar_height": 32,
+      "status_bar_height": 22,
+      "panel_header_height": 28,
+      "activity_bar_width": 40,
+      "activity_item": 32,
+      "panel_padding": 8,
+      "gap": 4,
+      "icon": 16,
+      "splitter_hit": 4
+    },
+    "comfortable": {
+      "row_height": 32,
+      "tree_row_height": 28,
+      "tab_height": 36,
+      "toolbar_height": 40,
+      "status_bar_height": 24,
+      "panel_header_height": 36,
+      "activity_bar_width": 48,
+      "activity_item": 36,
+      "panel_padding": 10,
+      "gap": 6,
+      "icon": 16,
+      "splitter_hit": 6
+    },
+    "spacious": {
+      "row_height": 40,
+      "tree_row_height": 32,
+      "tab_height": 40,
+      "toolbar_height": 48,
+      "status_bar_height": 28,
+      "panel_header_height": 44,
+      "activity_bar_width": 56,
+      "activity_item": 44,
+      "panel_padding": 16,
+      "gap": 8,
+      "icon": 20,
+      "splitter_hit": 8
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "borderDefault",
+      "borderFocus",
+      "foregroundPrimary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXLarge",
+      "sizeXSmall",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "captionLg"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.panel"
+    ],
+    "elevation": [
+      "elevation.s"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next item"
+    },
+    {
+      "keys": "up",
+      "action": "previous item"
+    },
+    {
+      "keys": "home",
+      "action": "first item"
+    },
+    {
+      "keys": "end",
+      "action": "last item"
+    },
+    {
+      "keys": "enter",
+      "action": "activate item"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

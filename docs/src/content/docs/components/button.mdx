@@ -1,0 +1,83 @@
+---
+title: Button
+description: "Primary, secondary, outline and ghost buttons in three sizes, with icons, loading and disabled states."
+sidebar:
+  order: 4
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Primary, secondary, outline and ghost buttons in three sizes, with icons, loading and disabled states.
+
+<Screenshot id="button" alt="Button variants and states" />
+
+## Usage
+
+- Buttons are focusable with Tab and activate on click, Enter or Space.
+- Use `Button::icon_only` for toolbar actions and always give it a `tooltip`.
+- `loading(true)` swaps the leading icon for a spinner and blocks clicks.
+
+```rust
+use refineui::prelude::*;
+
+Button::new("save", "Save")
+    .variant(ButtonVariant::Primary)
+    .icon(IconName::Checkmark)
+    .on_click(|_, _window, _cx| println!("saved"));
+
+Button::icon_only("settings", IconName::Settings)
+    .variant(ButtonVariant::Ghost)
+    .tooltip("Settings");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story button
+```
+
+## Motion
+
+Pressing scales the button to 0.96 over `duration-fast` (`motion-scale-press`); background, border and text colors tween over `duration-fast` (ease-out); the focus ring appears on keyboard focus only.
+
+## API
+
+Source: [`crates/refineui/src/components/button.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/button.rs)
+
+### Button
+
+A push button. Focusable (Tab), activates on click, Enter or Space.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | Labelled button. |
+| `fn icon_only(id: impl Into<ElementId>, icon: IconName) -> Self` | Icon-only button (web `layout="icon"`). Give it a `Self::tooltip` for accessibility. |
+| `fn variant(mut self, variant: ButtonVariant) -> Self` | Visual variant. |
+| `fn size(mut self, size: ControlSize) -> Self` | Control size. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn icon_end(mut self, icon: IconName) -> Self` | Trailing icon. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disable interaction. |
+| `fn loading(mut self, loading: bool) -> Self` | Show a spinner and ignore clicks (web `data-state="loading"`). |
+| `fn selected(mut self, selected: bool) -> Self` | Pressed / toggled-on appearance (used by toolbars and `crate::ToggleButton`). |
+| `fn full_width(mut self, full_width: bool) -> Self` | Stretch to the parent's width. |
+| `fn tooltip_action(mut self, action: impl Into<SharedString>) -> Self` | Hover tooltip that also shows the shortcut bound to a GPUI action (from the installed keymap, in the platform's notation), e.g. `.tooltip("Toggle Sidebar").tooltip_action("workspace::ToggleSidebar")`. |
+| `fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self` | Hover tooltip. |
+| `fn icon_size(mut self, size: IconSize) -> Self` | Override the icon size (defaults to the size's metric: 16 / 20 / 24). |
+| `fn tab_index(mut self, tab_index: isize) -> Self` | Tab order (default `0`). |
+| `fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Click / Enter / Space handler. |
+
+### ButtonVariant
+
+Visual style.
+
+| Variant | Description |
+| --- | --- |
+| `Primary` | Filled brand (default). |
+| `Secondary` | Subtle filled. |
+| `Outline` | Bordered. |
+| `Ghost` | Transparent until hovered. |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+

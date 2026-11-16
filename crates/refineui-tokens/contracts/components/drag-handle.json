@@ -1,0 +1,104 @@
+{
+  "$schema": "../schema.json",
+  "id": "drag-handle",
+  "name": "Drag Handle",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Drag Handle",
+  "rust_types": [
+    "DragHandle"
+  ],
+  "a11y_role": "none",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "dots foregroundTertiary → foregroundSecondary; grab cursor"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "grabbing cursor"
+    },
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": {
+      "status": "implemented",
+      "visual": "DragPreview chip follows the pointer; DropIndicator marks the insertion point"
+    }
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "borderDefault",
+      "borderFocus",
+      "foregroundOnBrand",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedSmall"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm",
+      "captionMd"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline",
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next item"
+    },
+    {
+      "keys": "up",
+      "action": "previous item"
+    },
+    {
+      "keys": "enter",
+      "action": "activate item"
+    },
+    {
+      "keys": "alt-up",
+      "action": "move item up"
+    },
+    {
+      "keys": "alt-down",
+      "action": "move item down"
+    }
+  ],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "grab",
+    "hover_only": false
+  }
+}

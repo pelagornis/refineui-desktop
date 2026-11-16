@@ -1,0 +1,61 @@
+{
+  "$schema": "../schema.json",
+  "id": "label",
+  "name": "Label",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Label"
+  ],
+  "a11y_role": "label",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": null,
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "foregroundBrand",
+      "foregroundDisabled",
+      "foregroundError",
+      "foregroundInfo",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundSuccess",
+      "foregroundTertiary",
+      "foregroundWarning"
+    ],
+    "spacing": [
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "labelLg",
+      "labelMd",
+      "labelSm"
+    ]
+  },
+  "keyboard": [],
+  "focus": {
+    "tab_stop": "none",
+    "ring": "none",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "compact": {
+    "button": {"sm": {"height": 22, "padding_x": 8, "padding_y": 2, "radius": 6, "text_size": 12, "icon": 12}, "md": {"height": 28, "padding_x": 10, "padding_y": 4, "radius": 8, "text_size": 14, "icon": 16}, "lg": {"height": 32, "padding_x": 16, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}},
+    "field": {"sm": {"height": 24, "padding_x": 8, "padding_y": 4, "radius": 6, "text_size": 12, "icon": 12}, "md": {"height": 28, "padding_x": 10, "padding_y": 4, "radius": 8, "text_size": 14, "icon": 16}, "lg": {"height": 32, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}},
+    "select": {"sm": {"height": 22, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "md": {"height": 28, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "lg": {"height": 32, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}},
+    "chip": {"sm": {"height": 20, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 12, "icon": 12}, "md": {"height": 24, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 14, "icon": 16}, "lg": {"height": 32, "padding_x": 8, "padding_y": 0, "radius": 6, "text_size": 16, "icon": 20}},
+    "desktop": {"row_height": 26, "tree_row_height": 22, "tab_height": 28, "toolbar_height": 32, "status_bar_height": 22, "panel_header_height": 28, "activity_bar_width": 40, "activity_item": 32, "panel_padding": 8, "gap": 4, "icon": 16, "splitter_hit": 4}
+  },
+  "comfortable": {
+    "button": {"sm": {"height": 28, "padding_x": 10, "padding_y": 4, "radius": 8, "text_size": 14, "icon": 16}, "md": {"height": 36, "padding_x": 10, "padding_y": 6, "radius": 12, "text_size": 16, "icon": 20}, "lg": {"height": 48, "padding_x": 16, "padding_y": 10, "radius": 16, "text_size": 20, "icon": 24}},
+    "field": {"sm": {"height": 36, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 20}, "md": {"height": 44, "padding_x": 16, "padding_y": 10, "radius": 12, "text_size": 14, "icon": 24}, "lg": {"height": 52, "padding_x": 20, "padding_y": 16, "radius": 16, "text_size": 16, "icon": 28}},
+    "select": {"sm": {"height": 28, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "md": {"height": 36, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "lg": {"height": 48, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}},
+    "chip": {"sm": {"height": 20, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 12, "icon": 12}, "md": {"height": 24, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 14, "icon": 16}, "lg": {"height": 32, "padding_x": 8, "padding_y": 0, "radius": 6, "text_size": 16, "icon": 20}},
+    "desktop": {"row_height": 32, "tree_row_height": 28, "tab_height": 36, "toolbar_height": 40, "status_bar_height": 24, "panel_header_height": 36, "activity_bar_width": 48, "activity_item": 36, "panel_padding": 10, "gap": 6, "icon": 16, "splitter_hit": 6}
+  },
+  "spacious": {
+    "button": {"sm": {"height": 32, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}, "md": {"height": 40, "padding_x": 16, "padding_y": 8, "radius": 12, "text_size": 16, "icon": 20}, "lg": {"height": 52, "padding_x": 20, "padding_y": 10, "radius": 16, "text_size": 20, "icon": 24}},
+    "field": {"sm": {"height": 40, "padding_x": 10, "padding_y": 8, "radius": 8, "text_size": 14, "icon": 20}, "md": {"height": 48, "padding_x": 16, "padding_y": 10, "radius": 12, "text_size": 16, "icon": 24}, "lg": {"height": 56, "padding_x": 20, "padding_y": 16, "radius": 16, "text_size": 16, "icon": 28}},
+    "select": {"sm": {"height": 32, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "md": {"height": 40, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 12, "icon": 16}, "lg": {"height": 52, "padding_x": 10, "padding_y": 6, "radius": 8, "text_size": 14, "icon": 16}},
+    "chip": {"sm": {"height": 20, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 12, "icon": 12}, "md": {"height": 24, "padding_x": 6, "padding_y": 0, "radius": 6, "text_size": 14, "icon": 16}, "lg": {"height": 32, "padding_x": 8, "padding_y": 0, "radius": 6, "text_size": 16, "icon": 20}},
+    "desktop": {"row_height": 40, "tree_row_height": 32, "tab_height": 40, "toolbar_height": 48, "status_bar_height": 28, "panel_header_height": 44, "activity_bar_width": 56, "activity_item": 44, "panel_padding": 16, "gap": 8, "icon": 20, "splitter_hit": 8}
+  }
+}

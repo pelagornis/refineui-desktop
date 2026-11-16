@@ -1,0 +1,78 @@
+---
+title: Table
+description: "Sortable, selectable data table."
+sidebar:
+  order: 47
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Sortable, selectable data table.
+
+<Screenshot id="table" alt="Table variants and states" />
+
+## Usage
+
+- Columns are flexible by default; use `width(px)` or `fraction(0..1)` to size them.
+
+```rust
+use refineui::prelude::*;
+
+Table::new("files", [
+    Column::new("File").fraction(0.5).sorted(true),
+    Column::new("Lines").width(80.).align(Align::End),
+])
+.text_rows([["button.rs", "412"], ["input.rs", "890"]])
+.striped(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story table
+```
+
+## Motion
+
+A single `surfaceHover` plate slides between hovered rows over `duration-medium` (emphasized); selection tweens over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/table.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/table.rs)
+
+### Table
+
+Data table. Cells are any element; use `Table::text_rows` for strings.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, columns: impl IntoIterator<Item = Column>) -> Self` | New table. |
+| `fn row(mut self, cells: impl IntoIterator<Item = AnyElement>) -> Self` | Append a row of elements. |
+| `fn text_rows<R, S>(mut self, rows: impl IntoIterator<Item = R>) -> Self where R: IntoIterator<Item = S>, S: Into<SharedString>,` | Append rows of strings. |
+| `fn selected(mut self, ix: Option<usize>) -> Self` | Highlight a row. |
+| `fn striped(mut self, striped: bool) -> Self` | Zebra striping. |
+| `fn on_select(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Row click. |
+| `fn on_sort(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Header click (column index). |
+
+### Column
+
+Column definition.
+
+| Method | Description |
+| --- | --- |
+| `fn new(title: impl Into<SharedString>) -> Self` | Flexible column. |
+| `fn width(mut self, w: f32) -> Self` | Fixed width (px). |
+| `fn fraction(mut self, f: f32) -> Self` | Fractional width (`0.0..=1.0` of the table). |
+| `fn align(mut self, a: Align) -> Self` | Alignment. |
+| `fn sorted(mut self, ascending: bool) -> Self` | Show a sort indicator (`true` = ascending). |
+
+### Align
+
+Column alignment.
+
+| Variant | Description |
+| --- | --- |
+| `Start` | Left (default). |
+| `Center` | Centre. |
+| `End` | Right (numbers). |
+

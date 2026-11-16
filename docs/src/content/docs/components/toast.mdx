@@ -1,0 +1,87 @@
+---
+title: Toast
+description: "Transient notifications stacked at the top centre of the window."
+sidebar:
+  order: 33
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Transient notifications stacked at the top centre of the window.
+
+<Screenshot id="toast" alt="Toast variants and states" />
+
+## Usage
+
+- Create one `Toaster` entity per window, render it as the last child of your root, and `push` toasts into it.
+- Newest toast is in front; hover the stack to fan it out. Toasts without a `duration` get a dismiss button.
+
+```rust
+use refineui::prelude::*;
+
+let toaster = cx.new(|_| Toaster::new());
+toaster.update(cx, |t, cx| {
+    t.push(ToastData::new("Export complete").variant(ToastVariant::Success), cx)
+});
+
+// in render():
+refineui::root(cx).child(content).child(self.toaster.clone())
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story toast
+```
+
+## Motion
+
+Enters from `translateY(-100%)` over 280ms (emphasized), leaves over 200ms (standard); the stack fans out over `duration-panel` on hover.
+
+## API
+
+Source: [`crates/refineui/src/components/toast.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/toast.rs)
+
+### Toaster
+
+Toast stack host. Create with `cx.new(\|_\| Toaster::new())` and render it once (it draws in a deferred top layer).
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Empty toaster (3 visible toasts). |
+| `fn max_toasts(mut self, n: usize) -> Self` | Maximum toasts kept in the stack (web default is 1). |
+| `fn push(&mut self, data: ToastData, cx: &mut Context<Self>) -> u64` | Show a toast; returns its id. |
+| `fn dismiss(&mut self, id: u64, cx: &mut Context<Self>)` | Animate a toast out, then remove it. |
+
+### ToastData
+
+Toast content.
+
+| Method | Description |
+| --- | --- |
+| `fn new(title: impl Into<SharedString>) -> Self` | Message toast (4s). |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Second line. |
+| `fn variant(mut self, v: ToastVariant) -> Self` | Intent. |
+| `fn duration(mut self, d: Option<Duration>) -> Self` | Auto-dismiss delay. |
+| `fn action(mut self, label: impl Into<SharedString>, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Action button. |
+
+### ToastVariant
+
+Toast intent (sets the icon and its color).
+
+| Variant | Description |
+| --- | --- |
+| `Default` | `info` icon in `foregroundPrimary`. |
+| `Success` | `checkmark` in `foregroundSuccess`. |
+| `Error` | `error-circle` in `foregroundError`. |
+| `Warning` | `warning` in `foregroundWarning`. |
+
+### Toast
+
+A single toast card (also usable inline).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, data: ToastData) -> Self` | Card for `data`. |
+| `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Show a ghost dismiss button (desktop addition; the web swipes away). |
+

@@ -1,0 +1,107 @@
+{
+  "$schema": "../schema.json",
+  "id": "card",
+  "name": "Card",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Card"
+  ],
+  "a11y_role": "group",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover fill (`*Hover` alias) over duration-fast"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill (`*Active` alias)"
+    },
+    "focused": {
+      "status": "planned",
+      "visual": "2px focusRing (borderFocus) on :focus-visible only"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "foregroundDisabled / backgroundSurfaceDisabled, no pointer"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "spinner replaces the leading icon; not operable"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "toggled / pressed-in fill when used as a toggle"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceDisabled",
+      "backgroundSurfaceSelected",
+      "borderDefault",
+      "borderFocus",
+      "borderStrong",
+      "borderSubtle",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeXLarge",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "titleSm"
+    ],
+    "motion": [
+      "motion.fast"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline",
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "activate"
+    },
+    {
+      "keys": "space",
+      "action": "activate"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

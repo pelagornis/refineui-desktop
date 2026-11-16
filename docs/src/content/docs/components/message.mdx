@@ -1,0 +1,48 @@
+---
+title: Message
+description: "Conversation row: avatar, bubbles and a footer (web `Message`)."
+sidebar:
+  order: 67
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Conversation row: avatar, bubbles and a footer (web `Message`).
+
+<Screenshot id="message" alt="Message variants and states" />
+
+## Usage
+
+- Pair with `BubbleGroup` for runs of bubbles from one sender.
+
+```rust
+use refineui::prelude::*;
+
+Message::new()
+    .avatar(Avatar::new("Ada Lovelace"))
+    .child(BubbleGroup::new([Bubble::new("Hi!"), Bubble::new("Got a minute?")]))
+    .footer("Ada · 9:41");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story message
+```
+
+## API
+
+Source: [`crates/refineui/src/components/message.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/message.rs)
+
+### Message
+
+One conversation turn: avatar, bubbles and an optional footer.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | New incoming (start-aligned) message. |
+| `fn align(mut self, align: BubbleAlign) -> Self` | Sender side (web `align`). |
+| `fn avatar(mut self, avatar: Avatar) -> Self` | Sender avatar (web `MessageAvatar`). |
+| `fn child(mut self, e: impl IntoElement) -> Self` | Add content — usually a `Bubble` or `BubbleGroup` (web `MessageContent`). |
+| `fn footer(mut self, text: impl Into<SharedString>) -> Self` | Delivery / time line under the bubbles (web `MessageFooter`). |
+

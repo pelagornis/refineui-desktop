@@ -1,0 +1,144 @@
+---
+title: Text
+description: "Typography primitives mapped to the RefineUI type scale and semantic roles."
+sidebar:
+  order: 19
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Typography primitives mapped to the RefineUI type scale and semantic roles.
+
+<Screenshot id="text" alt="Text variants and states" />
+
+## Usage
+
+- Prefer `TextRole` (bodyLg, labelMd, captionSm, titleMd …) — the same semantic roles as the web `Text` component.
+- `TextVariant` mirrors the raw Foundation tokens (heading1…caption3).
+
+```rust
+use refineui::prelude::*;
+
+Text::new("Settings").role(TextRole::TitleMd);
+Heading::new(2, "Settings");
+Text::new("Changes are saved automatically.").color(TextColor::Secondary);
+Label::new("Name").required(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story text
+```
+
+## API
+
+Source: [`crates/refineui/src/components/text.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/text.rs)
+
+### Text
+
+A run of text styled with a typography token.
+
+| Method | Description |
+| --- | --- |
+| `fn new(text: impl Into<SharedString>) -> Self` | Body text. |
+| `fn variant(mut self, variant: TextVariant) -> Self` | Typography role. |
+| `fn role(mut self, role: TextRole) -> Self` | Semantic role (web `variant`, e.g. `TextRole::BodyMd`). |
+| `fn color(mut self, color: TextColor) -> Self` | Color role. |
+| `fn truncate(mut self) -> Self` | Single line with ellipsis. |
+
+### TextRole
+
+Text color roles. Semantic text role (web `Text variant`, `semantic/text.ts`) — what the web components reference.
+
+| Variant | Description |
+| --- | --- |
+| `DisplayLg` |  |
+| `DisplayMd` |  |
+| `DisplaySm` |  |
+| `HeadingLg` |  |
+| `HeadingMd` |  |
+| `HeadingSm` |  |
+| `TitleLg` |  |
+| `TitleMd` |  |
+| `TitleSm` |  |
+| `SubtitleLg` |  |
+| `SubtitleMd` |  |
+| `BodyLg` |  |
+| `BodyMd` |  |
+| `BodySm` |  |
+| `BodyXs` |  |
+| `LabelLg` |  |
+| `LabelMd` |  |
+| `LabelSm` |  |
+| `CaptionLg` |  |
+| `CaptionMd` |  |
+| `CaptionSm` |  |
+
+| Method | Description |
+| --- | --- |
+| `fn name(self) -> &'static str` | Web name (`bodyMd`, …). |
+| `fn token(self) -> TextStyle` | Resolved text style. |
+
+### TextVariant
+
+Typography roles (web `typographys.ts`).
+
+| Variant | Description |
+| --- | --- |
+| `Heading1` | 64 / 86 heavy |
+| `Heading2` | 40 / 60 bold |
+| `Heading3` | 32 / 40 bold |
+| `Heading4` | 28 / 36 semibold |
+| `Title1` | 32 / 40 semibold |
+| `Title2` | 28 / 36 semibold |
+| `Title3` | 24 / 32 semibold |
+| `SubTitle1` | 20 / 28 semibold |
+| `SubTitle2` | 16 / 24 semibold |
+| `Body1` | 16 / 24 medium |
+| `Body2` | 14 / 20 medium |
+| `Body3` | 14 / 20 regular (default) |
+| `Body4` | 12 / 16 regular |
+| `Caption1` | 12 / 16 medium |
+| `Caption2` | 12 / 16 regular |
+| `Caption3` | 10 / 14 regular |
+
+| Method | Description |
+| --- | --- |
+| `fn token(self) -> TextStyle` | Underlying token. |
+
+### TextColor
+
+Text color role.
+
+| Variant | Description |
+| --- | --- |
+| `Primary` | `foregroundPrimary` (default) |
+| `Secondary` | `foregroundSecondary` |
+| `Tertiary` | `foregroundTertiary` |
+| `Disabled` | `foregroundDisabled` |
+| `Success` | `foregroundSuccess` |
+| `Warning` | `foregroundWarning` |
+| `Error` | `foregroundError` |
+| `Info` | `foregroundInfo` |
+| `Brand` | `foregroundBrand` |
+
+### Heading
+
+Shorthand for a heading-level `Text`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(level: u8, text: impl Into<SharedString>) -> Text` | `heading1`…`heading4` (`level` is clamped to 1..=4). |
+
+### Label
+
+Form label — web `Label` (`sm \| md \| lg`, required marker).
+
+| Method | Description |
+| --- | --- |
+| `fn new(text: impl Into<SharedString>) -> Self` | New label. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn required(mut self, required: bool) -> Self` | Append a required `*`. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled color. |
+

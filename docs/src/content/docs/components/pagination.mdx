@@ -1,0 +1,51 @@
+---
+title: Pagination
+description: "Move between pages of results."
+sidebar:
+  order: 36
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Move between pages of results.
+
+<Screenshot id="pagination" alt="Pagination variants and states" />
+
+## Usage
+
+- Pages are 1-based; long ranges collapse with ellipses.
+
+```rust
+use refineui::prelude::*;
+
+Pagination::new("pages", self.page, 20)
+    .on_change(cx.listener(|this, p: &usize, _, cx| {
+        this.page = *p;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story pagination
+```
+
+## Motion
+
+Border width and plate tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/pagination.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/pagination.rs)
+
+### Pagination
+
+Page navigator (1-based pages).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, page: usize, total: usize) -> Self` | New paginator showing `page` of `total`. |
+| `fn size(mut self, size: ControlSize) -> Self` | Button size. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the new page. |
+

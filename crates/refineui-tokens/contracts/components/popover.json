@@ -1,0 +1,72 @@
+{
+  "$schema": "../schema.json",
+  "id": "popover",
+  "name": "Popover",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Popover"
+  ],
+  "a11y_role": "dialog",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": {
+      "status": "planned",
+      "visual": "first focusable child focused on open; focus restored on close"
+    },
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "borderDefault",
+      "foregroundPrimary"
+    ],
+    "radius": [
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeSmall",
+      "sizeXSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "subtitleMd"
+    ],
+    "elevation": [
+      "elevation.floating"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "escape",
+      "action": "dismiss"
+    }
+  ],
+  "focus": {
+    "tab_stop": "container",
+    "ring": "none",
+    "restores_focus": true
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

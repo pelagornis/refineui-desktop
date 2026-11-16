@@ -1,0 +1,178 @@
+{
+  "$schema": "../schema.json",
+  "id": "tag",
+  "name": "Tag",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Chip"
+  ],
+  "a11y_role": "button",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover fill (`*Hover` alias) over duration-fast"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill (`*Active` alias)"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "2px focusRing (borderFocus) on :focus-visible only"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "foregroundDisabled / backgroundSurfaceDisabled, no pointer"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "spinner replaces the leading icon; not operable"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "toggled / pressed-in fill when used as a toggle"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "chip",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 20,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 24,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 8,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 16,
+        "icon": 20
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 20,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 24,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 8,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 16,
+        "icon": 20
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 20,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 12,
+        "icon": 12
+      },
+      "md": {
+        "height": 24,
+        "padding_x": 6,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 14,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 8,
+        "padding_y": 0,
+        "radius": 6,
+        "text_size": 16,
+        "icon": 20
+      }
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundBrandActive",
+      "backgroundBrandHover",
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "backgroundSurfaceDisabled",
+      "backgroundSurfaceSelected",
+      "borderDefault",
+      "borderDisabled",
+      "borderFocus",
+      "borderHover",
+      "foregroundBrand",
+      "foregroundDisabled",
+      "foregroundInversed"
+    ],
+    "radius": [
+      "roundedMedium"
+    ],
+    "spacing": [
+      "sizeXxSmall"
+    ],
+    "motion": [
+      "motion.fastEase"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "activate"
+    },
+    {
+      "keys": "space",
+      "action": "activate"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

@@ -1,0 +1,49 @@
+[workspace]
+resolver = "3"
+members = ["crates/refineui-tokens", "crates/refineui", "examples/gallery"]
+default-members = ["crates/refineui-tokens", "crates/refineui", "examples/gallery"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT"
+repository = "https://github.com/pelagornis/refineui-gpui"
+homepage = "https://github.com/pelagornis/refineui-gpui"
+authors = ["Pelagornis"]
+
+[workspace.dependencies]
+refineui = { path = "crates/refineui", version = "0.1.0" }
+refineui-tokens = { path = "crates/refineui-tokens", version = "0.1.0" }
+gpui = { version = "0.2.2", features = ["runtime_shaders"] } # compile Metal shaders at runtime; no Xcode Metal Toolchain needed
+smallvec = "1"
+unicode-segmentation = "1.12"
+anyhow = "1"
+png = "0.17"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "allow"
+unused_must_use = "deny"
+# objc's `msg_send!` (used by the macOS vibrancy prototype) checks `feature = "cargo-clippy"`.
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+print_stdout = "allow"
+large_enum_variant = "allow"
+type_complexity = "allow"
+too_many_arguments = "allow"
+new_without_default = "allow"
+
+[profile.dev]
+# GPUI is heavy in debug; keep our code debuggable but optimize deps a bit.
+debug = "limited"
+
+[profile.dev.package."*"]
+opt-level = 1
+
+[profile.release]
+lto = "thin"
+codegen-units = 16

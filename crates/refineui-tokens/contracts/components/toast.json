@@ -1,0 +1,84 @@
+{
+  "$schema": "../schema.json",
+  "id": "toast",
+  "name": "Toast",
+  "layer": "components",
+  "status": "adapt",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": "Notification Center",
+  "rust_types": [
+    "Toast",
+    "Toaster"
+  ],
+  "a11y_role": "status",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": null,
+    "pressed": null,
+    "focused": {
+      "status": "planned",
+      "visual": "first focusable child focused on open; focus restored on close"
+    },
+    "disabled": null,
+    "loading": null,
+    "selected": null,
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "borderDefault",
+      "foregroundError",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundSuccess",
+      "foregroundWarning"
+    ],
+    "radius": [
+      "roundedXLarge"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXxxLarge"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyXs"
+    ],
+    "motion": [
+      "motion.toastEnter",
+      "motion.toastLeave",
+      "motion.toastStack"
+    ],
+    "elevation": [
+      "elevation.toast"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "escape",
+      "action": "dismiss"
+    }
+  ],
+  "focus": {
+    "tab_stop": "container",
+    "ring": "none",
+    "restores_focus": true
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

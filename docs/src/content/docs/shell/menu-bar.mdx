@@ -1,0 +1,76 @@
+---
+title: Menu Bar
+description: "One `AppMenu` model for the system menu bar on macOS and an in-window menu bar on Windows and Linux."
+sidebar:
+  order: 53
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+One `AppMenu` model for the system menu bar on macOS and an in-window menu bar on Windows and Linux.
+
+<Screenshot id="menu-bar" alt="Menu Bar variants and states" />
+
+## Usage
+
+- Items name GPUI actions (`"editor::Save"`); shortcuts are read from the installed keymap, so the menu, tooltips and the command palette always agree.
+- `set_system_menus(&menus, cx)` builds `gpui::Menu`s with key equivalents and standard `OsAction`s (Undo, Redo, Cut, Copy, Paste, Select All) and returns any unregistered action names.
+- In-window: click a title or press **F10** / **Alt**; ← / → move between menus, ↓ / Enter open, Escape closes and returns focus. While one menu is open, hovering another title switches to it.
+
+```rust
+use refineui::prelude::*;
+
+let menus = vec![
+    AppMenu::new("File").action("New File", "demo::NewFile").separator().action("Save", "demo::Save"),
+    AppMenu::new("Edit").action("Undo", "demo::Undo").action("Copy", "demo::Copy"),
+];
+if Os::current() == Os::MacOs {
+    set_system_menus(&menus, cx);
+}
+MenuBar::new("menubar", menus);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story menu-bar
+```
+
+## Motion
+
+Menus open instantly; hover-switching between open menus is immediate, like native menu bars.
+
+## API
+
+Source: [`crates/refineui/src/shell/menu_bar.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/menu_bar.rs)
+
+### MenuBar
+
+In-window menu bar. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, menus: Vec<AppMenu>) -> Self` | Menu bar showing `menus`. |
+| `fn bind_keys(cx: &mut App)` | Bind F10 to `FocusMenuBar` (Windows / Linux convention). |
+
+### AppMenu
+
+A top-level menu ("File", "Edit", …).
+
+| Method | Description |
+| --- | --- |
+| `fn new(name: impl Into<SharedString>) -> Self` | Empty menu titled `name`. |
+| `fn action(mut self, label: impl Into<SharedString>, action: impl Into<SharedString>) -> Self` | Add an action item. |
+| `fn separator(mut self) -> Self` | Add a separator. |
+| `fn submenu(mut self, menu: AppMenu) -> Self` | Add a submenu. |
+| `fn actions(&self) -> Vec<SharedString>` | Every action name in this menu (recursively). |
+
+### AppMenuItem
+
+One entry of an `AppMenu`.
+
+| Variant | Description |
+| --- | --- |
+| `Separator` | Runs a GPUI action by name. Label. GPUI action name (`"workspace::Save"`). Separator line. |
+| `Submenu(AppMenu)` | Nested menu. |
+

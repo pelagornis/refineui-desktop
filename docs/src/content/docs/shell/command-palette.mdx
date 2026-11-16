@@ -1,0 +1,73 @@
+---
+title: Command Palette
+description: "The ⇧⌘P / Ctrl+Shift+P action search: grouped commands with icons and keymap shortcuts, built on `Command`."
+sidebar:
+  order: 59
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The ⇧⌘P / Ctrl+Shift+P action search: grouped commands with icons and keymap shortcuts, built on `Command`.
+
+<Screenshot id="command-palette" alt="Command Palette variants and states" />
+
+## Usage
+
+- `CommandPalette` is an entity: render it as an overlay of the window root and toggle it from a `ToggleCommandPalette` handler.
+- Commands name GPUI actions; running one closes the palette, restores focus to where it was and dispatches the action there.
+- Shortcut labels are refreshed from the installed keymap every time it opens. Typing filters by label and keywords; ↑ / ↓ move, Enter runs, Escape closes.
+
+```rust
+use refineui::prelude::*;
+
+let palette = cx.new(|cx| CommandPalette::new(vec![
+    PaletteCommand::new("Save", "editor::Save").group("File").icon(IconName::Save),
+    PaletteCommand::new("Toggle Sidebar", "workspace::ToggleSidebar").group("View"),
+], window, cx));
+
+root(cx)
+    .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
+        this.palette.update(cx, |p, cx| p.toggle(window, cx));
+    }))
+    .child(self.palette.clone());
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story command-palette
+```
+
+## Motion
+
+Opens and closes instantly (desktop palettes do not animate in); the result indicator moves over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/command_palette.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/command_palette.rs)
+
+### CommandPalette
+
+The palette (an entity). See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn bind_keys(cx: &mut App)` | Bind ⇧⌘P / Ctrl+Shift+P to `ToggleCommandPalette`. |
+| `fn new(commands: Vec<PaletteCommand>, window: &mut Window, cx: &mut Context<Self>) -> Self` | New (closed) palette over `commands`. |
+| `fn set_commands(&mut self, commands: Vec<PaletteCommand>, cx: &mut Context<Self>)` | Replace the command list. |
+| `fn is_open(&self) -> bool` | Is it showing? |
+| `fn open(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open (refreshing shortcut labels, clearing the query, focusing the search field). |
+| `fn close(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Close and give focus back. |
+| `fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open or close. |
+
+### PaletteCommand
+
+One palette entry: a GPUI action by name.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>, action: impl Into<SharedString>) -> Self` | Entry for `action` labelled `label`. |
+| `fn group(mut self, group: impl Into<SharedString>) -> Self` | Group heading (e.g. `"File"`, `"View"`). |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn keywords(mut self, k: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Extra search words. |
+

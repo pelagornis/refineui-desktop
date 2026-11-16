@@ -1,0 +1,67 @@
+---
+title: Select
+description: "Pick one option from a popup list."
+sidebar:
+  order: 18
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Pick one option from a popup list.
+
+<Screenshot id="select" alt="Select variants and states" />
+
+## Usage
+
+- Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.
+
+```rust
+use refineui::prelude::*;
+
+Select::new("font", ["Inter", "SF Pro", "Menlo"], self.font)
+    .placeholder("Font")
+    .width(px(180.))
+    .on_change(cx.listener(|this, ix: &usize, _, cx| {
+        this.font = Some(*ix);
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story select
+```
+
+## Motion
+
+The popup fades in with the frosted-surface motion and a hover plate slides between options, item-aligned so the selected row sits over the trigger; trigger and items scale to 0.98 when pressed.
+
+## API
+
+Source: [`crates/refineui/src/components/select.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/select.rs)
+
+### Select
+
+Single-choice dropdown.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, options: impl IntoIterator<Item = impl Into<SharedString>>, selected: Option<usize>) -> Self` | New select. |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Placeholder when nothing is selected. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn appearance(mut self, a: SelectAppearance) -> Self` | Trigger appearance. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn width(mut self, w: gpui::Pixels) -> Self` | Fixed width (default: fill parent). |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the picked index. |
+
+### SelectAppearance
+
+Trigger appearance.
+
+| Variant | Description |
+| --- | --- |
+| `Filled` | Hairline-bordered field on `backgroundPrimary` (default). |
+| `Ghost` | Borderless; hover / open shows the `backgroundPrimaryHover` plate. |
+| `Plain` | Text and chevron only. |
+

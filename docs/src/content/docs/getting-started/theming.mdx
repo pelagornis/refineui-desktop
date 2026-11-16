@@ -1,0 +1,45 @@
+---
+title: Theming
+description: Light and dark appearance, density and reading tokens.
+sidebar:
+  order: 1
+---
+
+The theme is a GPUI global. Read it anywhere with `cx.theme()`:
+
+```rust
+let theme = cx.theme();
+div()
+    .bg(theme.colors.background_surface)
+    .text_color(theme.colors.foreground_secondary)
+    .shadow(theme.shadow(Elevation::FLOATING))
+```
+
+## Appearance
+
+```rust
+use refineui::{Appearance, Theme};
+
+Theme::set_appearance(Appearance::Dark, cx);
+Theme::toggle_appearance(cx);
+
+// Follow the OS (call from a window observer):
+Theme::sync_system_appearance(window, cx);
+```
+
+Every window re-renders when the appearance changes.
+
+## Density
+
+Desktop apps default to **compact** controls (22 / 28 / 32 px). Switch to
+comfortable (28 / 36 / 48 px, the web sizes) per app:
+
+```rust
+Theme::set_density(Density::Comfortable, cx);
+```
+
+## Raw tokens
+
+The `refineui-tokens` crate has no GPUI dependency and exposes the RefineUI
+palette, semantic colors, spacing, radius, stroke, opacity, typography,
+shadow and motion values (`refineui::tokens`).

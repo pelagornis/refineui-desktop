@@ -1,0 +1,204 @@
+{
+  "$schema": "../schema.json",
+  "id": "select",
+  "name": "Select",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Select"
+  ],
+  "a11y_role": "combobox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "borderHover"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "opens the list"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "focusRing"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "disabled aliases"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "trailing spinner while options load"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "chosen option shows a check; trigger shows its label"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "select",
+    "sizes": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "compact": {
+      "sm": {
+        "height": 22,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "md": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "lg": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "comfortable": {
+      "sm": {
+        "height": 28,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "md": {
+        "height": 36,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "lg": {
+        "height": 48,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    },
+    "spacious": {
+      "sm": {
+        "height": 32,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "md": {
+        "height": 40,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 12,
+        "icon": 16
+      },
+      "lg": {
+        "height": 52,
+        "padding_x": 10,
+        "padding_y": 6,
+        "radius": 8,
+        "text_size": 14,
+        "icon": 16
+      }
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "backgroundSurfaceDisabled",
+      "borderDefault",
+      "borderDisabled",
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundPlaceholder",
+      "foregroundPrimary",
+      "foregroundPrimaryHover"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodyMd"
+    ],
+    "motion": [
+      "motion.fast",
+      "motion.frosted"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "open / choose"
+    },
+    {
+      "keys": "space",
+      "action": "open"
+    },
+    {
+      "keys": "down",
+      "action": "open / next option"
+    },
+    {
+      "keys": "up",
+      "action": "previous option"
+    },
+    {
+      "keys": "escape",
+      "action": "close"
+    },
+    {
+      "keys": "home",
+      "action": "first option"
+    },
+    {
+      "keys": "end",
+      "action": "last option"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

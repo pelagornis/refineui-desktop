@@ -1,0 +1,76 @@
+---
+title: Chart
+description: "Bar and monotone line charts with axis, grid, hover cursor and tooltip (web `Chart`)."
+sidebar:
+  order: 71
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Bar and monotone line charts with axis, grid, hover cursor and tooltip (web `Chart`).
+
+<Screenshot id="chart" alt="Chart variants and states" />
+
+## Usage
+
+- Geometry follows the web 800 × 320 viewBox (aspect 5:2): bars fill half their band with a 12px top radius; the line is a monotone cubic with a fading area.
+- The scale max rounds up to 1 / 2 / 5 / 10 × 10ⁿ (`nice_max`), with 5 grid lines by default.
+
+```rust
+use refineui::prelude::*;
+
+Chart::bars("revenue", [186., 305., 237., 273., 209., 214.],
+    ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]);
+Chart::line("visitors", values, labels).series(ChartSeries::Info);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story chart
+```
+
+## Motion
+
+Bars grow from the baseline and the line draws in over `duration-panel` (emphasized); the hover cursor and tooltip fade over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/chart.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/chart.rs)
+
+### Chart
+
+A small chart.
+
+| Method | Description |
+| --- | --- |
+| `fn bars(id: impl Into<ElementId>, values: impl IntoIterator<Item = f32>, labels: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Bar chart of `values` with x `labels`. |
+| `fn line(id: impl Into<ElementId>, values: impl IntoIterator<Item = f32>, labels: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Line chart of `values` with x `labels`. |
+| `fn series(mut self, s: ChartSeries) -> Self` | Series color. |
+| `fn lines(mut self, n: usize) -> Self` | Grid / tick count (default 5). |
+| `fn max(mut self, m: f32) -> Self` | Fixed scale max (default: `nice_max` of the values). |
+| `fn area(mut self, on: bool) -> Self` | Line: fill the area under the line (default on). |
+| `fn points(mut self, on: bool) -> Self` | Line: draw points (default on). |
+
+### ChartKind
+
+Bar or line.
+
+| Variant | Description |
+| --- | --- |
+| `Bar` | Vertical bars (web `ChartBars`). |
+| `Line` | Monotone line (web `ChartLine`). |
+
+### ChartSeries
+
+Series color (web `ChartSeriesColor` → `background*`).
+
+| Variant | Description |
+| --- | --- |
+| `Brand` | `backgroundBrand`. |
+| `Info` | `backgroundInfo`. |
+| `Success` | `backgroundSuccess`. |
+| `Warning` | `backgroundWarning`. |
+| `Error` | `backgroundError`. |
+| `Discovery` | `backgroundDiscovery`. |
+

@@ -1,0 +1,60 @@
+---
+title: Tabs
+description: "Switch between views in the same context."
+sidebar:
+  order: 34
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Switch between views in the same context.
+
+<Screenshot id="tabs" alt="Tabs variants and states" />
+
+## Usage
+
+
+```rust
+use refineui::prelude::*;
+
+Tabs::new("tabs", [Tab::new("Overview"), Tab::new("Issues").count(12)], self.tab)
+    .on_change(cx.listener(|this, ix: &usize, _, cx| {
+        this.tab = *ix;
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story tabs
+```
+
+## Motion
+
+The underline indicator slides and resizes between tabs.
+
+## API
+
+Source: [`crates/refineui/src/components/tabs.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/tabs.rs)
+
+### Tabs
+
+Horizontal tab list (web `Tabs`). Render the selected panel yourself below it.  `captionLg` triggers over a 1px `borderDefault` rule; a 2px brand underline slides to the selected tab (transform + width over `duration-medium`, emphasized). Unselected tabs are `foregroundTertiary`, hover `foregroundPrimaryHover`; hovering the selected tab tints the line `brandHover`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, tabs: impl IntoIterator<Item = impl Into<Tab>>, selected: usize) -> Self` | New tab list. |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the chosen index. |
+
+### Tab
+
+One tab.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | New tab. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn count(mut self, count: usize) -> Self` | Trailing counter badge. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+

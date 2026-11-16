@@ -1,0 +1,61 @@
+---
+title: Date Input
+description: "Field that opens a Calendar popover — one date or a range (web `DateInput`)."
+sidebar:
+  order: 62
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Field that opens a Calendar popover — one date or a range (web `DateInput`).
+
+<Screenshot id="date-input" alt="Date Input variants and states" />
+
+## Usage
+
+- Values are `Date`; the field shows them like `Intl` short dates ("Nov 10, 2026").
+- `DateInput::range` shows two months and closes after the end date is picked.
+- Default size is `Large` (48px), like the web field.
+
+```rust
+use refineui::prelude::*;
+
+DateInput::new("due", self.due)
+    .on_change(cx.listener(|this, d: &Date, _, cx| {
+        this.due = Some(*d);
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story date-input
+```
+
+## Motion
+
+The popover fades and slides 6px down over `duration-fast` (emphasized); the border and focus halo tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/date_input.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/date_input.rs)
+
+### DateInput
+
+A date (or date range) field.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, value: Option<Date>) -> Self` | Single-date input. |
+| `fn range(id: impl Into<ElementId>, start: Option<Date>, end: Option<Date>) -> Self` | Range input (web `mode="range"`). |
+| `fn month(mut self, month: Date) -> Self` | Month shown when nothing is selected (defaults to the value). |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Placeholder (`Select date` / `Select date range`). |
+| `fn size(mut self, size: ControlSize) -> Self` | Field size (default `Large`, like the web). |
+| `fn error(mut self, e: bool) -> Self` | Error border. |
+| `fn success(mut self, s: bool) -> Self` | Success border. |
+| `fn disabled(mut self, d: bool) -> Self` | Disabled. |
+| `fn full_width(mut self, f: bool) -> Self` | Stretch to the parent's width. |
+| `fn on_change(mut self, f: impl Fn(&Date, &mut Window, &mut App) + 'static) -> Self` | Picked date (single mode). |
+| `fn on_range_change(mut self, f: impl Fn(Option<Date>, Option<Date>, &mut Window, &mut App) + 'static) -> Self` | Range change (range mode). |
+

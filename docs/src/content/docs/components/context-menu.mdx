@@ -1,0 +1,58 @@
+---
+title: Context Menu
+description: "Right-click menu that opens at the pointer, with hover submenus."
+sidebar:
+  order: 43
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Right-click menu that opens at the pointer, with hover submenus.
+
+<Screenshot id="context-menu" alt="Context Menu variants and states" />
+
+## Usage
+
+- Opens at the pointer on right click and is kept 4px inside the window (web `placeInView`).
+- Submenus open on hover to the right of their row (flipping left near the edge) and close 150ms after the pointer leaves.
+- Escape, a selection or an outside press closes it.
+
+```rust
+use refineui::prelude::*;
+
+ContextMenu::new(
+    "canvas",
+    Button::new("rc", "Right click").variant(ButtonVariant::Secondary),
+    Menu::new("ctx")
+        .label("File")
+        .item(MenuItem::new("New").icon(IconName::Add).shortcut("⌘N"))
+        .divider()
+        .submenu(
+            MenuItem::new("More"),
+            Menu::new("ctx-more").item(MenuItem::new("Rename")).item(MenuItem::new("Move")),
+        ),
+);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story context-menu
+```
+
+## Motion
+
+Panel fades in at the pointer (frosted motion); submenus open on hover and close 150ms after leaving.
+
+## API
+
+Source: [`crates/refineui/src/components/context_menu.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/context_menu.rs)
+
+### ContextMenu
+
+Right-click menu: wraps `content` and opens a frosted `Menu` at the pointer, fading in / out over `duration-normal`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, content: impl IntoElement, menu: Menu) -> Self` | New context-menu region. |
+

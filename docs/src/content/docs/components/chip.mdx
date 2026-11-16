@@ -1,0 +1,69 @@
+---
+title: Chip
+description: "Compact label that can be selected, clicked or removed. `Tag` is an alias."
+sidebar:
+  order: 21
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Compact label that can be selected, clicked or removed. `Tag` is an alias.
+
+<Screenshot id="chip" alt="Chip variants and states" />
+
+## Usage
+
+- `on_remove` adds a dismiss button whose glyph brightens on hover.
+- `Chip::tag` is an alias of `Chip::new` (the web Tag shares the chip anatomy).
+
+```rust
+use refineui::prelude::*;
+
+Chip::new("open", "Open").selected(self.filter == Filter::Open);
+Chip::tag("rust", "rust").on_remove(|_, _, _| {});
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story chip
+```
+
+## Motion
+
+Plate and remove-glyph opacity tween over `duration-fast`.
+
+## API
+
+Source: [`crates/refineui/src/components/chip.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/chip.rs)
+
+### Chip
+
+Compact label for filters, selections and metadata.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | New pill chip. |
+| `fn tag(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self` | Same as `Chip::new` (web `Tag` re-exports `Chip`). |
+| `fn variant(mut self, variant: ChipVariant) -> Self` | Variant. |
+| `fn size(mut self, size: ControlSize) -> Self` | Size. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn selected(mut self, selected: bool) -> Self` | Selected (filter-chip style). |
+| `fn on_click(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Make the chip clickable. |
+| `fn on_remove(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Show a remove (×) button. |
+
+### ChipVariant
+
+Chip / Tag variant.
+
+| Variant | Description |
+| --- | --- |
+| `Default` | Subtle fill (default). |
+| `Outline` | Bordered. |
+| `Filled` | Brand fill. |
+
+| Method | Description |
+| --- | --- |
+| `fn label(self) -> &'static str` | Display name. |
+

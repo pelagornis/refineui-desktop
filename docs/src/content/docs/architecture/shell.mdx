@@ -1,0 +1,117 @@
+---
+title: Application shell
+description: Window, titlebar, window controls, menu bar, toolbar, activity bar / navigation rail, status bar and the composed ApplicationShell.
+sidebar:
+  order: 7
+---
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ ●●●  Titlebar · unified toolbar · title          (macOS)       │
+│ ⊞ ‹ ›   Search commands ⇧⌘P           ▷ ✱   ─ ▢ ✕ (Windows)    │
+│ File Edit View Run Window Help              (Windows / Linux)  │
+├────┬──────────┬────────────────────────────────┬───────────────┤
+│ Ac │ Left     │ Workspace                       │ Right dock    │
+│ ti │ dock     │                                 │               │
+│ vi │          ├────────────────────────────────┤               │
+│ ty │          │ Bottom dock                     │               │
+├────┴──────────┴────────────────────────────────┴───────────────┤
+│ Status bar                                                      │
+└───────────────────────────────────────────────────────────────┘
+```
+
+Phase 2 ships every part as a GPUI view in `refineui::shell` and composes
+them in [`ApplicationShell`](/shell/application-shell/). The full demo is
+`cargo run -p refineui-gallery --bin refineui-shell` (or **Shell demo** in
+the gallery).
+
+```rust
+let spec = ShellSpec::default(); // unified toolbar, leading activity bar, status bar
+spec.regions(platform::current());                       // ordered ShellRegion list (F6 order)
+spec.metrics(platform::current(), Density::Comfortable); // titlebar / menu / toolbar / rail / status px
+
+ApplicationShell::new("app")
+    .spec(spec)
+    .title("refineui-gpui")
+    .menus(menus)
+    .toolbar(toolbar)
+    .activity_bar(activity)
+    .left_dock(ShellDock::new(explorer, 248.))
+    .center(editor)
+    .status_bar(status);
+```
+
+## Window
+
+- `WindowSpec::new(WindowPreset::Main, "Title")` → `window_options(&spec, cx)`
+  gives GPUI `WindowOptions` with a transparent titlebar, the macOS
+  traffic-light point for the titlebar height, the preset's minimum size,
+  `is_minimizable` and, on Linux, `WindowDecorations::Client`.
+- Presets: **Main** 1280×800 (min 720×480), **Document** 1000×720,
+  **Settings** 720×560 (no minimize / maximize), **Utility** 420×520.
+- Restore: `track_window_state(window, cx, path)` saves `WindowState`
+  (bounds, maximized, full screen) on every move / resize and on close.
+  `WindowSpec::restore(WindowState::load(&path))` re-applies it after
+  `sanitized(displays, min)`: if no connected display shows a 120×24 grip
+  of the titlebar (unplugged monitor) the saved position is dropped and
+  the window is centred; the size is clamped to the preset minimum and the
+  display.
+- Linux CSD: `WindowFrame` (wrapped automatically by `ApplicationShell`)
+  draws the 12px rounded frame and 10px shadow, insets the client area
+  (`set_client_inset`) and maps edges to `start_window_resize`; tiled
+  edges drop the rounding and shadow.
+
+## Titlebar and window controls
+
+| | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Controls | Native traffic lights, **leading**, positioned by GPUI at `((h − 14) / 2)` from the top and leading edge | Drawn caption buttons, **trailing**, 46 × h each, `WindowControlArea::{Min, Max, Close}` | Drawn header-bar buttons, trailing, 24px discs |
+| Titlebar height | 28 plain / 38 unified compact / 52 unified | 32 / 40 / 48 | 38 / 38 / 46 |
+| Drag area | Empty titlebar space; double-click = `titlebar_double_click` (honours the system setting) | `WindowControlArea::Drag` (system hit test, snap layouts) | `start_window_move`; double-click maximizes; right-click = window menu |
+| Close hover | System | `#C42B1C` + white glyph | Darker disc |
+| Full screen | Leading reserve removed | — | — |
+
+Interactive titlebar children are wrapped in `occlude()` so they never
+start a window drag. `Titlebar::os(..)` and `.interactive(false)` draw any
+platform's chrome as a static preview (docs, galleries).
+
+## Menu bar
+
+- One model: `AppMenu` (`action(label, "ns::Action")`, `separator`,
+  `submenu`). Shortcuts are looked up in the installed keymap.
+- **macOS**: `set_system_menus(&menus, cx)` → `cx.set_menus` with key
+  equivalents and standard `OsAction`s (Undo / Redo / Cut / Copy / Paste /
+  Select All). There is no in-window bar.
+- **Windows / Linux**: `MenuBar` inline in a plain titlebar, or in its own
+  row (`DesktopMetrics::tab_height`) under a unified titlebar. F10 / Alt
+  focuses it, ← / → move, ↓ / Enter open, Escape closes and returns focus.
+
+## Toolbar
+
+`ToolbarPlacement::{Unified, Separate, None}`. In the unified titlebar use
+`Toolbar::fill(true)` with `spacer()`s; each item is occluded from the drag
+region. Overflow into a menu is Phase 3.
+
+## Activity bar / Navigation rail
+
+`ActivityBar` replaces Side Dock. The default **Refine** style is a
+density-sized rail (48px comfortable) of 36px rounded tiles with a plate
+indicator and tooltips; every aspect is a field of `ActivityBarStyle`
+(shape, indicator None / Bar / Dot / Plate, sizes, colours, labels
+Tooltip / Below / Beside) and `render_item` replaces the face entirely.
+`ActivityBar::rail` keeps the former Side Dock look,
+`ActivityBar::navigation_rail` shows captions. Items reorder by drag or
+⌥↑ / ⌥↓.
+
+## Status bar
+
+`status_bar_height`, `surfaceSunken` with a hairline top border,
+`captionMd` text, leading and trailing groups of text / button / progress /
+custom items; `accent(true)` for debugging or remote sessions.
+
+## Focus regions
+
+F6 / Shift-F6 cycle menu bar → toolbar (titlebar) → activity bar → left
+dock → workspace → bottom dock → right dock → status bar
+(`interaction::focus::cycle_region`); Tab moves inside a region. A region
+shows an inset `borderFocus` outline for keyboard focus only.
