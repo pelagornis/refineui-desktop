@@ -2,7 +2,7 @@
 title: Menu Bar
 description: "One `AppMenu` model for the system menu bar on macOS and an in-window menu bar on Windows and Linux."
 sidebar:
-  order: 53
+  order: 59
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -15,7 +15,8 @@ One `AppMenu` model for the system menu bar on macOS and an in-window menu bar o
 
 - Items name GPUI actions (`"editor::Save"`); shortcuts are read from the installed keymap, so the menu, tooltips and the command palette always agree.
 - `set_system_menus(&menus, cx)` builds `gpui::Menu`s with key equivalents and standard `OsAction`s (Undo, Redo, Cut, Copy, Paste, Select All) and returns any unregistered action names.
-- In-window: click a title or press **F10** / **Alt**; ← / → move between menus, ↓ / Enter open, Escape closes and returns focus. While one menu is open, hovering another title switches to it.
+- In-window, the bar is a horizontal `ButtonGroup` row of ghost small `Button`s; the open menu's button is `selected`.
+- Click a title or press **F10** / **Alt**; ← / → move between menus, ↓ / Enter open, Escape closes and returns focus. While one menu is open, hovering another title switches to it.
 
 ```rust
 use refineui::prelude::*;
@@ -38,7 +39,7 @@ cargo run -p refineui-gallery -- --story menu-bar
 
 ## Motion
 
-Menus open instantly; hover-switching between open menus is immediate, like native menu bars.
+Menus open instantly; hover-switching between open menus is immediate, like native menu bars. Title buttons use the Button hover / press motion.
 
 ## API
 

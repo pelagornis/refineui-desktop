@@ -2,11 +2,11 @@
 """Regenerate the RefineUI color tokens from the web monorepo.
 
   python3 scripts/sync_tokens.py [path/to/refineui]   # default: ../refineui
-  cargo fmt && cargo test -p refineui-tokens
+  cargo fmt && cargo test -p refineui-foundation
 
 Writes:
-  crates/refineui-tokens/src/palette.rs      <- packages/tokens/src/global/colors.ts
-  crates/refineui-tokens/src/semantic.rs     <- packages/tokens/src/semantic/colors.ts (pairs block)
+  crates/refineui-foundation/src/palette.rs      <- packages/tokens/src/global/colors.ts
+  crates/refineui-foundation/src/semantic.rs     <- packages/tokens/src/semantic/colors.ts (pairs block)
   crates/refineui/src/theme_colors.rs        <- the semantic alias list
 
 Spacing, radius, typography, shadow and motion tokens are small and hand-ported;
@@ -44,7 +44,7 @@ for name, hx in palette:
 o += ["", "/// Every palette entry as `(web token name, color)`, in source order.", "pub const ALL: &[(&str, Color)] = &["]
 o += [f'    ("{name}", {const(name)}),' for name, _ in palette]
 o += ["];", ""]
-(ROOT / "crates/refineui-tokens/src/palette.rs").write_text("\n".join(o))
+(ROOT / "crates/refineui-foundation/src/palette.rs").write_text("\n".join(o))
 
 # ---- semantic pairs ----------------------------------------------------------
 sem_src = (TOKENS / "semantic/colors.ts").read_text()
@@ -55,7 +55,7 @@ for alias, l, d in pairs:
     for key in (l, d):
         if key not in names:
             sys.exit(f"{alias}: unknown palette key {key}")
-sem_path = ROOT / "crates/refineui-tokens/src/semantic.rs"
+sem_path = ROOT / "crates/refineui-foundation/src/semantic.rs"
 sem = sem_path.read_text()
 head, rest = sem.split("semantic_colors! {\n", 1)
 _, tail = rest.split("\n}\n", 1)
@@ -67,11 +67,11 @@ sem_path.write_text(head + "semantic_colors! {\n" + "\n".join(body) + "\n}\n" + 
 # ---- GPUI theme colors -------------------------------------------------------
 fields = [snake(a) for a, _, _ in pairs] + ["surface_overlay", "surface_frosted"]
 o = [
-    "//! GPUI-resolved semantic colors. Generated from `refineui_tokens::SemanticColors`;",
+    "//! GPUI-resolved semantic colors. Generated from `refineui_foundation::SemanticColors`;",
     "//! field names match the web alias tokens in snake_case.",
     "",
     "use gpui::Hsla;",
-    "use refineui_tokens::SemanticColors;",
+    "use refineui_foundation::SemanticColors;",
     "",
     "use crate::theme::to_hsla;",
     "",

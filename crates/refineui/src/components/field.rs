@@ -5,7 +5,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use refineui_tokens::{spacing, typography::role};
+use refineui_foundation::{spacing, typography::role};
 
 use crate::{ActiveTheme, ControlSize, Label, StyledExt};
 

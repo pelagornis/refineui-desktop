@@ -2133,8 +2133,6 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "979b45cfa6ec723b6f42330915a1b3769b930d02b2d505f9697f8ca602bee707"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -4388,13 +4386,19 @@ dependencies = [
  "gpui",
  "objc",
  "raw-window-handle",
- "refineui-tokens",
+ "refineui-foundation",
+ "refineui-material",
+ "refineui-system-icons",
  "serde",
  "serde_json",
  "smallvec",
  "syntect",
  "unicode-segmentation",
 ]
+
+[[package]]
+name = "refineui-foundation"
+version = "0.1.0"
 
 [[package]]
 name = "refineui-gallery"
@@ -4406,12 +4410,31 @@ dependencies = [
  "png 0.17.16",
  "raw-window-handle",
  "refineui",
+ "refineui-material",
  "x11rb",
 ]
 
 [[package]]
+name = "refineui-material"
+version = "0.1.0"
+dependencies = [
+ "gpui",
+ "image",
+ "refineui-foundation",
+ "smallvec",
+]
+
+[[package]]
+name = "refineui-system-icons"
+version = "0.5.0"
+source = "git+https://github.com/pelagornis/refineui-system-icons?rev=92f5616b1dda54ea426e25db97e4a472214c920c#92f5616b1dda54ea426e25db97e4a472214c920c"
+
+[[package]]
 name = "refineui-tokens"
 version = "0.1.0"
+dependencies = [
+ "refineui-foundation",
+]
 
 [[package]]
 name = "regex"

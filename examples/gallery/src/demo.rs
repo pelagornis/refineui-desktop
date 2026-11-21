@@ -1,9 +1,9 @@
 //! Demo actions, key bindings, menus and palette commands shared by the
-//! gallery stories and the `refineui-shell` demo window.
+//! gallery stories.
 
 use gpui::App;
 use refineui::IconName;
-use refineui::components::PaletteCommand;
+use refineui::components::CommandItem;
 use refineui::interaction::keymap::KeybindingManager;
 use refineui::platform::Os;
 use refineui::shell::AppMenu;
@@ -42,6 +42,13 @@ gpui::actions!(
         ZoomWindow,
         Hide,
         Preferences,
+        SplitRight,
+        SplitDown,
+        ToggleZoom,
+        FloatPanel,
+        NewWindow,
+        ToggleInspector,
+        ResetLayout,
     ]
 );
 
@@ -78,6 +85,11 @@ pub fn keymap() -> KeybindingManager {
         ("f5", "demo::Run", None),
         ("shift-f5", "demo::Debug", None),
         ("secondary-,", "demo::Preferences", None),
+        ("secondary-\\", "demo::SplitRight", None),
+        ("secondary-alt-\\", "demo::SplitDown", None),
+        ("secondary-shift-enter", "demo::ToggleZoom", None),
+        ("secondary-shift-n", "demo::NewWindow", None),
+        ("secondary-alt-b", "demo::ToggleInspector", None),
     ] {
         km.bind(keys, action, ctx);
     }
@@ -158,6 +170,17 @@ pub fn menus() -> Vec<AppMenu> {
             .action("Toggle Sidebar", "demo::ToggleSidebar")
             .action("Toggle Panel", "demo::TogglePanel")
             .action("Toggle Status Bar", "demo::ToggleStatusBar")
+            .action("Toggle Inspector", "demo::ToggleInspector")
+            .separator()
+            .submenu(
+                AppMenu::new("Editor Layout")
+                    .action("Split Right", "demo::SplitRight")
+                    .action("Split Down", "demo::SplitDown")
+                    .action("Toggle Maximized Group", "demo::ToggleZoom")
+                    .separator()
+                    .action("Float Panel", "demo::FloatPanel")
+                    .action("Reset Layout", "demo::ResetLayout"),
+            )
             .separator()
             .submenu(
                 AppMenu::new("Appearance")
@@ -175,6 +198,8 @@ pub fn menus() -> Vec<AppMenu> {
     );
     v.push(
         AppMenu::new("Window")
+            .action("New Window", "demo::NewWindow")
+            .separator()
             .action("Minimize", "demo::Minimize")
             .action("Zoom", "demo::ZoomWindow")
             .separator()
@@ -190,44 +215,90 @@ pub fn menus() -> Vec<AppMenu> {
 }
 
 /// Command palette entries.
-pub fn commands() -> Vec<PaletteCommand> {
+pub fn commands() -> Vec<CommandItem> {
     vec![
-        PaletteCommand::new("New File", "demo::NewFile")
+        CommandItem::new("New File")
+            .action("demo::NewFile")
             .group("File")
             .icon(IconName::Document),
-        PaletteCommand::new("Open…", "demo::OpenFile")
+        CommandItem::new("Open…")
+            .action("demo::OpenFile")
             .group("File")
             .icon(IconName::FolderOpen),
-        PaletteCommand::new("Save", "demo::Save")
+        CommandItem::new("Save")
+            .action("demo::Save")
             .group("File")
             .icon(IconName::Save),
-        PaletteCommand::new("Save All", "demo::SaveAll").group("File"),
-        PaletteCommand::new("Close Tab", "demo::CloseTab").group("File"),
-        PaletteCommand::new("Toggle Sidebar", "demo::ToggleSidebar")
+        CommandItem::new("Save All")
+            .action("demo::SaveAll")
+            .group("File"),
+        CommandItem::new("Close Tab")
+            .action("demo::CloseTab")
+            .group("File"),
+        CommandItem::new("Toggle Sidebar")
+            .action("demo::ToggleSidebar")
             .group("View")
             .icon(IconName::PanelLeft)
             .keywords(["explorer", "panel"]),
-        PaletteCommand::new("Toggle Panel", "demo::TogglePanel")
+        CommandItem::new("Toggle Panel")
+            .action("demo::TogglePanel")
             .group("View")
             .keywords(["terminal", "output", "problems"]),
-        PaletteCommand::new("Toggle Status Bar", "demo::ToggleStatusBar").group("View"),
-        PaletteCommand::new("Toggle Light / Dark", "demo::ToggleAppearance")
+        CommandItem::new("Toggle Status Bar")
+            .action("demo::ToggleStatusBar")
+            .group("View"),
+        CommandItem::new("Toggle Inspector")
+            .action("demo::ToggleInspector")
+            .group("View")
+            .icon(IconName::Options),
+        CommandItem::new("Split Editor Right")
+            .action("demo::SplitRight")
+            .group("Layout")
+            .icon(IconName::SquareMultiple)
+            .keywords(["split", "group", "pane"]),
+        CommandItem::new("Split Editor Down")
+            .action("demo::SplitDown")
+            .group("Layout")
+            .keywords(["split", "group", "pane"]),
+        CommandItem::new("Toggle Maximized Editor Group")
+            .action("demo::ToggleZoom")
+            .group("Layout")
+            .icon(IconName::FullScreenMaximize)
+            .keywords(["zoom", "maximize"]),
+        CommandItem::new("Float Panel")
+            .action("demo::FloatPanel")
+            .group("Layout")
+            .keywords(["detach", "window", "undock"]),
+        CommandItem::new("Reset Layout")
+            .action("demo::ResetLayout")
+            .group("Layout"),
+        CommandItem::new("New Window")
+            .action("demo::NewWindow")
+            .group("Window")
+            .icon(IconName::Desktop),
+        CommandItem::new("Toggle Light / Dark")
+            .action("demo::ToggleAppearance")
             .group("View")
             .icon(IconName::Moon)
             .keywords(["theme", "appearance", "dark", "light"]),
-        PaletteCommand::new("Cycle Density", "demo::CycleDensity")
+        CommandItem::new("Cycle Density")
+            .action("demo::CycleDensity")
             .group("View")
             .keywords(["compact", "comfortable", "spacious"]),
-        PaletteCommand::new("Run", "demo::Run")
+        CommandItem::new("Run")
+            .action("demo::Run")
             .group("Run")
             .icon(IconName::Play),
-        PaletteCommand::new("Start Debugging", "demo::Debug")
+        CommandItem::new("Start Debugging")
+            .action("demo::Debug")
             .group("Run")
             .icon(IconName::Bug),
-        PaletteCommand::new("Settings", "demo::Preferences")
+        CommandItem::new("Settings")
+            .action("demo::Preferences")
             .group("Preferences")
             .icon(IconName::Settings),
-        PaletteCommand::new("Documentation", "demo::Docs")
+        CommandItem::new("Documentation")
+            .action("demo::Docs")
             .group("Help")
             .icon(IconName::QuestionCircle),
     ]

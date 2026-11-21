@@ -34,7 +34,10 @@ trait (`PlatformAdapter`). OS code stays behind `cfg` inside the adapter.
 
 | Crate / module | GPUI? | Contents |
 | --- | --- | --- |
-| `refineui-tokens` | **No** | Palette, semantic colors, typography, spacing, radius, stroke, opacity, elevation, motion, blur, z-index, sizes, **density** (`Density`, `DesktopMetrics`), **window metrics**, **component contracts** (`contracts/*.json` + schema) |
+| `refineui-foundation` | **No** | Palette, semantic colors, typography, spacing, radius, stroke, opacity, elevation, motion, blur, **material roles** (`MaterialRole`, `MaterialTokens`), z-index, sizes, **density** (`Density`, `DesktopMetrics`), **window metrics**, **component contracts** (`contracts/*.json` + schema) |
+| `refineui-tokens` | **No** | Compatibility re-export of `refineui-foundation` |
+| `refineui-material` | Yes (gpui + foundation only) | Material Engine: `Material`, real backdrop blur, saturation, tint, lighting, grain, elevation shadows, `MaterialSurface` — see [Material Engine](/architecture/material/) |
+| `vendor/gpui` | — | gpui 0.2.2 + the `BackdropBlur` primitive, applied with `[patch.crates-io]` |
 | `refineui::foundation` | Yes | `Theme`, density access, focus ring, `LayerOrder`, `CursorRole`, frost (`vibrancy`) |
 | `refineui::interaction` | Logic only (GPUI-free state machines) | `keymap` (contexts, conflicts), `selection`, `focus` (roving), `dnd` (drop geometry) |
 | `refineui::components` | Yes | The component set |
@@ -42,11 +45,14 @@ trait (`PlatformAdapter`). OS code stays behind `cfg` inside the adapter.
 | `refineui::shell` | Logic now; GPUI views in Phase 2 | Shell regions and chrome metrics per platform / density |
 | `refineui::platform` | Logic + `cfg` glue | `PlatformAdapter`, `MacOsAdapter`, `WindowsAdapter`, `LinuxAdapter` |
 
-We kept this to **two crates**. Separate crates for each layer would add
-version and re-export overhead without stronger guarantees, since the
-module boundaries are enforced by review and by the rules below (brief
-principle 7). The only hard split is the one the brief requires: shared
-contracts (`refineui-tokens`) never depend on GPUI.
+Crates follow the three layers of the material brief: **Foundation**
+(`refineui-foundation`, GPUI-free), **Desktop** (`refineui`: components,
+interaction, workspace, shell, platform) and **Material**
+(`refineui-material`). Material depends only on GPUI and the foundation,
+never on components; components adopt materials in Phase 4. Inside
+`refineui` the sub-layers stay modules — separate crates would add version
+and re-export overhead without stronger guarantees (brief principle 7).
+Shared contracts (`refineui-foundation`) never depend on GPUI.
 
 `use refineui::prelude::*` re-exports components, the theme, density,
 `LayerOrder`, `CursorRole`, `SelectionModel` and `PlatformAdapter`.
@@ -57,8 +63,9 @@ contracts (`refineui-tokens`) never depend on GPUI.
 | --- | --- | --- |
 | `bundled-fonts` | yes | Embed Inter. |
 | `syntax-highlight` | yes | CodeBlock colours (syntect). |
-| `web-extras` | no | Web-oriented components outside Desktop Core: `Carousel`, `Footer`, `NavigationMenu`, `Link`, `container()`. |
+| `web-extras` | no | The web page `container()` (outside Desktop Core). `Link` and `Carousel` are core; `Footer` and `NavigationMenu` were removed. |
 | `serde` | no | `Serialize` / `Deserialize` for `workspace::layout`. |
+| `material` | no | Components on the Material Engine (real backdrop blur for Popover, Tooltip, Menu, the dialog scrim, `Surface`, opt-in glass Button / Input / Toast / Dialog). Needs the vendored gpui patch (see Installation). |
 | `typecheck-macos-vibrancy` | no | Type-check the AppKit glue on non-macOS hosts (CI only). |
 
 ## Rules (brief §8)

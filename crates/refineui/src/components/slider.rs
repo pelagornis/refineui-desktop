@@ -111,7 +111,7 @@ fn fill_width(t: f32, track_w: f32, track_h: f32) -> Option<f32> {
 
 impl RenderOnce for Slider {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        use refineui_tokens::size::component::{
+        use refineui_foundation::size::component::{
             SLIDER_INTERACTION, SLIDER_THUMB, SLIDER_TRACK, SLIDER_TRACK_SM,
         };
         let theme = cx.theme().clone();
@@ -147,9 +147,12 @@ impl RenderOnce for Slider {
         let (border, scale) = if self.disabled {
             (c.border_disabled, 1.0)
         } else if pressed {
-            (c.border_strong, refineui_tokens::motion::scale::PRESS)
+            (c.border_strong, refineui_foundation::motion::scale::PRESS)
         } else if hovered {
-            (c.border_strong, refineui_tokens::motion::scale::HOVER_GROW)
+            (
+                c.border_strong,
+                refineui_foundation::motion::scale::HOVER_GROW,
+            )
         } else if focused {
             (c.border_focus, 1.0)
         } else {
@@ -168,7 +171,7 @@ impl RenderOnce for Slider {
             shadow.clear();
         }
         if focused {
-            shadow.extend(theme.ring(c.border_focus, refineui_tokens::stroke::THICK));
+            shadow.extend(theme.ring(c.border_focus, refineui_foundation::stroke::THICK));
         }
         let value = self.value;
         let id = self.id.clone();

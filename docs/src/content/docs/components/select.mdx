@@ -2,7 +2,7 @@
 title: Select
 description: "Pick one option from a popup list."
 sidebar:
-  order: 18
+  order: 22
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -14,12 +14,16 @@ Pick one option from a popup list.
 ## Usage
 
 - Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.
+- Placement is collision-aware: `SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow, constraining height to the available space and scrolling inside a `ScrollArea`. `SelectPosition::ItemAligned` (default, Radix) overlays the selected row on the trigger.
+- Tune `collision_padding` (default 10) and `side_offset` (default 4, popper only). Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.
+- GPUI has no CSS variables; `SelectLayout` / `FloatingLayout` exposes the same values as `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation uses that origin (a short slide from the trigger). See the `select-position` gallery story for flip, constrained scroll and item-aligned screenshots.
 
 ```rust
 use refineui::prelude::*;
 
 Select::new("font", ["Inter", "SF Pro", "Menlo"], self.font)
     .placeholder("Font")
+    .position(SelectPosition::Popper)
     .width(px(180.))
     .on_change(cx.listener(|this, ix: &usize, _, cx| {
         this.font = Some(*ix);
@@ -35,7 +39,7 @@ cargo run -p refineui-gallery -- --story select
 
 ## Motion
 
-The popup fades in with the frosted-surface motion and a hover plate slides between options, item-aligned so the selected row sits over the trigger; trigger and items scale to 0.98 when pressed.
+The popup fades in with the frosted-surface motion, sliding a few pixels out of the trigger along `SelectLayout::transform_origin` (the web `--refineui-select-content-transform-origin`). A hover plate slides between options; trigger and items scale to 0.98 when pressed.
 
 ## API
 
@@ -53,6 +57,10 @@ Single-choice dropdown.
 | `fn appearance(mut self, a: SelectAppearance) -> Self` | Trigger appearance. |
 | `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
 | `fn width(mut self, w: gpui::Pixels) -> Self` | Fixed width (default: fill parent). |
+| `fn default_open(mut self, open: bool) -> Self` | Start with the list open (first frame only; used by the gallery screenshot of the open popup). |
+| `fn position(mut self, position: SelectPosition) -> Self` | Popup placement (default `SelectPosition::ItemAligned`). |
+| `fn collision_padding(mut self, padding: f32) -> Self` | Viewport-edge padding used when flipping and clamping the popup (web `collisionPadding`, default 10). |
+| `fn side_offset(mut self, offset: f32) -> Self` | Gap between the trigger and a `SelectPosition::Popper` popup (web `sideOffset`, default 4). Ignored for item-aligned placement. |
 | `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the picked index. |
 
 ### SelectAppearance
@@ -64,4 +72,56 @@ Trigger appearance.
 | `Filled` | Hairline-bordered field on `backgroundPrimary` (default). |
 | `Ghost` | Borderless; hover / open shows the `backgroundPrimaryHover` plate. |
 | `Plain` | Text and chevron only. |
+
+### SelectPosition
+
+How the popup is placed relative to the trigger (web `position`).
+
+| Variant | Description |
+| --- | --- |
+| `ItemAligned` | Radix default: the selected item overlays the trigger (macOS pop-up button style), shifting and scrolling to stay in view. |
+| `Popper` | Below the trigger (or above when there is not enough room), with `Select::side_offset` and collision flipping. |
+
+### SelectLayout
+
+Placement of an open Select popup. Alias of `FloatingLayout`; see that type for the mapping to `--refineui-select-content-available-height`, `--refineui-select-trigger-height`, and `--refineui-select-content-transform-origin`.
+
+### FloatingLayout
+
+Result of collision-aware placement.  Field mapping to the web Select CSS variables:  \| Field \| Web custom property \| \| --- \| --- \| \| `Self::available_height` \| `--refineui-select-content-available-height` \| \| `Self::trigger_height` \| `--refineui-select-trigger-height` \| \| `Self::transform_origin` (via `TransformOrigin::to_css`) \| `--refineui-select-content-transform-origin` \| \| `Self::side` \| data-side (`top` / `bottom`) \|
+
+| Method | Description |
+| --- | --- |
+| `fn origin(self) -> Point<Pixels>` | Top-left origin as a GPUI point. |
+
+### FloatingSide
+
+Preferred (and resolved) vertical side of a popper panel.
+
+| Variant | Description |
+| --- | --- |
+| `Bottom` | Below the trigger. |
+| `Top` | Above the trigger. |
+
+| Method | Description |
+| --- | --- |
+| `fn opposite(self) -> Self` | The opposite side. |
+
+### CollisionOptions
+
+Padding from the viewport edge and gap from the trigger.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Defaults (`collision_padding` 10, `side_offset` 4). |
+| `fn collision_padding(mut self, v: f32) -> Self` | Viewport-edge padding. |
+| `fn side_offset(mut self, v: f32) -> Self` | Trigger-to-panel gap (popper). |
+
+### TransformOrigin
+
+Local point inside the panel used as a CSS-style transform origin.  Maps to the web custom property `--refineui-select-content-transform-origin` (a CSS string such as `"160px 0px"`).
+
+| Method | Description |
+| --- | --- |
+| `fn to_css(self) -> String` | CSS value for `--refineui-select-content-transform-origin`. |
 

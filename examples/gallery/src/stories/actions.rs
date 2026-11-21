@@ -32,7 +32,7 @@ pub(super) fn stories() -> Vec<Story> {
         Story {
             id: "link",
             name: "Link",
-            group: StoryGroup::Optional,
+            group: StoryGroup::Actions,
             summary: "Inline text link.",
             shot: (480., 100.),
             render: link,

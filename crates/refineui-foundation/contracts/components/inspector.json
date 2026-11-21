@@ -1,0 +1,124 @@
+{
+  "$schema": "../schema.json",
+  "id": "inspector",
+  "name": "Inspector",
+  "layer": "composition",
+  "status": "new",
+  "phase": 3,
+  "feature": null,
+  "desktop_target": "Inspector",
+  "rust_types": [
+    "Inspector"
+  ],
+  "a11y_role": "complementary",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "planned",
+      "visual": "trigger hover fill"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "trigger active fill"
+    },
+    "focused": {
+      "status": "planned",
+      "visual": "focusRing on the trigger"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "trigger disabled aliases"
+    },
+    "loading": null,
+    "selected": {
+      "status": "planned",
+      "visual": "expanded / open"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "desktop",
+    "compact": {
+      "row_height": 26,
+      "tree_row_height": 22,
+      "tab_height": 28,
+      "toolbar_height": 32,
+      "status_bar_height": 22,
+      "panel_header_height": 28,
+      "activity_bar_width": 40,
+      "activity_item": 32,
+      "panel_padding": 8,
+      "gap": 4,
+      "icon": 16,
+      "splitter_hit": 4
+    },
+    "comfortable": {
+      "row_height": 32,
+      "tree_row_height": 28,
+      "tab_height": 36,
+      "toolbar_height": 40,
+      "status_bar_height": 24,
+      "panel_header_height": 36,
+      "activity_bar_width": 48,
+      "activity_item": 36,
+      "panel_padding": 10,
+      "gap": 6,
+      "icon": 16,
+      "splitter_hit": 6
+    },
+    "spacious": {
+      "row_height": 40,
+      "tree_row_height": 32,
+      "tab_height": 40,
+      "toolbar_height": 48,
+      "status_bar_height": 28,
+      "panel_header_height": 44,
+      "activity_bar_width": 56,
+      "activity_item": 44,
+      "panel_padding": 16,
+      "gap": 8,
+      "icon": 20,
+      "splitter_hit": 8
+    }
+  },
+  "tokens": {
+    "color": [
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "spacing": [
+      "sizeLarge",
+      "sizeSmall"
+    ],
+    "typography": [
+      "bodySm"
+    ],
+    "stroke": [
+      "strokeWidthHairline"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "toggle"
+    },
+    {
+      "keys": "space",
+      "action": "toggle"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

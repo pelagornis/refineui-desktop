@@ -14,7 +14,7 @@ use gpui::{
     App, ElementId, InteractiveElement, IntoElement, KeyDownEvent, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{motion::easing::EMPHASIZED, opacity, spacing, typography::role};
+use refineui_foundation::{motion::easing::EMPHASIZED, opacity, spacing, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, probe, use_focus_handle,
@@ -130,7 +130,7 @@ impl RenderOnce for ProgressStepper {
         let pos = animate(
             child_id(&self.id, "pos"),
             current as f32,
-            Motion::new(refineui_tokens::motion::duration::PANEL, EMPHASIZED),
+            Motion::new(refineui_foundation::motion::duration::PANEL, EMPHASIZED),
             window,
             cx,
         );

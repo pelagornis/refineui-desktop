@@ -1,13 +1,13 @@
 ---
 title: Divider
-description: "Horizontal and vertical separators, optionally labelled or with a centered icon."
+description: "Horizontal and vertical separators, optionally labelled or with a centered icon. `Separator` is the same component."
 sidebar:
-  order: 25
+  order: 30
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-Horizontal and vertical separators, optionally labelled or with a centered icon.
+Horizontal and vertical separators, optionally labelled or with a centered icon. `Separator` is the same component.
 
 <Screenshot id="divider" alt="Divider variants and states" />
 
@@ -39,11 +39,16 @@ A separating rule.
 | Method | Description |
 | --- | --- |
 | `fn horizontal() -> Self` | Horizontal divider. |
+| `fn on_surface(mut self, kind: crate::SurfaceKind) -> Self` | On a `crate::Surface` of `kind`: a translucent rule tinted by the surface's foreground, so it reads on blurred materials instead of an opaque gray line. |
 | `fn vertical() -> Self` | Vertical divider. |
 | `fn label(mut self, label: impl Into<SharedString>) -> Self` | Content layout with a label. |
 | `fn icon(mut self) -> Self` | Icon layout (brand ring glyph). |
 | `fn align(mut self, align: DividerAlign) -> Self` | Label / icon alignment. |
 | `fn strong(mut self, strong: bool) -> Self` | Use `borderStrong` (desktop addition for pane splitters). |
+
+### Separator
+
+Separator — the desktop name for `Divider` (same component).
 
 ### Axis
 

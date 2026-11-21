@@ -8,7 +8,7 @@ use gpui::{
     relative,
 };
 
-use refineui_tokens::{radius, size::component, spacing, typography::role};
+use refineui_foundation::{radius, size::component, spacing, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, probe, use_interaction, use_layout_probe,

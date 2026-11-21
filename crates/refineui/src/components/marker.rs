@@ -11,7 +11,7 @@ use gpui::{
     Animation, AnimationExt, App, ElementId, IntoElement, ParentElement, RenderOnce, SharedString,
     Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{spacing, stroke, typography::role};
+use refineui_foundation::{spacing, stroke, typography::role};
 
 use crate::motion::{reduced_motion, skeleton_pulse_opacity};
 use crate::{ActiveTheme, Icon, IconName, IconSize, StyledExt};
@@ -81,7 +81,7 @@ impl RenderOnce for Marker {
             text.with_animation(
                 self.id,
                 Animation::new(std::time::Duration::from_millis(
-                    refineui_tokens::motion::duration::SKELETON,
+                    refineui_foundation::motion::duration::SKELETON,
                 ))
                 .repeat(),
                 |d, t| d.opacity(skeleton_pulse_opacity(t)),

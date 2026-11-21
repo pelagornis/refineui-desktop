@@ -12,6 +12,11 @@
 //! panels therefore use [`crate::Theme::floating_fill`]: the frost colour
 //! pre-composited over the page, fully opaque.
 //!
+//! The vendored gpui (`vendor/gpui`) adds a backdrop-blur primitive; with
+//! the `material` feature in-window panels use it (see [`crate::material`]).
+//! When [`FrostMode::Native`] is active it takes precedence and in-window
+//! materials stay off.
+//!
 //! ## What *can* blur
 //!
 //! The OS compositor can. `WindowBackgroundAppearance::Blurred` puts an
@@ -61,7 +66,7 @@ use gpui::{
     IntoElement, ParentElement, Pixels, Point, Render, Size, Styled, Subscription, Window,
     WindowBackgroundAppearance, WindowBounds, WindowId, WindowKind, WindowOptions, div, px,
 };
-use refineui_tokens::{radius, stroke};
+use refineui_foundation::{radius, stroke};
 
 use crate::motion::{child_id, probe, use_layout_probe};
 use crate::{ActiveTheme, Menu};

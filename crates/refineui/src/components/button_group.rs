@@ -8,7 +8,7 @@
 //! `size` / `variant` cascade to every Button that does not set its own.
 
 use gpui::{App, IntoElement, ParentElement, RenderOnce, Styled, Window, div, prelude::*, px};
-use refineui_tokens::{spacing, stroke};
+use refineui_foundation::{spacing, stroke};
 
 use crate::{ActiveTheme, Axis, Button, ButtonVariant, ControlSize};
 
@@ -104,6 +104,17 @@ pub(crate) fn group_tube(size: ControlSize, vertical: bool, cx: &App) -> gpui::D
         ))
 }
 
+/// The detached ButtonGroup row (`gap-xx-small`), for composites that wrap
+/// each Button (e.g. [`crate::shell::MenuBar`]).
+pub(crate) fn group_row(vertical: bool) -> gpui::Div {
+    div()
+        .flex()
+        .flex_none()
+        .when(vertical, |d| d.flex_col())
+        .when(!vertical, |d| d.items_center())
+        .gap(px(spacing::XX_SMALL))
+}
+
 impl RenderOnce for ButtonGroup {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let vertical = self.orientation == Axis::Vertical;
@@ -115,13 +126,7 @@ impl RenderOnce for ButtonGroup {
         if self.attached {
             group_tube(size.unwrap_or_default(), vertical, cx).children(buttons)
         } else {
-            div()
-                .flex()
-                .flex_none()
-                .when(vertical, |d| d.flex_col())
-                .when(!vertical, |d| d.items_center())
-                .gap(px(spacing::XX_SMALL))
-                .children(buttons)
+            group_row(vertical).children(buttons)
         }
     }
 }
@@ -132,7 +137,7 @@ mod tests {
 
     #[test]
     fn tube_radius_is_button_radius_plus_padding() {
-        let d = refineui_tokens::size::Density::Comfortable;
+        let d = refineui_foundation::size::Density::Comfortable;
         for s in ControlSize::ALL {
             assert_eq!(
                 button_group_radius(s),

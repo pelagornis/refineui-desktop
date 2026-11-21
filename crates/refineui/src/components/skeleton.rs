@@ -75,15 +75,15 @@ impl RenderOnce for Skeleton {
         let color = cx.theme().colors.background_surface_selected;
         let h = self.height.unwrap_or(match self.shape {
             SkeletonShape::Text => px(12.),
-            _ => px(refineui_tokens::size::component::SKELETON_HEIGHT),
+            _ => px(refineui_foundation::size::component::SKELETON_HEIGHT),
         });
         let el = div().flex_none().h(h).bg(color);
         let el = match (self.shape, self.width) {
             (SkeletonShape::Circle, w) => el.w(w.unwrap_or(h)).rounded_full(),
             (SkeletonShape::Text, Some(w)) => el.w(w).rounded_full(),
             (SkeletonShape::Text, None) => el.w_full().rounded_full(),
-            (_, Some(w)) => el.w(w).rounded(px(refineui_tokens::radius::LARGE)),
-            (_, None) => el.w_full().rounded(px(refineui_tokens::radius::LARGE)),
+            (_, Some(w)) => el.w(w).rounded(px(refineui_foundation::radius::LARGE)),
+            (_, None) => el.w_full().rounded(px(refineui_foundation::radius::LARGE)),
         };
         if self.animate && !crate::motion::reduced_motion(cx) {
             el.with_animation("refineui-skeleton", skeleton_pulse(), |d, t| {

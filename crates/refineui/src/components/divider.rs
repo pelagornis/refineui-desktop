@@ -5,7 +5,7 @@
 //! ring in a 20px slot. Short ends (left / right alignment) are 8px.
 
 use gpui::{App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px};
-use refineui_tokens::{size::component::DIVIDER_SHORT_END, spacing, typography::role};
+use refineui_foundation::{size::component::DIVIDER_SHORT_END, spacing, typography::role};
 
 use crate::{ActiveTheme, StyledExt};
 
@@ -45,7 +45,11 @@ pub struct Divider {
     content: Content,
     align: DividerAlign,
     strong: bool,
+    surface: Option<crate::SurfaceKind>,
 }
+
+/// Separator — the desktop name for [`Divider`] (same component).
+pub type Separator = Divider;
 
 impl Divider {
     /// Horizontal divider.
@@ -55,7 +59,16 @@ impl Divider {
             content: Content::None,
             align: DividerAlign::Center,
             strong: false,
+            surface: None,
         }
+    }
+
+    /// On a [`crate::Surface`] of `kind`: a translucent rule tinted by the
+    /// surface's foreground, so it reads on blurred materials instead of an
+    /// opaque gray line.
+    pub fn on_surface(mut self, kind: crate::SurfaceKind) -> Self {
+        self.surface = Some(kind);
+        self
     }
 
     /// Vertical divider.
@@ -94,12 +107,14 @@ impl Divider {
 impl RenderOnce for Divider {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let c = &cx.theme().colors;
-        let color = if self.strong {
-            c.border_strong
-        } else {
-            c.border_default
+        let color = match self.surface {
+            Some(kind) => kind
+                .foreground(cx)
+                .opacity(if self.strong { 0.22 } else { 0.12 }),
+            None if self.strong => c.border_strong,
+            None => c.border_default,
         };
-        let thin = px(refineui_tokens::stroke::THIN);
+        let thin = px(refineui_foundation::stroke::THIN);
         let segment = |grow: bool| {
             let d = div().h(thin).min_h(thin).flex_none().bg(color);
             if grow {

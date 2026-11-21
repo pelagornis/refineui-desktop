@@ -8,7 +8,7 @@ use gpui::{
     prelude::*, px,
 };
 
-use refineui_tokens::{size::component, spacing, stroke, typography::role};
+use refineui_foundation::{size::component, spacing, stroke, typography::role};
 
 use crate::motion::{Motion, animate, child_id, focus_visible, use_focus_handle};
 use crate::{ActiveTheme, StyledExt};

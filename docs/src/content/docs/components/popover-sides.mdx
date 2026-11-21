@@ -1,0 +1,79 @@
+---
+title: Popover Sides
+description: "The popover beak on each of the four sides, continuous with the panel."
+sidebar:
+  order: 50
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The popover beak on each of the four sides, continuous with the panel.
+
+<Screenshot id="popover-sides" alt="Popover Sides variants and states" />
+
+## Usage
+
+- `placement` chooses the preferred side (`AnchorSide::{Top,Bottom,Left,Right}`). The panel flips when that side does not have room, via `place_anchored`.
+- The 24×12 beak and the panel are one closed outline (shared fill and a single hairline). The beak aims at the trigger midpoint and is clamped off the corner radius.
+
+```rust
+use refineui::prelude::*;
+
+Popover::new("side", Button::new("open", "Open"), |_,_,_| Text::new("Top").into_any_element())
+    .placement(AnchorSide::Top);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story popover-sides
+```
+
+## Motion
+
+Same enter motion as Popover; the beak is part of one outline with the panel on every side.
+
+## API
+
+Source: [`crates/refineui/src/components/popover.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/popover.rs)
+
+### Popover
+
+Floating panel anchored to a trigger.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, trigger: impl IntoElement, content: impl Fn(Rc<dyn Fn(&mut App)>, &mut Window, &mut App) -> AnyElement + 'static) -> Self` | New popover (bottom placement, centered — web defaults). |
+| `fn title(mut self, title: impl Into<SharedString>) -> Self` | Optional heading with a close button. |
+| `fn placement(mut self, side: AnchorSide) -> Self` | Preferred side of the trigger (web `side`). The panel flips when this side does not have room. |
+| `fn side_offset(mut self, offset: f32) -> Self` | Gap between the trigger and the panel (web `sideOffset`). |
+| `fn align(mut self, align: PopoverAlign) -> Self` | Panel alignment (web `align`, default `center`). |
+| `fn align_end(self) -> Self` | Align the panel's end edge with the trigger (`align("end")`). |
+| `fn force_open(mut self) -> Self` | Render the panel open, in flow (for docs / screenshots). |
+
+### PopoverAlign
+
+Panel alignment against the trigger — web `PopoverAlign`.
+
+| Variant | Description |
+| --- | --- |
+| `Start` | Panel start edge flush with the trigger's start edge. |
+| `Center` | Panel centered under the trigger (web default). |
+| `End` | Panel end edge flush with the trigger's end edge. |
+
+### AnchorSide
+
+Placement side for a beaked floating panel (Popover / Tooltip).
+
+| Variant | Description |
+| --- | --- |
+| `Top` | Above the trigger; the beak sits on the panel's bottom edge. |
+| `Bottom` | Below the trigger; the beak sits on the panel's top edge. |
+| `Left` | Leading side of the trigger; the beak sits on the panel's right edge. |
+| `Right` | Trailing side of the trigger; the beak sits on the panel's left edge. |
+
+| Method | Description |
+| --- | --- |
+| `fn opposite(self) -> Self` | The opposite side. |
+| `fn vertical(self) -> bool` | `true` when the panel is above or below the trigger. |
+

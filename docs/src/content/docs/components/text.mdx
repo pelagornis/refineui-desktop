@@ -2,7 +2,7 @@
 title: Text
 description: "Typography primitives mapped to the RefineUI type scale and semantic roles."
 sidebar:
-  order: 19
+  order: 24
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -42,6 +42,7 @@ A run of text styled with a typography token.
 | Method | Description |
 | --- | --- |
 | `fn new(text: impl Into<SharedString>) -> Self` | Body text. |
+| `fn on_surface(mut self, kind: crate::SurfaceKind) -> Self` | Read on a `crate::Surface` of `kind`: primary / secondary / tertiary colors follow the surface (e.g. light text on the HUD); intent colors are unchanged. |
 | `fn variant(mut self, variant: TextVariant) -> Self` | Typography role. |
 | `fn role(mut self, role: TextRole) -> Self` | Semantic role (web `variant`, e.g. `TextRole::BodyMd`). |
 | `fn color(mut self, color: TextColor) -> Self` | Color role. |

@@ -1,0 +1,5 @@
+#!/bin/bash
+out=""; prev=""
+for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done
+if [ -n "$out" ]; then clang -target arm64-apple-macos11 -c -x c /dev/null -o "$out" 2>/dev/null || : > "$out"; fi
+exit 0

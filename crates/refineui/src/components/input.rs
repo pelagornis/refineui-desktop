@@ -129,6 +129,7 @@ pub struct TextInput {
     appearance: InputAppearance,
     last_lines: Vec<WrappedLine>,
     line_height: Pixels,
+    glass: bool,
 }
 
 impl EventEmitter<InputEvent> for TextInput {}
@@ -166,7 +167,23 @@ impl TextInput {
             appearance: InputAppearance::Outline,
             last_lines: Vec::new(),
             line_height: px(20.),
+            glass: false,
         }
+    }
+
+    /// Glass field: the field plate is a material (real blur behind the
+    /// text) for inputs floating over content, e.g. a search field in a
+    /// HUD or over media. Only when [`crate::materials_active`]; otherwise
+    /// the field paints as usual. Default `false`.
+    pub fn glass(mut self, glass: bool) -> Self {
+        self.glass = glass;
+        self
+    }
+
+    /// Runtime form of [`Self::glass`].
+    pub fn set_glass(&mut self, glass: bool, cx: &mut Context<Self>) {
+        self.glass = glass;
+        cx.notify();
     }
 
     /// Multi-line field with soft wrap (web `Textarea`): `bodyMd`, `roundedLarge`,
@@ -194,6 +211,16 @@ impl TextInput {
     pub fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
         self.placeholder = placeholder.into();
         self
+    }
+
+    /// Replace the placeholder after creation.
+    pub fn set_placeholder(
+        &mut self,
+        placeholder: impl Into<SharedString>,
+        cx: &mut Context<Self>,
+    ) {
+        self.placeholder = placeholder.into();
+        cx.notify();
     }
 
     /// Initial value.
@@ -1186,17 +1213,41 @@ impl Render for TextInput {
             cx,
         );
         let halo_color = halo.unwrap_or(border);
+        let radius = px(if self.multiline {
+            refineui_foundation::radius::LARGE
+        } else if filled {
+            search_shell(theme.density, self.size).radius
+        } else {
+            m.radius
+        });
+        // Glass: the material is the plate and draws the (animated) border
+        // above the blur; the box itself keeps a transparent border.
+        let glass = (self.glass && crate::materials_active(cx)).then(|| {
+            crate::material::backing(
+                crate::SurfaceKind::Panel,
+                radius,
+                1.,
+                bg,
+                Some(border),
+                Vec::new(),
+                cx,
+            )
+        });
+        let (border, bg, glass_layer) = match glass {
+            Some(b) => (b.border, b.fill, b.layer),
+            None => (border, bg, None),
+        };
         // SearchField (filled) uses a larger leading glyph: small / medium / large.
         let shell = search_shell(theme.density, self.size);
         let icon_size = IconSize::Custom(px(if filled { shell.icon } else { m.icon }));
         let clear_size = IconSize::Custom(px(match self.size {
-            ControlSize::Small => refineui_tokens::size::icon::X_SMALL,
-            _ => refineui_tokens::size::icon::SMALL,
+            ControlSize::Small => refineui_foundation::size::icon::X_SMALL,
+            _ => refineui_foundation::size::icon::SMALL,
         }));
         let show_clear = self.clearable && !self.content.is_empty() && !self.disabled;
         let multiline = self.multiline;
         let text = if multiline {
-            refineui_tokens::typography::role::BODY_MD
+            refineui_foundation::typography::role::BODY_MD
         } else {
             m.text
         };
@@ -1222,22 +1273,18 @@ impl Render for TextInput {
             })
             .when(multiline, |d| {
                 d.items_start()
-                    .min_h(px(refineui_tokens::size::component::TEXTAREA_MIN))
-                    .px(px(refineui_tokens::spacing::X_SMALL))
-                    .py(px(refineui_tokens::spacing::MEDIUM))
+                    .min_h(px(refineui_foundation::size::component::TEXTAREA_MIN))
+                    .px(px(refineui_foundation::spacing::X_SMALL))
+                    .py(px(refineui_foundation::spacing::MEDIUM))
             })
-            .gap(px(refineui_tokens::spacing::X_SMALL))
+            .gap(px(refineui_foundation::spacing::X_SMALL))
             .w_full()
-            .rounded(px(if multiline {
-                refineui_tokens::radius::LARGE
-            } else if filled {
-                shell.radius
-            } else {
-                m.radius
-            }))
+            .rounded(radius)
             .border_1()
             .border_color(border)
             .bg(bg)
+            .relative()
+            .children(glass_layer)
             .text_color(if self.disabled {
                 c.foreground_disabled
             } else {
@@ -1248,7 +1295,7 @@ impl Render for TextInput {
             .when(halo_alpha > 0.01, |d| {
                 d.shadow(theme.ring(
                     halo_color.opacity(halo_alpha),
-                    refineui_tokens::stroke::HAIRLINE,
+                    refineui_foundation::stroke::HAIRLINE,
                 ))
             })
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
@@ -1316,7 +1363,8 @@ impl Render for TextInput {
                             window.focus(&this.focus_handle);
                         }))
                         .child(
-                            Icon::new(IconName::DismissCircle)
+                            // Web `SearchFieldClear`: `dismiss`, filled, 16 / 20 / 20.
+                            Icon::new(IconName::Dismiss)
                                 .style(crate::IconStyle::Filled)
                                 .size(clear_size)
                                 .color(c.foreground_tertiary),
@@ -1342,16 +1390,19 @@ pub(crate) struct SearchShell {
 /// SearchField metrics for `size` at `density`: a fixed-height row (no block
 /// padding), so web Comfortable is 36 / 44 / 52 tall, 12 / 16 / 20 inline
 /// padding, `roundedLarge / XLarge / XXLarge`, and a 20 / 24 / 28 search glyph.
+///
+/// Density-independent on purpose (web parity): a compact density used to
+/// shrink the row to 24 / 28 / 32 with a 16px glyph, which no longer matched
+/// the web SearchField. Pick `ControlSize::Small` for a tighter field.
 pub(crate) fn search_shell(
-    density: refineui_tokens::size::Density,
+    _density: refineui_foundation::size::Density,
     size: ControlSize,
 ) -> SearchShell {
-    let m = density.field(size);
-    let icon = match (density, size) {
-        (refineui_tokens::size::Density::Compact, _) => m.icon,
-        (_, ControlSize::Small) => refineui_tokens::size::icon::SMALL,
-        (_, ControlSize::Medium) => refineui_tokens::size::icon::MEDIUM,
-        (_, ControlSize::Large) => refineui_tokens::size::icon::LARGE,
+    let m = refineui_foundation::size::Density::Comfortable.field(size);
+    let icon = match size {
+        ControlSize::Small => refineui_foundation::size::icon::SMALL,
+        ControlSize::Medium => refineui_foundation::size::icon::MEDIUM,
+        ControlSize::Large => refineui_foundation::size::icon::LARGE,
     };
     SearchShell {
         height: m.height,
@@ -1387,7 +1438,7 @@ impl Textarea {
 #[cfg(test)]
 mod search_shell_tests {
     use super::*;
-    use refineui_tokens::size::Density;
+    use refineui_foundation::size::Density;
 
     /// Pins web `SearchField` (`formControlRowShellSizeClass`) so the size
     /// cannot regress silently.
@@ -1399,13 +1450,15 @@ mod search_shell_tests {
             (ControlSize::Medium, 44., 16., 12., 24.),
             (ControlSize::Large, 52., 20., 16., 28.),
         ];
-        for (size, h, px_, r, icon) in rows {
-            let s = search_shell(Density::Comfortable, size);
-            assert_eq!(
-                (s.height, s.padding_x, s.radius, s.icon),
-                (h, px_, r, icon),
-                "{size:?}"
-            );
+        for density in Density::ALL {
+            for (size, h, px_, r, icon) in rows {
+                let s = search_shell(density, size);
+                assert_eq!(
+                    (s.height, s.padding_x, s.radius, s.icon),
+                    (h, px_, r, icon),
+                    "{density:?} {size:?}"
+                );
+            }
         }
     }
 }

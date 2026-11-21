@@ -1,6 +1,6 @@
 //! Layout helpers — web `Layout` (`Box`, `Stack`, `Grid`, `Container`,
 //! `Spacer`) as thin `div` presets. Gaps and paddings take the spacing
-//! tokens (`refineui_tokens::spacing::*`) like the web `sizeXxx` props.
+//! tokens (`refineui_foundation::spacing::*`) like the web `sizeXxx` props.
 
 use gpui::{Div, Hsla, Styled, div, px};
 
@@ -29,7 +29,7 @@ pub fn grid(columns: u16, gap: f32) -> Div {
 /// Full-width column with horizontal padding (web `Container`, default
 /// `sizeXXLarge` = 24px).
 pub fn container() -> Div {
-    container_with(refineui_tokens::spacing::XX_LARGE)
+    container_with(refineui_foundation::spacing::XX_LARGE)
 }
 
 #[cfg(feature = "web-extras")]

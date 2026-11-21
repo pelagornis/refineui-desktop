@@ -1,0 +1,106 @@
+{
+  "$schema": "../schema.json",
+  "id": "shortcut-recorder",
+  "name": "Shortcut Recorder",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 5,
+  "feature": null,
+  "desktop_target": "Shortcut Recorder",
+  "rust_types": [
+    "ShortcutRecorder"
+  ],
+  "a11y_role": "button",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover fill (`*Hover` alias) over duration-fast"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill (`*Active` alias)"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "2px focusRing (borderFocus) on :focus-visible only"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "foregroundDisabled / backgroundSurfaceDisabled, no pointer"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "spinner replaces the leading icon; not operable"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "toggled / pressed-in fill when used as a toggle"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "fixed"
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrandSubtle",
+      "backgroundSurface",
+      "backgroundSurfaceHover",
+      "borderDefault",
+      "borderError",
+      "borderFocus",
+      "foregroundBrand",
+      "foregroundError",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedMedium",
+      "roundedSmall"
+    ],
+    "spacing": [
+      "sizeSmall",
+      "sizeXSmall",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodySm",
+      "captionMd"
+    ],
+    "stroke": [
+      "strokeWidthThin"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "start recording"
+    },
+    {
+      "keys": "space",
+      "action": "start recording"
+    },
+    {
+      "keys": "escape",
+      "action": "cancel recording"
+    },
+    {
+      "keys": "backspace",
+      "action": "clear shortcut"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

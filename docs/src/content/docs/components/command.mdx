@@ -2,7 +2,7 @@
 title: Command
 description: "Searchable command list with groups, shortcuts and keyboard navigation (web `Command`)."
 sidebar:
-  order: 77
+  order: 84
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -13,22 +13,33 @@ Searchable command list with groups, shortcuts and keyboard navigation (web `Com
 
 ## Usage
 
-- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
-- `Command` is an entity; subscribe to `CommandEvent::Select`.
-- Typing filters items by every word of the label, value or keywords; ↑ / ↓ move the indicator and Enter selects.
-- Put it in a `Dialog` for a ⌘K palette.
+- `Command` is an entity (web `Command` + `CommandInput` + `CommandList` + `CommandEmpty`); subscribe to `CommandEvent::{Select, QueryChange, Highlight, Back}` or give items `on_select`. The desktop command palette is this same component in a `CommandDialog`, not a second widget (see Command Palette).
+- Filtering is fuzzy (subsequence with word-start and contiguity bonuses) over the label, then value and keywords; matched letters are highlighted. Items sort by score within a group and groups by their best item. `should_filter(false)` turns it off; `filter(fn)` supplies your own scorer (web `filter`).
+- When nothing matches, a compact `ResultView` (`ResultVariant::Empty`) is rendered inside the results plate, like web `CommandEmpty`. The search field is a sibling above that plate, so it stays pinned while the list scrolls.
+- ↑ / ↓ move the indicator, Enter selects; Backspace on an empty query emits `CommandEvent::Back` (for nested pages). `hints(true)` shows a ↑↓ / ↵ / esc footer; `set_breadcrumb` shows page chips above the input.
+- `CommandDialog` is the web `CommandDialog`: the same `Command` inside a centered `Dialog` (scrim, Escape / outside click closes, focus returns to the trigger).
 
 ```rust
 use refineui::prelude::*;
 
-let palette = cx.new(|cx| Command::new(window, cx)
+let command = cx.new(|cx| Command::new(window, cx)
     .group(CommandGroup::new("Suggestions")
         .item(CommandItem::new("Calendar").icon(IconName::Calendar))
         .item(CommandItem::new("Search files").shortcut("⌘P"))));
-cx.subscribe(&palette, |this, _, CommandEvent::Select(value), cx| {
-    this.run(value, cx);
+cx.subscribe(&command, |this, _, event: &CommandEvent, cx| {
+    if let CommandEvent::Select(value) = event {
+        this.run(value, cx);
+    }
 })
 .detach();
+
+// ⌘K dialog:
+CommandDialog::new("cmdk", self.command.clone())
+    .open(self.open)
+    .on_close(move |_window, cx| view.update(cx, |this, cx| {
+        this.open = false;
+        cx.notify();
+    }));
 ```
 
 Open the live, interactive version in the gallery:
@@ -39,7 +50,7 @@ cargo run -p refineui-gallery -- --story command
 
 ## Motion
 
-A `surfaceHover` indicator slides between items over `duration-medium` (emphasized); rows press to 0.96; the empty state fades.
+A `surfaceHover` indicator slides between items over `duration-medium` (emphasized); rows press to 0.96; the empty `ResultView` fades in inside the results plate.
 
 ## API
 
@@ -56,9 +67,17 @@ The command palette (an entity: create with `cx.new(\|cx\| Command::new(window, 
 | `fn set_groups(&mut self, groups: Vec<CommandGroup>, cx: &mut Context<Self>)` | Replace every group (e.g. to refresh shortcut labels) and keep the selection valid. |
 | `fn reset(&mut self, cx: &mut Context<Self>)` | Clear the search query. |
 | `fn size(mut self, size: ControlSize) -> Self` | Row size (web `size`, default `md`). |
+| `fn should_filter(mut self, on: bool) -> Self` | Filter items by the query (web `shouldFilter`, default `true`). |
+| `fn filter(mut self, f: impl Fn(&str, &str, &[SharedString]) -> f32 + 'static) -> Self` | Custom scorer (web `filter`): `(value, search, keywords) -> score`, 0 hides the item. Disables label highlighting. |
+| `fn placeholder(self, p: impl Into<SharedString>, cx: &mut Context<Self>) -> Self` | Search placeholder. |
+| `fn set_breadcrumb(&mut self, crumbs: Vec<SharedString>, cx: &mut Context<Self>)` | Breadcrumb chips shown above the results (nested palette pages). |
+| `fn set_material(&mut self, on: bool, cx: &mut Context<Self>)` | Draw the results panel as the Popover material and the search field as glass when `crate::materials_active` (the Command Palette turns this on). Default `false`: the opaque web-parity panel. |
+| `fn hints(mut self, on: bool) -> Self` | Show the keyboard hint row under the results. |
+| `fn query(&self) -> &SharedString` | The current query. |
 | `fn empty_text(mut self, t: impl Into<SharedString>) -> Self` | Empty-state text. |
 | `fn search(&self) -> &Entity<TextInput>` | The search field entity (to focus it, read the query…). |
 | `fn selected(&self) -> Option<&SharedString>` | Currently selected item value. |
+| `fn select(&mut self, value: SharedString, window: &mut Window, cx: &mut Context<Self>)` | Runs an item: its `on_select`, then `CommandEvent::Select`. |
 
 ### CommandGroup
 
@@ -77,12 +96,22 @@ One runnable entry.
 | Method | Description |
 | --- | --- |
 | `fn new(label: impl Into<SharedString>) -> Self` | Item whose value is its label. |
+| `fn subtitle(mut self, s: impl Into<SharedString>) -> Self` | Secondary line under the label (palette results). |
+| `fn end_icon(mut self, icon: IconName) -> Self` | Trailing icon (web `endIcon`), e.g. a chevron for an item that opens a page. |
+| `fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Runs when the item is chosen (web `onSelect`), in addition to `CommandEvent::Select`. |
+| `fn value_str(&self) -> &SharedString` | The item's value. |
+| `fn label(&self) -> &SharedString` | The item's label. |
+| `fn score(&self, query: &str) -> Option<CommandMatch>` | Scores this item: the label fuzzily (with highlight positions), else keywords (substring of every query word, no highlight). |
 | `fn value(mut self, v: impl Into<SharedString>) -> Self` | Stable value reported on select (defaults to the label). |
 | `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
 | `fn shortcut(mut self, s: impl Into<SharedString>) -> Self` | Shortcut hint. |
 | `fn keywords(mut self, k: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Extra search terms. |
 | `fn disabled(mut self, d: bool) -> Self` | Disabled (shown, not selectable). |
-| `fn matches(&self, query: &str) -> bool` | cmdk-style match: every query word appears in the label or a keyword. |
+| `fn action(mut self, name: impl Into<SharedString>) -> Self` | Dispatch the GPUI action named `name` when this item is run (also used as `value`). Desktop addition used by `CommandPalette`. |
+| `fn group(mut self, group: impl Into<SharedString>) -> Self` | Catalog group heading when building a `CommandPalette` from a flat list. |
+| `fn opens_page(mut self, page: impl Into<SharedString>) -> Self` | Opens the nested `CommandPage` with this id (chevron, `page:{id}` value). |
+| `fn page(label: impl Into<SharedString>, page: impl Into<SharedString>) -> Self` | Item that opens nested page `page` (web has no pages; desktop palette). |
+| `fn matches(&self, query: &str) -> bool` | Does the item match `query` (fuzzy label or keywords)? |
 
 ### CommandEvent
 
@@ -91,4 +120,50 @@ Emitted by `Command`.
 | Variant | Description |
 | --- | --- |
 | `Select(SharedString)` | An item was run (Enter or click); carries its value. |
+| `QueryChange(SharedString)` | The search query changed (web `onValueChange`). |
+| `Highlight(SharedString)` | The highlighted item changed (web `onSelectedValueChange`). |
+| `Back` | Backspace on an empty query (the palette pops a nested page). |
+
+### CommandDialog
+
+Web `CommandDialog`: a `Command` inside a `crate::Dialog` whose panel is transparent (the search field and results panel float on the scrim).  Controlled like `Dialog`: keep rendering it and pass `open`; close it in `on_close` (scrim click or Escape). Focus the command's search field when you open it (`window.focus(&cmd.read(cx).search().focus_handle(cx))`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, command: Entity<Command>) -> Self` | Dialog around `command`. |
+| `fn content(mut self, content: impl IntoElement) -> Self` | Wraps the command in custom content (it must contain the command entity); used by `crate::CommandPalette` for its page transition. |
+| `fn open(mut self, open: bool) -> Self` | Open state (web `open`). |
+| `fn size(mut self, size: crate::DialogSize) -> Self` | Dialog width (web `size`). |
+| `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Close request (web `onOpenChange(false)`). |
+| `fn inline(mut self, inline: bool) -> Self` | Render in flow (docs / previews). |
+
+### CommandPalette
+
+The palette (an entity). See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn bind_keys(cx: &mut App)` | Bind ⇧⌘P / Ctrl+Shift+P to `ToggleCommandPalette`. |
+| `fn new(commands: Vec<CommandItem>, window: &mut Window, cx: &mut Context<Self>) -> Self` | New (closed) palette over `commands`. |
+| `fn page(mut self, page: CommandPage) -> Self` | Adds a nested page (opened by `CommandItem::page`). |
+| `fn set_commands(&mut self, commands: Vec<CommandItem>, cx: &mut Context<Self>)` | Replace the root command list. |
+| `fn set_pages(&mut self, pages: Vec<CommandPage>, cx: &mut Context<Self>)` | Replace the nested pages. |
+| `fn recent(&self) -> &[SharedString]` | Recently run actions, newest first. |
+| `fn is_open(&self) -> bool` | Is it showing? |
+| `fn page_stack(&self) -> &[SharedString]` | Open page ids (root excluded). |
+| `fn open(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open on the root page (refreshing shortcut labels, clearing the query, focusing the search field). |
+| `fn push_page(&mut self, id: impl Into<SharedString>, cx: &mut Context<Self>)` | Opens nested page `id`. |
+| `fn back(&mut self, cx: &mut Context<Self>)` | Goes back one page. |
+| `fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Escape: back one page, or close on the root. |
+| `fn close(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Close and give focus back. |
+| `fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open or close. |
+
+### CommandPage
+
+A nested page of commands (desktop; the web Command has no pages).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<SharedString>, title: impl Into<SharedString>, commands: Vec<CommandItem>) -> Self` | Page `id` titled `title`. |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Search placeholder on this page. |
 

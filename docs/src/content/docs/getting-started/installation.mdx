@@ -19,6 +19,25 @@ refineui = { git = "https://github.com/pelagornis/refineui-gpui" }
 The `bundled-fonts` feature (on by default) embeds Inter. Disable it with
 `default-features = false` if your app ships its own fonts.
 
+### Materials (real backdrop blur)
+
+The `material` feature puts components on the Material Engine
+(`refineui-material`). Blur needs a small renderer patch to gpui 0.2.2 that
+ships in this repository (`vendor/gpui`), so patch gpui to it — the graph
+still has exactly one gpui:
+
+```toml
+[dependencies]
+gpui = "0.2.2"
+refineui = { git = "https://github.com/pelagornis/refineui-gpui", features = ["material"] }
+
+[patch.crates-io]
+gpui = { git = "https://github.com/pelagornis/refineui-gpui" }
+```
+
+Without the feature everything works on stock gpui and frosted surfaces use
+opaque fills. See [Material Components](/foundations/material-components/).
+
 ## Initialise
 
 ```rust

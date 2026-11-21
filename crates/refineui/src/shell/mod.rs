@@ -20,19 +20,27 @@
 
 mod activity_bar;
 mod app_shell;
+mod floating_panel;
 mod menu_bar;
+mod notification_center;
+mod preferences;
+#[cfg(feature = "serde")]
+pub mod session;
 mod status_bar;
 mod titlebar;
 mod window;
 
 pub use activity_bar::*;
 pub use app_shell::*;
+pub use floating_panel::*;
 pub use menu_bar::*;
+pub use notification_center::*;
+pub use preferences::*;
 pub use status_bar::*;
 pub use titlebar::*;
 pub use window::*;
 
-use refineui_tokens::size::Density;
+use refineui_foundation::size::Density;
 
 use crate::platform::{MenuBarPlacement, PlatformAdapter};
 

@@ -11,6 +11,14 @@
 //! (`transparent → black 35% … 65% → transparent`). Scrolling settles on the
 //! centered row after 120ms and selects it; clicking a row centers it.
 //! `hour_cycle_12h` adds an AM/PM column; values stay `HH:mm` (24h).
+//!
+//! **Native entry** (like `<input type="time">`): the field itself holds
+//! editable `HH`, `MM` (and `AM/PM`) segments. Click or Tab focuses a segment;
+//! typing digits fills it and auto-advances once the segment is unambiguous
+//! (`1` waits for a second hour digit, `3` becomes `03` and advances);
+//! Up/Down step the segment (minutes by `minute_step`, wrapping); Left/Right
+//! move between segments; Backspace clears the segment (`--`); `a` / `p` set
+//! the period. The clock icon still opens the wheel picker.
 
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -19,12 +27,13 @@ use gpui::{
     AnyElement, App, ElementId, IntoElement, ParentElement, RenderOnce, ScrollHandle, SharedString,
     StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::components::menu::popup_state;
 use crate::components::picker::{PickerField, picker_field, picker_popup};
 use crate::motion::{Motion, animate, child_id};
 use crate::{ActiveTheme, ControlSize, IconName, StyledExt};
+use gpui::{FocusHandle, KeyDownEvent, MouseButton};
 
 /// Row height (`foundationSize320`).
 pub const TIME_ROW: f32 = 32.;
@@ -217,7 +226,178 @@ fn column(
         .into_any_element()
 }
 
-/// A time field with a wheel picker.
+/// Editable segment of the native entry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum TimeSegment {
+    Hour,
+    Minute,
+    Period,
+}
+
+/// Native-entry state: active segment, a pending first digit, blank segments.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct TimeEntry {
+    pub time: Time,
+    pub seg: TimeSegment,
+    pub pending: Option<u32>,
+    /// `[hour, minute]` cleared with Backspace (shown as `--`).
+    pub blank: [bool; 2],
+}
+
+impl TimeEntry {
+    pub(crate) fn new(value: Option<Time>) -> Self {
+        Self {
+            time: value.unwrap_or_default(),
+            seg: TimeSegment::Hour,
+            pending: None,
+            blank: [value.is_none(); 2],
+        }
+    }
+
+    fn segments(twelve: bool) -> &'static [TimeSegment] {
+        if twelve {
+            &[TimeSegment::Hour, TimeSegment::Minute, TimeSegment::Period]
+        } else {
+            &[TimeSegment::Hour, TimeSegment::Minute]
+        }
+    }
+
+    /// The committed value, if every segment is filled.
+    pub(crate) fn value(&self) -> Option<Time> {
+        (!self.blank[0] && !self.blank[1]).then_some(self.time)
+    }
+
+    /// Moves focus by `delta` segments; returns false at either end.
+    pub(crate) fn step_segment(&mut self, delta: i32, twelve: bool) -> bool {
+        let segs = Self::segments(twelve);
+        let ix = segs.iter().position(|s| *s == self.seg).unwrap_or(0) as i32 + delta;
+        self.pending = None;
+        if ix < 0 || ix >= segs.len() as i32 {
+            return false;
+        }
+        self.seg = segs[ix as usize];
+        true
+    }
+
+    /// Types a digit into the active segment (native auto-advance rules).
+    pub(crate) fn type_digit(&mut self, d: u32, twelve: bool) {
+        match self.seg {
+            TimeSegment::Hour => {
+                let pm = self.time.hour >= 12;
+                let (max_first, max) = if twelve { (1, 12) } else { (2, 23) };
+                let shown = match self.pending.take() {
+                    Some(first) => {
+                        let v = first * 10 + d;
+                        if v > max || (twelve && v == 0) {
+                            d.max(u32::from(twelve))
+                        } else {
+                            v
+                        }
+                    }
+                    None if d > max_first => d,
+                    None => {
+                        self.pending = Some(d);
+                        d.max(u32::from(twelve && d == 0))
+                    }
+                };
+                self.time.hour = if twelve {
+                    shown % 12 + if pm { 12 } else { 0 }
+                } else {
+                    shown
+                };
+                self.blank[0] = false;
+                if self.pending.is_none() {
+                    self.step_segment(1, twelve);
+                }
+            }
+            TimeSegment::Minute => {
+                let m = match self.pending.take() {
+                    Some(first) => first * 10 + d,
+                    None if d > 5 => d,
+                    None => {
+                        self.pending = Some(d);
+                        d
+                    }
+                };
+                self.time.minute = m;
+                self.blank[1] = false;
+                if self.pending.is_none() {
+                    self.step_segment(1, twelve);
+                }
+            }
+            TimeSegment::Period => {}
+        }
+    }
+
+    /// Up (+1) / Down (-1) on the active segment, wrapping.
+    pub(crate) fn nudge(&mut self, dir: i32, minute_step: u32) {
+        self.pending = None;
+        match self.seg {
+            TimeSegment::Hour => {
+                self.time.hour = if self.blank[0] {
+                    if dir > 0 { 0 } else { 23 }
+                } else {
+                    (self.time.hour as i32 + dir).rem_euclid(24) as u32
+                };
+                self.blank[0] = false;
+            }
+            TimeSegment::Minute => {
+                let step = minute_step.max(1) as i32;
+                self.time.minute = if self.blank[1] {
+                    if dir > 0 { 0 } else { (60 - step) as u32 }
+                } else {
+                    let snapped = self.time.minute as i32 / step * step;
+                    (snapped + dir * step).rem_euclid(60) as u32
+                };
+                self.blank[1] = false;
+            }
+            TimeSegment::Period => self.time.hour = (self.time.hour + 12) % 24,
+        }
+    }
+
+    /// Backspace: drop the pending digit, else clear the segment.
+    pub(crate) fn backspace(&mut self) {
+        if self.pending.take().is_some() {
+            return;
+        }
+        match self.seg {
+            TimeSegment::Hour => self.blank[0] = true,
+            TimeSegment::Minute => self.blank[1] = true,
+            TimeSegment::Period => {}
+        }
+    }
+
+    /// `a` / `p` on the period segment.
+    pub(crate) fn set_period(&mut self, pm: bool) {
+        let h = self.time.hour % 12;
+        self.time.hour = if pm { h + 12 } else { h };
+    }
+
+    /// Display text for a segment.
+    pub(crate) fn text(&self, seg: TimeSegment, twelve: bool) -> String {
+        match seg {
+            TimeSegment::Hour if self.blank[0] => "--".into(),
+            TimeSegment::Minute if self.blank[1] => "--".into(),
+            TimeSegment::Hour => {
+                let h = self.time.hour;
+                let h = if twelve {
+                    if h.is_multiple_of(12) { 12 } else { h % 12 }
+                } else {
+                    h
+                };
+                if self.pending.is_some() && self.seg == TimeSegment::Hour {
+                    format!("{h:>2}").replace(' ', "0")
+                } else {
+                    format!("{h:02}")
+                }
+            }
+            TimeSegment::Minute => format!("{:02}", self.time.minute),
+            TimeSegment::Period => if self.time.hour >= 12 { "PM" } else { "AM" }.into(),
+        }
+    }
+}
+
+/// A time field with native segment entry and a wheel picker.
 #[derive(IntoElement)]
 pub struct TimeInput {
     id: ElementId,
@@ -329,18 +509,50 @@ impl RenderOnce for TimeInput {
                 v.format()
             })
         });
+        let focus = window
+            .use_keyed_state(child_id(&self.id, "focus"), cx, |_, cx| cx.focus_handle())
+            .read(cx)
+            .clone();
+        let entry_state = window.use_keyed_state(child_id(&self.id, "entry"), cx, |_, _| {
+            TimeEntry::new(self.value)
+        });
+        // External value changes win over the in-progress entry.
+        {
+            let e = *entry_state.read(cx);
+            if self.value.is_some() && e.value() != self.value && e.pending.is_none() {
+                entry_state.update(cx, |e, _| {
+                    let seg = e.seg;
+                    *e = TimeEntry::new(self.value);
+                    e.seg = seg;
+                });
+            }
+        }
+        let focused = focus.is_focused(window);
+        let content = segments_row(
+            &self.id,
+            &entry_state,
+            &focus,
+            focused,
+            self.twelve_hour,
+            self.minute_step,
+            self.disabled,
+            self.on_change.clone(),
+            cx,
+        );
+        let _ = text;
         let trigger = picker_field(
             PickerField {
                 id: child_id(&self.id, "field"),
                 size: self.size,
-                text,
+                text: None,
                 placeholder: self.placeholder.clone(),
                 icon: IconName::Clock,
                 error: self.error,
                 success: self.success,
                 disabled: self.disabled,
-                open: is_open,
+                open: is_open || focused,
                 full_width: self.full_width,
+                content: Some(content),
             },
             window,
             cx,
@@ -348,7 +560,13 @@ impl RenderOnce for TimeInput {
         let commit = {
             let on_change = self.on_change.clone();
             let draft_state = draft_state.clone();
+            let entry_state = entry_state.clone();
             Rc::new(move |t: Time, w: &mut Window, cx: &mut App| {
+                entry_state.update(cx, |e, _| {
+                    e.time = t;
+                    e.blank = [false; 2];
+                    e.pending = None;
+                });
                 draft_state.update(cx, |d, cx| {
                     *d = t;
                     cx.notify();
@@ -480,6 +698,116 @@ impl RenderOnce for TimeInput {
     }
 }
 
+/// The editable `HH : MM [AM]` row inside the field.
+fn segments_row(
+    id: &ElementId,
+    entry: &gpui::Entity<TimeEntry>,
+    focus: &FocusHandle,
+    focused: bool,
+    twelve: bool,
+    minute_step: u32,
+    disabled: bool,
+    on_change: Option<Rc<dyn Fn(&Time, &mut Window, &mut App)>>,
+    cx: &App,
+) -> AnyElement {
+    let c = cx.theme().colors;
+    let e = *entry.read(cx);
+    let all_blank = e.blank == [true; 2];
+    let seg_el = |seg: TimeSegment, cx: &App| {
+        let active = focused && e.seg == seg;
+        let entry = entry.clone();
+        let focus = focus.clone();
+        let blank = match seg {
+            TimeSegment::Hour => e.blank[0],
+            TimeSegment::Minute => e.blank[1],
+            TimeSegment::Period => false,
+        };
+        let _ = cx;
+        div()
+            .id(child_id(
+                id,
+                match seg {
+                    TimeSegment::Hour => "seg-hour",
+                    TimeSegment::Minute => "seg-minute",
+                    TimeSegment::Period => "seg-period",
+                },
+            ))
+            .px(px(spacing::XX_SMALL))
+            .rounded(px(radius::SMALL))
+            .when(active, |d| {
+                d.bg(c.background_brand_subtle)
+                    .text_color(c.foreground_brand)
+            })
+            .when(!active && (blank || all_blank), |d| {
+                d.text_color(c.foreground_placeholder)
+            })
+            .when(!disabled, |d| {
+                d.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+                    cx.stop_propagation();
+                    window.focus(&focus);
+                    entry.update(cx, |e, cx| {
+                        e.seg = seg;
+                        e.pending = None;
+                        cx.notify();
+                    });
+                })
+            })
+            .child(e.text(seg, twelve))
+    };
+    let entry_k = entry.clone();
+    div()
+        .id(child_id(id, "segments"))
+        .track_focus(focus)
+        .flex()
+        .items_center()
+        .when(!disabled, |d| {
+            d.on_key_down(move |ev: &KeyDownEvent, window, cx| {
+                let key = ev.keystroke.key.as_str();
+                let mut handled = true;
+                let before = *entry_k.read(cx);
+                let mut after = before;
+                match key {
+                    "up" => after.nudge(1, minute_step),
+                    "down" => after.nudge(-1, minute_step),
+                    "left" => handled = after.step_segment(-1, twelve),
+                    "right" => handled = after.step_segment(1, twelve),
+                    "tab" => {
+                        handled = after
+                            .step_segment(if ev.keystroke.modifiers.shift { -1 } else { 1 }, twelve)
+                    }
+                    "backspace" | "delete" => after.backspace(),
+                    "a" if after.seg == TimeSegment::Period => after.set_period(false),
+                    "p" if after.seg == TimeSegment::Period => after.set_period(true),
+                    k if k.len() == 1 && k.as_bytes()[0].is_ascii_digit() => {
+                        after.type_digit(u32::from(k.as_bytes()[0] - b'0'), twelve)
+                    }
+                    _ => handled = false,
+                }
+                if !handled {
+                    return;
+                }
+                cx.stop_propagation();
+                entry_k.update(cx, |e, cx| {
+                    *e = after;
+                    cx.notify();
+                });
+                if let (Some(v), Some(h)) = (after.value(), &on_change)
+                    && before.value() != Some(v)
+                {
+                    h(&v, window, cx);
+                }
+            })
+        })
+        .child(seg_el(TimeSegment::Hour, cx))
+        .child(div().child(":"))
+        .child(seg_el(TimeSegment::Minute, cx))
+        .when(twelve, |d| {
+            d.child(div().w(px(spacing::XX_SMALL)))
+                .child(seg_el(TimeSegment::Period, cx))
+        })
+        .into_any_element()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,6 +818,46 @@ mod tests {
         assert_eq!(t.format(), "09:05");
         assert_eq!(Time::new(0, 30).format_12h(), "12:30 AM");
         assert_eq!(Time::new(13, 0).format_12h(), "01:00 PM");
+    }
+
+    #[test]
+    fn native_entry_auto_advances() {
+        let mut e = TimeEntry::new(None);
+        e.type_digit(1, false); // waits: 1x could be 10-19
+        assert_eq!((e.seg, e.pending), (TimeSegment::Hour, Some(1)));
+        e.type_digit(5, false);
+        assert_eq!((e.time.hour, e.seg), (15, TimeSegment::Minute));
+        e.type_digit(7, false); // > 5: unambiguous
+        assert_eq!(e.time.minute, 7);
+        assert_eq!(e.value(), Some(Time::new(15, 7)));
+        let mut e = TimeEntry::new(None);
+        e.type_digit(3, false); // > 2: 03, advance
+        assert_eq!((e.time.hour, e.seg), (3, TimeSegment::Minute));
+        e.type_digit(4, false);
+        e.type_digit(2, false);
+        assert_eq!(e.time.minute, 42);
+    }
+
+    #[test]
+    fn native_entry_arrows_and_backspace() {
+        let mut e = TimeEntry::new(Some(Time::new(23, 58)));
+        e.nudge(1, 1);
+        assert_eq!(e.time.hour, 0);
+        assert!(e.step_segment(1, false));
+        e.nudge(1, 5); // snaps to the step then wraps
+        assert_eq!(e.time.minute, 0);
+        e.backspace();
+        assert_eq!(e.value(), None);
+        assert_eq!(e.text(TimeSegment::Minute, false), "--");
+        assert!(!e.step_segment(1, false));
+        let mut e = TimeEntry::new(Some(Time::new(9, 0)));
+        e.seg = TimeSegment::Period;
+        e.set_period(true);
+        assert_eq!(e.time.hour, 21);
+        e.seg = TimeSegment::Hour;
+        e.type_digit(1, true);
+        e.type_digit(1, true);
+        assert_eq!(e.time.hour, 23); // 11 PM
     }
 
     #[test]

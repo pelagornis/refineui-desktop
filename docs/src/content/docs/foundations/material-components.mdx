@@ -1,0 +1,82 @@
+---
+title: Material Components
+description: "Components on the Material Engine: `Surface`, Text / Icon / Separator on surfaces, glass Button and Input, and material Popover, Tooltip, Menu, Toast and Dialog."
+sidebar:
+  order: 7
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Components on the Material Engine: `Surface`, Text / Icon / Separator on surfaces, glass Button and Input, and material Popover, Tooltip, Menu, Toast and Dialog.
+
+<Screenshot id="material-components" alt="Material Components variants and states" />
+
+## Usage
+
+- Enable the **`material`** cargo feature of `refineui` (it needs the vendored gpui, see the Material Engine architecture page). Without it — or on DirectX, with reduced transparency, or with native macOS frost — every component keeps its opaque web-parity look; the API is the same either way. `materials_active(cx)` tells which path is used.
+- **Automatic** with the feature: Popover, Tooltip and Menu panels use the Popover / Tooltip / Menu materials (the beak stays an opaque fill — blur is limited to rounded rectangles), and the Dialog / Drawer scrim becomes the Scrim material (the web's 2px backdrop blur).
+- **Opt-in**: `Button::glass(true)`, `TextInput::glass(true)`, `Toast::material(true)` / `Toaster::material(true)` and `Dialog::material(true)` (Sheet material). Web parity keeps these opaque by default.
+- `Surface::new(SurfaceKind::…)` is a `div` whose plate is the matching recipe (panel, sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim, glass). `Text::on_surface`, `Icon::on_surface` and `Separator::on_surface` pick colors that read on it (light text on the HUD, a translucent rule instead of an opaque gray line).
+- Materials draw the component's shadows outside the shape and its border above the blur, so neither is blurred into the backdrop.
+
+```rust
+use refineui::prelude::*;
+
+Surface::new(SurfaceKind::Hud)
+    .p(px(14.))
+    .child(Icon::new(IconName::WeatherSunny).on_surface(SurfaceKind::Hud))
+    .child(Separator::horizontal().on_surface(SurfaceKind::Hud))
+    .child(Text::new("Volume 60%").on_surface(SurfaceKind::Hud));
+
+Button::new("play", "Play").glass(true);
+Toast::new("saved", ToastData::new("Saved")).material(true);
+Dialog::new("save", "Save changes?").material(true);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story material-components
+```
+
+## API
+
+Source: [`crates/refineui/src/components/surface.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/surface.rs)
+
+### Surface
+
+A material-backed plate (see the module docs).
+
+| Method | Description |
+| --- | --- |
+| `fn new(kind: SurfaceKind) -> Self` | A surface of `kind`. |
+| `fn radius(mut self, radius: Pixels) -> Self` | Corner radius (default: the kind's radius token). |
+| `fn elevation(mut self, elevation: Elevation) -> Self` | Elevation (default: the kind's elevation; the material recipe's own shadows when materials are active). |
+| `fn border_color_override(mut self, border: Option<Hsla>) -> Self` | Border color; `None` removes it (default: `borderDefault` / the recipe's border). |
+| `fn default_radius(kind: SurfaceKind) -> Pixels` | The kind's default corner radius. |
+| `fn default_elevation(kind: SurfaceKind) -> Option<Elevation>` | The kind's default elevation (opaque path). |
+
+### SurfaceKind
+
+What a surface is for. Picks the material recipe when materials are active and the opaque fallback fill otherwise.
+
+| Variant | Description |
+| --- | --- |
+| `Panel` | Generic raised panel (card-like). Regular material. |
+| `Sidebar` | Source list / navigation column. Chrome material. |
+| `Titlebar` | Titlebar / unified toolbar. Chrome material. |
+| `Popover` | Popover and dropdown panels. Regular material. |
+| `Menu` | Menus. Regular material. |
+| `Tooltip` | Tooltips. Thin material. |
+| `Hud` | Heads-up display: dark smoked glass in both appearances. |
+| `Sheet` | Sheets and dialogs. Thick material with a glass rim. |
+| `Toast` | Toast notifications. Regular material. |
+| `Scrim` | Modal backdrop. |
+| `Glass` | Expressive glass. Glass material. |
+
+| Method | Description |
+| --- | --- |
+| `fn fallback_fill(self, cx: &App) -> Hsla` | Opaque fill used without materials (web parity: frosted surfaces use `crate::Theme::floating_fill`, panels `backgroundPrimary`). |
+| `fn foreground(self, cx: &App) -> Hsla` | Text / icon color that reads on this surface (the HUD is always dark; everything else follows the theme). |
+| `fn foreground_secondary(self, cx: &App) -> Hsla` | Secondary text color on this surface. |
+

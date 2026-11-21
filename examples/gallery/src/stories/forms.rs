@@ -90,8 +90,16 @@ pub(super) fn stories() -> Vec<Story> {
             name: "Select",
             group: StoryGroup::Forms,
             summary: "Pick one option from a popup list.",
-            shot: (640., 330.),
+            shot: (700., 500.),
             render: select,
+        },
+        Story {
+            id: "select-position",
+            name: "Select Position",
+            group: StoryGroup::Forms,
+            summary: "Collision-aware popup placement: popper flip, constrained height with scrolling, and item-aligned overlay.",
+            shot: (760., 760.),
+            render: select_position,
         },
     ]
 }
@@ -435,6 +443,14 @@ fn select(w: &mut Window, cx: &mut App) -> AnyElement {
         "Hawaii Standard Time",
         "India Standard Time",
         "China Standard Time",
+        "Japan Standard Time",
+        "Korea Standard Time",
+        "Singapore Standard Time",
+        "Australian Eastern Time",
+        "Greenwich Mean Time",
+        "Central European Time",
+        "Eastern European Time",
+        "Brasilia Time",
     ];
     let set_a = {
         let a = a.clone();
@@ -454,29 +470,191 @@ fn select(w: &mut Window, cx: &mut App) -> AnyElement {
             })
         }
     };
-    row()
-        .items_start()
+    div()
+        .flex()
+        .flex_col()
         .gap(px(16.))
         .child(
-            Select::new("font", options, *a.read(cx))
-                .width(px(260.))
-                .on_change(set_a),
+            row()
+                .items_start()
+                .gap(px(16.))
+                .child(
+                    Select::new("open", options, Some(4))
+                        .width(px(280.))
+                        .default_open(true),
+                )
+                .child(
+                    Select::new("font", options, *a.read(cx))
+                        .width(px(260.))
+                        .on_change(set_a),
+                )
+                .child(
+                    Select::new(
+                        "weight",
+                        ["Regular", "Medium", "Semibold", "Bold"],
+                        *b.read(cx),
+                    )
+                    .placeholder("Weight")
+                    .appearance(SelectAppearance::Ghost)
+                    .width(px(160.))
+                    .on_change(set_b),
+                )
+                .child(
+                    Select::new("dis", options, Some(0))
+                        .disabled(true)
+                        .width(px(160.)),
+                ),
+        )
+        .into_any_element()
+}
+
+fn select_position(w: &mut Window, cx: &mut App) -> AnyElement {
+    let many = [
+        "Eastern Standard Time",
+        "Central Standard Time",
+        "Mountain Standard Time",
+        "Pacific Standard Time",
+        "Alaska Standard Time",
+        "Hawaii Standard Time",
+        "India Standard Time",
+        "China Standard Time",
+        "Japan Standard Time",
+        "Korea Standard Time",
+        "Singapore Standard Time",
+        "Australian Eastern Time",
+        "Greenwich Mean Time",
+        "Central European Time",
+        "Eastern European Time",
+        "Brasilia Time",
+        "Atlantic Standard Time",
+        "Mountain Daylight Time",
+        "Pacific Daylight Time",
+        "Samoa Standard Time",
+        "Newfoundland Time",
+        "Azores Time",
+        "West Africa Time",
+        "Moscow Time",
+    ];
+    let few = [
+        "Eastern Standard Time",
+        "Central Standard Time",
+        "Mountain Standard Time",
+        "Pacific Standard Time",
+        "Alaska Standard Time",
+        "Hawaii Standard Time",
+    ];
+    let aligned = [
+        "Eastern Standard Time",
+        "Central Standard Time",
+        "Mountain Standard Time",
+        "Pacific Standard Time",
+        "Alaska Standard Time",
+        "Hawaii Standard Time",
+        "India Standard Time",
+        "China Standard Time",
+    ];
+    let mode = state("sel-pos-mode", w, cx, || 0usize);
+    let live = state("sel-pos-live", w, cx, || Some(2usize));
+    let position = if *mode.read(cx) == 0 {
+        SelectPosition::Popper
+    } else {
+        SelectPosition::ItemAligned
+    };
+    let caption = |s: &'static str| {
+        Text::new(s)
+            .role(TextRole::CaptionMd)
+            .color(TextColor::Tertiary)
+    };
+    // Columns stay out of each other's way: a constrained flip-up list is
+    // almost as tall as the window, so it lives only in the right column.
+    div()
+        .relative()
+        .w(px(720.))
+        .h(px(720.))
+        .child(
+            div()
+                .absolute()
+                .top(px(12.))
+                .left(px(16.))
+                .w(px(280.))
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(caption("Popper · below"))
+                .child(
+                    Select::new("pos-below", few, Some(0))
+                        .position(SelectPosition::Popper)
+                        .width(px(280.))
+                        .default_open(true),
+                ),
         )
         .child(
-            Select::new(
-                "weight",
-                ["Regular", "Medium", "Semibold", "Bold"],
-                *b.read(cx),
-            )
-            .placeholder("Weight")
-            .appearance(SelectAppearance::Ghost)
-            .width(px(160.))
-            .on_change(set_b),
+            div()
+                .absolute()
+                .top(px(360.))
+                .left(px(16.))
+                .w(px(280.))
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(caption("Item-aligned"))
+                .child(
+                    Select::new("pos-align", aligned, Some(3))
+                        .position(SelectPosition::ItemAligned)
+                        .width(px(280.))
+                        .default_open(true),
+                ),
         )
         .child(
-            Select::new("dis", options, Some(0))
-                .disabled(true)
-                .width(px(160.)),
+            div()
+                .absolute()
+                .top(px(600.))
+                .left(px(16.))
+                .w(px(280.))
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .child(caption("Mode (interactive)"))
+                .child(
+                    SegmentedControl::new(
+                        "sel-pos-mode-seg",
+                        ["Popper", "Item-aligned"],
+                        *mode.read(cx),
+                    )
+                    .size(ControlSize::Small)
+                    .on_change(setter(&mode)),
+                )
+                .child(
+                    Select::new("pos-live", many, *live.read(cx))
+                        .position(position)
+                        .width(px(280.))
+                        .on_change({
+                            let live = live.clone();
+                            move |ix: &usize, _: &mut Window, cx: &mut App| {
+                                live.update(cx, |s, cx| {
+                                    *s = Some(*ix);
+                                    cx.notify();
+                                })
+                            }
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .absolute()
+                .bottom(px(16.))
+                .right(px(16.))
+                .w(px(300.))
+                .flex()
+                .flex_col()
+                .gap(px(6.))
+                .child(caption("Popper · above, constrained"))
+                .child(
+                    Select::new("pos-above", many, Some(2))
+                        .position(SelectPosition::Popper)
+                        .width(px(300.))
+                        .default_open(true),
+                ),
         )
         .into_any_element()
 }

@@ -1,0 +1,268 @@
+---
+title: Material Engine & Phase 0 audit
+description: Crate structure, GPUI rendering audit, the backdrop blur design, migration plan and benchmarks.
+sidebar:
+  order: 11
+---
+Audit of `refineui-gpui` (baseline = Mac Phase 2 commit 706e8ec + Phase 3
+workspace work) against the Material brief, verified against the gpui 0.2.2
+sources rather than documentation.
+
+## 1. What exists
+
+| Area | State before this stage |
+| --- | --- |
+| GPUI | crates.io `gpui 0.2.2`, `runtime_shaders`. Renderers: Blade (Vulkan; Linux/FreeBSD, and macOS with `macos-blade`), Metal (macOS default), DirectX 11 (Windows). |
+| Tokens | `refineui-tokens`: GPUI-free Rust port of `@refineui/tokens` — palette, semantic light/dark pairs, typography, spacing, radius, stroke, shadow (key + ambient elevation), opacity, z-index, motion, blur radii, density, window metrics, component contracts (JSON). |
+| Components | `refineui` crate: 68 component modules (actions, forms, display, navigation, overlays, data), `interaction/` (focus, keymap, DnD), `shell/` (titlebar, menu bar, status bar, activity bar, application shell, floating panel), `workspace/` (dock, panel, split view, tabs, inspector, layout persistence), `platform/` adapters, theme global. |
+| Blur | None in-window. `vibrancy.rs` is a macOS-only prototype that opens a separate OS window with `NSVisualEffectView`; everything else used translucent fills ("frosted" = alpha). |
+| Icons | Bundled SVG copies (now replaced by `pelagornis/refineui-system-icons` @ 92f5616). |
+
+## 2. GPUI rendering capabilities (verified in source)
+
+- **Scene model** (`src/scene.rs`): elements push primitives (`Shadow`, `Quad`,
+  `Path`, `Underline`, `MonochromeSprite`, `PolychromeSprite`, `Surface`) into
+  per-kind vectors. Draw order comes from a `BoundsTree`: a primitive gets
+  `1 + max(order of earlier overlapping primitives)`; `finish()` sorts each
+  kind and `BatchIterator` merges kinds by `(order, kind)`. Layers
+  (`paint_layer`) are only used for text lines.
+- **Public paint API** (`Window::paint_*`): quads (with linear gradients),
+  shadows (analytic Gaussian rounded rects), paths, sprites/images, SVGs,
+  and `paint_surface` (macOS CVPixelBuffer only). There is **no** way to read
+  back pixels drawn earlier in the frame, render to an offscreen target,
+  supply a shader, or schedule an extra pass. → backdrop blur cannot be done
+  through the public API.
+- **Blade renderer** (`platform/blade/blade_renderer.rs`): one `main` render
+  pass on the swapchain texture (surface usage `TARGET` only, format
+  `Bgra8Unorm`, i.e. gamma-space values). It already *ends* the main pass for
+  path batches, rasterizes into an intermediate texture
+  (`COPY|RESOURCE|TARGET`) and *resumes* with `InitOp::Load` — the exact
+  mid-frame pattern a backdrop blur needs. Blade inserts a barrier at every
+  pass begin; texture-to-texture copies are available on Vulkan and Metal;
+  Metal honours `framebufferOnly = false` when the usage is not `TARGET`.
+- **Metal renderer** (`platform/mac/metal_renderer.rs`): one render command
+  encoder per frame on the `CAMetalLayer` drawable (`BGRA8Unorm`), also ending
+  and re-creating the encoder around path batches.
+- **DirectX renderer**: the same batch loop; no intermediate-pass helper.
+- **Clipping**: content masks are axis-aligned rects applied in shaders;
+  rounded clipping exists only per primitive (quad SDF).
+
+## 3. Backdrop blur — decision
+
+Smallest extension that is technically correct: a new scene primitive.
+
+1. `BackdropBlur { bounds, content_mask, corner_radii, sigma, tint,
+   saturation, opacity }`, ordered by its *sampled* region (shape + 3σ) so
+   everything under the kernel footprint is drawn first; it sorts first among
+   kinds of the same order so a surface's own fill/text draw above it.
+2. Renderer: close the main pass → copy the sampled region of the drawable →
+   box-downsample (1/2/4/8 by σ) into `Rgba16Float` → separable Gaussian
+   (H, V) → composite with saturation, tint, rounded-rect SDF, opacity →
+   resume the main pass. Textures are cached per drawable size.
+3. `Window::paint_backdrop_blur` + `backdrop_blur_supported()` (false on
+   Windows, which paints the documented fallback instead).
+
+Rejected: (a) translucent fills (not blur); (b) a second OS window with
+system vibrancy (cannot blur in-window content; kept only as the old macOS
+prototype); (c) rendering the whole frame offscreen every frame (extra
+full-screen copy for every window even without blur); (d) a fork of gpui
+from git (would put a second gpui in the graph — the vendored copy keeps
+version 0.2.2 and is applied with `[patch.crates-io]`).
+
+## 4. Crate structure (implemented)
+
+```
+crates/
+  refineui-foundation   Layer A — tokens (GPUI-free, no deps) + material tokens + contracts
+  refineui-tokens       compatibility re-export of refineui-foundation
+  refineui-material     Layer C — Material Engine (gpui + foundation only)
+  refineui              Layer B — RefineUI Desktop components, shell, workspace
+examples/gallery        showcase + screenshot generator (uses all three)
+vendor/gpui             gpui 0.2.2 + BackdropBlur (REFINEUI_PATCH.md, refineui.patch)
+```
+
+Dependency rules: foundation → nothing; material → gpui + foundation (never
+components); refineui → gpui + foundation; components adopt materials in
+Phase 4. The suggested `refineui-desktop` name is the existing `refineui`
+crate (renaming would break every user for no technical gain).
+
+## 5. Migration plan
+
+1. Phase 1 (done): move `refineui-tokens` → `refineui-foundation`; keep
+   `refineui-tokens` as a re-export; add `material` tokens (thin, regular,
+   thick, chrome, glass, scrim per appearance, each with a fallback fill).
+   `refineui::tokens` still points at the foundation.
+2. Phase 2 (done): vendored gpui patch + `refineui-material` (Material,
+   backdrop, lighting, texture, shadow, MaterialSurface); `materials` gallery
+   story; `blur_bench` example.
+3. Phase 3: glass refinements, inner shadows, blend modes, damage-aware
+   caching (skip re-blur when nothing under the region changed).
+4. Phase 4: components consume materials — Menu/Popover/Dropdown
+   (`surfaceFrosted` → `MaterialRole::Regular`), Dialog scrim (`Scrim`,
+   restores the web's 2px blur), Command Palette, Tooltip (`Thin`), Sidebar
+   peek / titlebar (`Chrome`); retire the vibrancy prototype.
+5. Phases 5–6 as in the brief.
+
+## 6. Risks
+
+- Vendored gpui must be re-patched on upgrade (patch is ~2.8k diff lines,
+  mostly new code in 4 renderer files).
+- Metal path is untested on hardware: the Rust side is type-checked for
+  `aarch64-apple-darwin` from Linux and the new MSL is syntax-checked against a
+  C++ shim, but neither compile nor output has been seen on a Mac.
+- Surface `COPY` usage: universally supported on Vulkan/Metal, but the
+  Vulkan surface code only logs (does not fail) on unsupported usage.
+- Blur cost scales with sampled area; many large blurred surfaces on
+  integrated GPUs need the Phase 3 damage cache.
+- MSRV is 1.98 (required by the icons crate).
+
+## 7. Benchmark (Phase 2 baseline)
+
+`cargo run --release -p refineui-material --example blur_bench -- <panels>`:
+960×640 window, animated busy backdrop, N `Regular` panels (170×130,
+σ = 16 px → ×4 downsample). Measured on the box: Xvfb + **lavapipe
+(software Vulkan on the CPU)**, frames driven by continuous pointer events
+because headless X only presents after input; the fallback runs at the
+display cap (~16 ms).
+
+| Panels | Real blur | Fallback fill |
+| --- | --- | --- |
+| 1 | 18.5 ms / frame (53.9 fps) | 16.0 ms (62.6 fps, capped) |
+| 8 | 36.0 ms / frame (27.8 fps) | 16.0 ms (62.6 fps, capped) |
+
+≈ 2.5 ms per panel on a CPU rasterizer. Hardware GPUs were not available;
+Phase 3 targets: ≤ 0.3 ms per typical panel on an integrated GPU and no
+re-blur when the region under a surface is unchanged.
+
+## 8. Phase 3 — material expansion
+
+All effects run inside the single blur **composite** pass (one draw over the
+shape plus its shadow extent), so they cost no extra passes:
+
+| Area | What | Where |
+| --- | --- | --- |
+| Glass | saturation, tint with a blend mode (`BlendMode`: normal, multiply, screen, overlay, soft light), grain, ±1 LSB dithering against banding | `composite.rs`, `backdrop_blur.wgsl` / `shaders.metal` |
+| Lighting | directional sheen + far-side shade, ambient lift, edge rim along the rounded-rect normal (facing the light), diagonal reflection band, Gaussian specular spot | `lighting.rs` (`Lighting`) |
+| Texture | integer-hash grain per device pixel (no texture fetch); fallback uses a cached grain tile | `texture.rs`, shaders |
+| Shadows | up to 4 drop shadows (`ShadowPreset` incl. `Ambient`, elevation tokens) drawn by the composite **outside the shape only** with gpui's erf shadow model; `InnerShadow` presets (`pressed`, `well`, `glass_rim`) | `shadow.rs` |
+| Compositing | premultiplied “over” of plate and shadow; linear `Mask`; rounded-rect clip; nested materials sample what the outer one composited | `composite.rs` (module docs list the rules) |
+| Recipes | sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim, glass | `recipes.rs` (`Recipe`) |
+
+### Known issues fixed
+
+- **Shadows captured into the material's own backdrop.** Drop shadows were
+  GPUI shadows painted before the blur, so the blur sampled them. They are now
+  drawn by the composite outside the shape (like CSS `box-shadow`, which is
+  clipped under the box), so the backdrop never contains them. Shadows beyond
+  four still use GPUI shadows.
+- **Text / blur ordering at the same draw level.** A blur inserted inside a
+  `paint_layer` is ordered by `union(sampled region, layer bounds)` and bumps
+  the layer's order, so content painted later in the same layer (labels,
+  icons) always draws above the blur instead of being sorted under it.
+
+### Caching and dirty-region reuse
+
+`Scene::backdrop_blur_keys` hashes, per blur, every primitive drawn before it
+whose bounds intersect its sampled region (plus the blur's own parameters and
+any earlier blur it samples). When the key matches the previous frame the
+renderer skips copy / downsample / Gaussian and only runs the composite inside
+the main pass (no pass break). Misses copy the blurred result into a per-key
+texture. Entries unused for 3 frames are evicted (max 24). Surfaces (video)
+make a blur uncacheable. `GPUI_BLUR_CACHE=0` disables the cache.
+
+### Benchmark (Phase 3)
+
+16 `Regular` panels, 960×640, Xvfb + lavapipe, release. Frames are paced by
+the 60 Hz refresh timer, so results are quantized to ~16.7 ms steps.
+
+| Phase | Cache on | Cache off (`GPUI_BLUR_CACHE=0`) |
+| --- | --- | --- |
+| `blur/moving` (panels move, every blur recomputed) | 31.8 ms | 32.0 ms |
+| `blur/static` (only a small widget animates) | 16.0 ms (capped) | 31.9 ms |
+| `fallback` (reduced transparency) | 16.0 ms (capped) | 16.5 ms |
+
+The static case drops from re-blurring every panel to composite-only. With 8
+panels every phase sits at the 60 Hz cap on this machine.
+
+### Fallback path
+
+Without real blur (DirectX, reduced transparency) a `Material` paints: GPUI
+shadows → fallback fill (a gradient when masked) → grain tile → quad lighting
+(directional/ambient/rim; specular approximated by a clipped white glow) →
+inner shadows → border. The reflection band and blend modes are blur-only.
+
+## 9. Phase 4 — components on Material
+
+`refineui` gains an optional **`material`** feature (default off, so stock
+gpui keeps working; the gallery turns it on). `refineui::material` holds the
+glue: `SurfaceKind` (panel, sidebar, titlebar, popover, menu, tooltip, HUD,
+sheet, toast, scrim, glass → recipe + opaque fallback), `materials_active(cx)`
+(feature on, blur supported, reduced transparency off, native macOS frost
+off) and a crate-internal `backing()` that returns either the material layer
+or the component's existing fill / border / shadows.
+
+| Component | With materials | API |
+| --- | --- | --- |
+| Surface (new) | `div` with a material plate per `SurfaceKind` | `Surface::new(kind)`, `radius`, `elevation`, `border_color_override` |
+| Text / Icon | colors that read on a surface (light on the HUD) | `Text::on_surface`, `Icon::on_surface` |
+| Separator | alias of `Divider`; translucent rule on surfaces | `Separator`, `Divider::on_surface` |
+| Button | glass plate + hover / press veil | `Button::glass(bool)` (opt-in) |
+| Input | material field plate, animated border above the blur | `TextInput::glass(bool)`, `set_glass` (opt-in) |
+| Popover, Tooltip | panel = Popover / Tooltip material; outline strokes the panel and fills only the beak | automatic |
+| Menu (Dropdown, ContextMenu, submenus, Menu Bar) | Menu material | automatic |
+| Dialog / Drawer | scrim = Scrim material (the web 2px blur); panel = Sheet material on request | automatic scrim, `Dialog::material(bool)` |
+| Toast | Toast material | `Toast::material(bool)`, `Toaster::material(bool)` (opt-in) |
+
+Existing APIs are unchanged (only additive builders, a new component and a
+type alias); without the feature, rendering is byte-for-byte the old path.
+Opt-in where the web design is opaque (buttons, inputs, toasts, dialog
+panels) keeps web parity by default.
+
+Phase 4 left `Select`'s list, the Sidebar peek, the Command Palette panel
+and the drag preview opaque; Phase 5 converts them (§10).
+
+## 10. Phase 5 — desktop components on Material
+
+**Leftovers.** `Select`'s list is a Menu material on a non-scrolling outer
+plate with the scroll container inside; the Sidebar peek is a Popover
+material; the Command Palette results panel is a Popover material
+(`Command::set_material`, on for `CommandPalette`) with a glass search
+field; `DragPreview` chips are Menu material.
+
+**Shell and workspace chrome.** `material::chrome(kind, fill, cx)` returns a
+transparent fill plus a square, borderless, shadowless material layer (outset
+0), so the one-sided hairlines the shell already draws stay visible and the
+layout is the RefineUI shell, not a different skin:
+
+| Piece | Kind |
+| --- | --- |
+| Titlebar, Status Bar, Tab Bar strip | `Titlebar` |
+| Activity Bar, Sidebar rail, Dock side docks, Application Shell menu strip and side docks | `Sidebar` |
+| Notification Center | `Sheet` (rounded, rim, `Shadow16`) |
+| Preferences sidebar | `Sidebar` |
+
+The workspace (editor, panels, inspector content, bottom dock) stays on
+opaque `backgroundPrimary` for reading. Over an opaque window the chrome
+materials blur that fill, so the look is unchanged; with
+`ApplicationShell::vibrant(true)` the shell root is left unpainted and the
+chrome blurs what is behind the window (a transparent / blurred OS window,
+or the gallery wallpaper) — the macOS sidebar vibrancy look. The Floating
+Panel keeps its own OS-level blur (`blurred`); its titlebar is chrome.
+
+**New desktop pieces.** `NotificationCenter` (+ `Notification`,
+`NotificationTone`), `PreferencesWindow` (+ `PreferencesSection`,
+`PreferencesGroup`, `PreferencesRow`), `ShortcutRecorder` (entity,
+`ShortcutChanged`, keymap conflict check) and empty / error states on `ResultView` (`ResultVariant::Empty`, `details`, `compact`),
+each with a contract and a docs page.
+
+**Motion.** `motion::Spring` (`SMOOTH`, `BOUNCY`, `SNAPPY`; semi-implicit
+Euler with 4ms substeps), `animate_spring` (keeps velocity when the target
+changes mid-flight, so springs are interruptible) and `spring_presence`.
+Both honour `ReducedMotion` (jump to the target). The Notification Center
+slides in on `Spring::SNAPPY`. Tweens (`animate`, `animate_from`) already
+retarget from the current value.
+
+**Showcase.** The `desktop-showcase` story is a complete app (vibrant
+chrome over a wallpaper, sidebar, document workspace, status bar, open
+notification center) in light and dark.
+

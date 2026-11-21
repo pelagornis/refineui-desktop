@@ -21,9 +21,8 @@ sidebar:
 ```
 
 Phase 2 ships every part as a GPUI view in `refineui::shell` and composes
-them in [`ApplicationShell`](/shell/application-shell/). The full demo is
-`cargo run -p refineui-gallery --bin refineui-shell` (or **Shell demo** in
-the gallery).
+them in [`ApplicationShell`](/shell/application-shell/); the gallery's
+Application Shell page shows the composed shell live, per OS.
 
 ```rust
 let spec = ShellSpec::default(); // unified toolbar, leading activity bar, status bar
@@ -94,20 +93,25 @@ region. Overflow into a menu is Phase 3.
 
 ## Activity bar / Navigation rail
 
-`ActivityBar` replaces Side Dock. The default **Refine** style is a
-density-sized rail (48px comfortable) of 36px rounded tiles with a plate
-indicator and tooltips; every aspect is a field of `ActivityBarStyle`
-(shape, indicator None / Bar / Dot / Plate, sizes, colours, labels
-Tooltip / Below / Beside) and `render_item` replaces the face entirely.
-`ActivityBar::rail` keeps the former Side Dock look,
-`ActivityBar::navigation_rail` shows captions. Items reorder by drag or
-⌥↑ / ⌥↓.
+`ActivityBar` replaces Side Dock and the old rail / navigation-rail
+presets with one unified RefineUI rail: density-sized (48px comfortable),
+tiles that morph toward a squircle when selected, a `backgroundBrandSubtle`
+selected plate, a brand edge indicator and tooltips. Items can carry an
+external `image` (URL or asset) and a count or dot badge. `folder` groups
+items in a Toolbar-style tube: closed, the tile shows a 2×2 stacked preview
+of its members (and a count badge when there are more than four); open, it
+shows the FolderOpen icon and the members sit inside the same rounded
+plate, which grows and shrinks with accordion height motion (`default_open`
+seeds the first frame). `render_item` replaces the face entirely. Items
+reorder by drag or ⌥↑ / ⌥↓; open-folder children are in the ↑ / ↓ order
+and Enter / Space also toggles a focused folder.
 
 ## Status bar
 
-`status_bar_height`, `surfaceSunken` with a hairline top border,
-`captionMd` text, leading and trailing groups of text / button / progress /
-custom items; `accent(true)` for debugging or remote sessions.
+A quiet `backgroundPrimary` strip with a hairline top border (not a
+coloured band): rounded `captionLg` chips in leading and trailing groups of
+text / button / progress / custom items. Tones tint only icons or a 6px dot;
+`accent(true)` adds a 2px brand rule and a brand-subtle lead pill.
 
 ## Focus regions
 

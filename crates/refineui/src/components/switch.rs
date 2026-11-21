@@ -4,7 +4,7 @@ use gpui::{
     App, CursorStyle, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::motion::{
     Interaction, Motion, TrackInteraction, animate, child_id, focus_visible, use_focus_handle,
@@ -61,7 +61,7 @@ impl Switch {
 
 impl RenderOnce for Switch {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        use refineui_tokens::size::component::{
+        use refineui_foundation::size::component::{
             SWITCH_HEIGHT, SWITCH_PADDING, SWITCH_THUMB, SWITCH_WIDTH,
         };
         let theme = cx.theme().clone();

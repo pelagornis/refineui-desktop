@@ -1,0 +1,2944 @@
+diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
+--- /tmp/gpui-orig/src/backdrop_blur.rs	1970-01-01 09:00:00.000000000 +0900
++++ vendor/gpui/src/backdrop_blur.rs	2026-11-20 02:32:15.914879837 +0900
+@@ -0,0 +1,347 @@
++//! RefineUI patch: renderer-independent planning for backdrop blur.
++//!
++//! Both the Blade and the Metal renderer run the same steps (copy → downsample
++//! → Gaussian H → Gaussian V → composite) with the same uniform block, built
++//! here so the two backends cannot drift apart. See `REFINEUI_PATCH.md`.
++
++#![cfg_attr(windows, allow(dead_code))]
++
++use crate::{BackdropBlur, Bounds, ScaledPixels, Size, point};
++
++/// Uniform block shared by every blur step. Mirrors `BlurParams` in
++/// `blade/backdrop_blur.wgsl` and `RefineBlurParams` in `mac/shaders.metal`.
++#[repr(C)]
++#[derive(Clone, Copy, Debug, Default, PartialEq)]
++pub(crate) struct BackdropBlurParams {
++    pub dst_rect: [f32; 4],
++    pub target_size: [f32; 4],
++    pub src_size: [f32; 4],
++    pub src_clamp: [f32; 4],
++    pub params: [f32; 4],
++    pub shape: [f32; 4],
++    pub radii: [f32; 4],
++    pub tint: [f32; 4],
++    pub extra: [f32; 4],
++    pub light_dir: [f32; 4],
++    pub light_a: [f32; 4],
++    pub light_b: [f32; 4],
++    pub light_color: [f32; 4],
++    pub mask: [f32; 4],
++    pub misc: [f32; 4],
++    pub shadows: [[f32; 4]; 8],
++}
++
++/// Where one blur reads and writes, in drawable pixels.
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub(crate) struct BackdropBlurPlan {
++    /// Downsample factor (1, 2, 4 or 8).
++    pub scale: f32,
++    /// Gaussian sigma in drawable pixels.
++    pub sigma: f32,
++    /// Region copied out of the drawable (x0, y0, x1, y1), snapped to the
++    /// downsample grid.
++    pub copy: [f32; 4],
++    /// The same region in downsampled texels, whole texels only.
++    pub region_ds: [f32; 4],
++    /// Rectangle the composite covers (shape + shadows, clipped).
++    pub draw: Bounds<ScaledPixels>,
++    /// Drawable size.
++    pub target: [f32; 2],
++}
++
++impl BackdropBlurPlan {
++    /// Size of the blurred result in downsampled texels.
++    pub(crate) fn result_size(&self) -> (u32, u32) {
++        (
++            (self.region_ds[2] - self.region_ds[0]).max(1.0) as u32,
++            (self.region_ds[3] - self.region_ds[1]).max(1.0) as u32,
++        )
++    }
++
++    fn base(&self) -> BackdropBlurParams {
++        let [width, height] = self.target;
++        let r = self.region_ds;
++        BackdropBlurParams {
++            dst_rect: [r[0], r[1], r[2] - r[0], r[3] - r[1]],
++            target_size: [width, height, 0.0, 0.0],
++            src_size: [width, height, 1.0 / width, 1.0 / height],
++            src_clamp: self.copy,
++            params: [self.scale, 0.0, 0.0, 0.0],
++            extra: [1.0, 1.0, 0.0, self.scale],
++            ..Default::default()
++        }
++    }
++
++    /// Box downsample of the copied region (full-size source texture).
++    pub(crate) fn downsample_params(&self) -> BackdropBlurParams {
++        self.base()
++    }
++
++    /// One Gaussian direction in downsampled space.
++    pub(crate) fn gaussian_params(&self, horizontal: bool) -> BackdropBlurParams {
++        let mut params = self.base();
++        params.src_clamp = self.region_ds;
++        let (x, y) = if horizontal { (1.0, 0.0) } else { (0.0, 1.0) };
++        params.params = [1.0, self.sigma / self.scale, x, y];
++        params
++    }
++}
++
++/// The texture the composite samples.
++#[derive(Clone, Copy, Debug)]
++pub(crate) enum BlurSource {
++    /// The full-size ping-pong texture, result at `region_ds`.
++    Targets,
++    /// A cached texture holding exactly the region (origin at 0, 0).
++    Cached,
++}
++
++impl BackdropBlur {
++    /// Plan the blur for a drawable of `width` × `height`; `None` when
++    /// nothing of the shape is visible.
++    pub(crate) fn plan(&self, width: f32, height: f32) -> Option<BackdropBlurPlan> {
++        if width <= 0.0 || height <= 0.0 {
++            return None;
++        }
++        let viewport = Bounds {
++            origin: point(ScaledPixels(0.0), ScaledPixels(0.0)),
++            size: Size {
++                width: ScaledPixels(width),
++                height: ScaledPixels(height),
++            },
++        };
++        let visible = self
++            .bounds
++            .intersect(&self.content_mask.bounds)
++            .intersect(&viewport);
++        if visible.is_empty() {
++            return None;
++        }
++        let draw = self.draw_bounds().intersect(&viewport);
++        let sigma = self.sigma.0.max(0.0);
++        let s: f32 = if sigma <= 4.0 {
++            1.0
++        } else if sigma <= 10.0 {
++            2.0
++        } else if sigma <= 24.0 {
++            4.0
++        } else {
++            8.0
++        };
++        let sample = self.sample_bounds().intersect(&viewport);
++        let x0 = ((sample.origin.x.0 / s).floor() * s).max(0.0);
++        let y0 = ((sample.origin.y.0 / s).floor() * s).max(0.0);
++        let x1 = (((sample.origin.x.0 + sample.size.width.0) / s).ceil() * s).min(width);
++        let y1 = (((sample.origin.y.0 + sample.size.height.0) / s).ceil() * s).min(height);
++        // A region clipped by the drawable edge can end mid-texel in the
++        // downsampled space; only whole texels are written.
++        let region_ds = [x0 / s, y0 / s, (x1 / s).floor(), (y1 / s).floor()];
++        if region_ds[2] <= region_ds[0] || region_ds[3] <= region_ds[1] {
++            return None;
++        }
++        Some(BackdropBlurPlan {
++            scale: s,
++            sigma,
++            copy: [x0, y0, x1, y1],
++            region_ds,
++            draw,
++            target: [width, height],
++        })
++    }
++
++    /// Uniforms for the composite step. `premultiplied` selects the output
++    /// alpha convention of the drawable's blend state.
++    pub(crate) fn composite_params(
++        &self,
++        plan: &BackdropBlurPlan,
++        source: BlurSource,
++        premultiplied: bool,
++    ) -> BackdropBlurParams {
++        let [width, height] = plan.target;
++        let (src_size, src_clamp, offset) = match source {
++            BlurSource::Targets => (
++                [width, height, 1.0 / width, 1.0 / height],
++                plan.region_ds,
++                [0.0, 0.0],
++            ),
++            BlurSource::Cached => {
++                let (w, h) = plan.result_size();
++                let (w, h) = (w as f32, h as f32);
++                (
++                    [w, h, 1.0 / w, 1.0 / h],
++                    [0.0, 0.0, w, h],
++                    [plan.region_ds[0], plan.region_ds[1]],
++                )
++            }
++        };
++        // The drawable is a non-sRGB UNORM format (gpui writes gamma-space
++        // colors), so colors stay in gamma space.
++        let tint = self.tint.to_rgb();
++        let light = &self.light;
++        let light_color = light.color.to_rgb();
++        let mut shadows = [[0.0; 4]; 8];
++        let mut count = 0;
++        for shadow in self.shadows.iter().filter(|s| s.is_visible()) {
++            let color = shadow.color.to_rgb();
++            shadows[count * 2] = [
++                shadow.offset.x.0,
++                shadow.offset.y.0,
++                shadow.blur_radius.0.max(0.0),
++                shadow.spread_radius.0,
++            ];
++            shadows[count * 2 + 1] = [color.r, color.g, color.b, color.a];
++            count += 1;
++        }
++        BackdropBlurParams {
++            dst_rect: [
++                plan.draw.origin.x.0,
++                plan.draw.origin.y.0,
++                plan.draw.size.width.0,
++                plan.draw.size.height.0,
++            ],
++            target_size: [width, height, 0.0, 0.0],
++            src_size,
++            src_clamp,
++            params: [1.0, 0.0, 0.0, 0.0],
++            shape: [
++                self.bounds.origin.x.0,
++                self.bounds.origin.y.0,
++                self.bounds.size.width.0,
++                self.bounds.size.height.0,
++            ],
++            radii: [
++                self.corner_radii.top_left.0,
++                self.corner_radii.top_right.0,
++                self.corner_radii.bottom_right.0,
++                self.corner_radii.bottom_left.0,
++            ],
++            tint: [tint.r, tint.g, tint.b, tint.a],
++            extra: [
++                self.saturation,
++                self.opacity.clamp(0.0, 1.0),
++                if premultiplied { 1.0 } else { 0.0 },
++                plan.scale,
++            ],
++            light_dir: [
++                light.direction[0],
++                light.direction[1],
++                light.directional.max(0.0),
++                light.ambient.max(0.0),
++            ],
++            light_a: [
++                light.edge.max(0.0),
++                light.edge_width.0,
++                light.specular.max(0.0),
++                light.specular_size.0,
++            ],
++            light_b: [
++                light.specular_position[0],
++                light.specular_position[1],
++                light.reflection.max(0.0),
++                self.noise,
++            ],
++            light_color: [
++                light_color.r,
++                light_color.g,
++                light_color.b,
++                self.tint_blend as f32,
++            ],
++            mask: self.mask,
++            misc: [count as f32, offset[0], offset[1], 0.0],
++            shadows,
++        }
++    }
++}
++
++/// Whether the blur cache is on (default) — `GPUI_BLUR_CACHE=0` turns it
++/// off, e.g. to benchmark the uncached path.
++pub(crate) fn blur_cache_enabled() -> bool {
++    std::env::var("GPUI_BLUR_CACHE").map_or(true, |v| v != "0")
++}
++
++/// Cache entries older than this many frames are released.
++pub(crate) const BLUR_CACHE_MAX_AGE: u64 = 3;
++/// At most this many blurred backdrops are kept.
++pub(crate) const BLUR_CACHE_MAX_ENTRIES: usize = 24;
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::{BackdropBlurLight, BackdropBlurShadow, ContentMask, Corners, Hsla, size};
++
++    fn blur(x: f32, y: f32, w: f32, h: f32, sigma: f32) -> BackdropBlur {
++        let bounds = Bounds {
++            origin: point(ScaledPixels(x), ScaledPixels(y)),
++            size: size(ScaledPixels(w), ScaledPixels(h)),
++        };
++        BackdropBlur {
++            order: 0,
++            bounds,
++            content_mask: ContentMask {
++                bounds: Bounds {
++                    origin: point(ScaledPixels(0.0), ScaledPixels(0.0)),
++                    size: size(ScaledPixels(4000.0), ScaledPixels(4000.0)),
++                },
++            },
++            corner_radii: Corners::default(),
++            sigma: ScaledPixels(sigma),
++            tint: Hsla::transparent_black(),
++            saturation: 1.0,
++            opacity: 1.0,
++            tint_blend: 0,
++            noise: 0.0,
++            light: BackdropBlurLight::default(),
++            mask: [0.0; 4],
++            shadows: [BackdropBlurShadow::default(); 4],
++        }
++    }
++
++    #[test]
++    fn plan_snaps_to_the_downsample_grid() {
++        let plan = blur(101.0, 50.0, 200.0, 100.0, 16.0)
++            .plan(1000.0, 800.0)
++            .unwrap();
++        assert_eq!(plan.scale, 4.0);
++        for v in plan.copy {
++            assert_eq!(v % 4.0, 0.0);
++        }
++        // The copy covers the shape plus the 3σ kernel footprint.
++        assert!(plan.copy[0] <= 101.0 - 48.0);
++        assert!(plan.copy[2] >= 301.0 + 48.0);
++        assert_eq!(plan.region_ds[0] * 4.0, plan.copy[0]);
++    }
++
++    #[test]
++    fn plan_clips_to_the_drawable_and_skips_hidden_shapes() {
++        let plan = blur(-50.0, -50.0, 100.0, 100.0, 8.0)
++            .plan(500.0, 500.0)
++            .unwrap();
++        assert_eq!(plan.copy[0], 0.0);
++        assert_eq!(plan.copy[1], 0.0);
++        assert!(blur(600.0, 0.0, 50.0, 50.0, 8.0).plan(500.0, 500.0).is_none());
++    }
++
++    #[test]
++    fn shadows_extend_the_draw_rect_but_not_the_sample() {
++        let mut b = blur(100.0, 100.0, 100.0, 100.0, 4.0);
++        let plain = b.plan(1000.0, 1000.0).unwrap();
++        b.shadows[0] = BackdropBlurShadow {
++            offset: point(ScaledPixels(0.0), ScaledPixels(20.0)),
++            blur_radius: ScaledPixels(10.0),
++            spread_radius: ScaledPixels(0.0),
++            color: Hsla::black().opacity(0.3),
++        };
++        let shadowed = b.plan(1000.0, 1000.0).unwrap();
++        assert_eq!(plain.copy, shadowed.copy);
++        assert!(shadowed.draw.size.height.0 > plain.draw.size.height.0 + 40.0);
++        let params = b.composite_params(&shadowed, BlurSource::Cached, false);
++        assert_eq!(params.misc[0], 1.0);
++        assert_eq!(params.misc[1], shadowed.region_ds[0]);
++    }
++
++    #[test]
++    fn params_layout_matches_the_shaders() {
++        // 15 vec4 + 8 vec4 of shadows.
++        assert_eq!(std::mem::size_of::<BackdropBlurParams>(), 23 * 16);
++    }
++}
+diff -ruN /tmp/gpui-orig/src/gpui.rs vendor/gpui/src/gpui.rs
+--- /tmp/gpui-orig/src/gpui.rs	2026-11-20 01:36:08.781910756 +0900
++++ vendor/gpui/src/gpui.rs	2026-11-20 02:32:15.934879547 +0900
+@@ -13,6 +13,7 @@
+ mod arena;
+ mod asset_cache;
+ mod assets;
++mod backdrop_blur;
+ mod bounds_tree;
+ mod color;
+ /// The default colors used by GPUI.
+diff -ruN /tmp/gpui-orig/src/platform/blade/backdrop_blur.wgsl vendor/gpui/src/platform/blade/backdrop_blur.wgsl
+--- /tmp/gpui-orig/src/platform/blade/backdrop_blur.wgsl	1970-01-01 09:00:00.000000000 +0900
++++ vendor/gpui/src/platform/blade/backdrop_blur.wgsl	2026-11-20 02:43:19.962129576 +0900
+@@ -0,0 +1,330 @@
++// RefineUI patch: real backdrop blur for the Blade renderer.
++//
++// Three steps per blurred plate, all limited to the plate's sampled region:
++//   1. fs_downsample — box-filter the copied frame region down by `scale`
++//      (1, 2, 4 or 8) into a float texture.
++//   2. fs_blur       — separable Gaussian, run twice (horizontal, vertical).
++//   3. fs_composite  — upsample (bilinear), apply saturation, tint (with a
++//      blend mode), lighting, grain + dithering and an optional linear mask,
++//      clip to the rounded rectangle, draw the drop shadows outside the
++//      shape, and blend into the frame.
++//
++// The composite also runs on its own for a cached blur (same backdrop as the
++// previous frame): then `misc.yz` offsets into the cached texture.
++
++struct BlurParams {
++    // Rectangle to cover in the render target, in target pixels (x, y, w, h).
++    dst_rect: vec4<f32>,
++    // Render target size (w, h, _, _).
++    target_size: vec4<f32>,
++    // Source texture size (w, h, 1 / w, 1 / h).
++    src_size: vec4<f32>,
++    // Valid source texels, in source pixels (x0, y0, x1, y1).
++    src_clamp: vec4<f32>,
++    // (scale, sigma, dir.x, dir.y): downsample factor / Gaussian sigma in
++    // source texels / blur direction.
++    params: vec4<f32>,
++    // Plate shape in target pixels (x, y, w, h).
++    shape: vec4<f32>,
++    // Corner radii (top-left, top-right, bottom-right, bottom-left).
++    radii: vec4<f32>,
++    // Tint, linear RGBA (straight alpha).
++    tint: vec4<f32>,
++    // (saturation, opacity, premultiplied output, downsample factor).
++    extra: vec4<f32>,
++    // (direction towards the light x, y, directional, ambient).
++    light_dir: vec4<f32>,
++    // (edge, edge width px, specular, specular size px).
++    light_a: vec4<f32>,
++    // (specular position x, y (shape-relative), reflection, noise).
++    light_b: vec4<f32>,
++    // (light r, g, b, tint blend mode).
++    light_color: vec4<f32>,
++    // Linear mask (dir.x, dir.y, start, end); zero direction = off.
++    mask: vec4<f32>,
++    // (shadow count, source offset x, y, _) — offset in downsampled texels.
++    misc: vec4<f32>,
++    // Per shadow: (offset x, y, blur sigma, spread), then color (straight RGBA).
++    shadows: array<vec4<f32>, 8>,
++}
++
++var<uniform> blur_params: BlurParams;
++var t_blur: texture_2d<f32>;
++var s_blur: sampler;
++
++const BLUR_LUMA: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
++
++@vertex
++fn vs_blur(@builtin(vertex_index) vertex_id: u32) -> @builtin(position) vec4<f32> {
++    let unit = vec2<f32>(f32(vertex_id & 1u), f32((vertex_id >> 1u) & 1u));
++    let position = blur_params.dst_rect.xy + unit * blur_params.dst_rect.zw;
++    let ndc = position / blur_params.target_size.xy * vec2<f32>(2.0, -2.0) + vec2<f32>(-1.0, 1.0);
++    return vec4<f32>(ndc, 0.0, 1.0);
++}
++
++// Sample at a continuous source position (texel centers at +0.5), clamped
++// to the valid region so the kernel never reads stale texels.
++fn sample_clamped(position: vec2<f32>) -> vec4<f32> {
++    let p = clamp(position, blur_params.src_clamp.xy + vec2<f32>(0.5), blur_params.src_clamp.zw - vec2<f32>(0.5));
++    return textureSampleLevel(t_blur, s_blur, p * blur_params.src_size.zw, 0.0);
++}
++
++@fragment
++fn fs_downsample(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
++    let scale = blur_params.params.x;
++    let center = frag.xy * scale;
++    if (scale < 2.0) {
++        return sample_clamped(center);
++    }
++    // Each bilinear tap placed between four texels averages them, so an
++    // n × n grid of taps two texels apart averages the scale × scale block.
++    let n = i32(scale * 0.5);
++    var acc = vec4<f32>(0.0);
++    for (var j = 0; j < n; j += 1) {
++        for (var i = 0; i < n; i += 1) {
++            let offset = vec2<f32>(f32(i) * 2.0 + 1.0, f32(j) * 2.0 + 1.0) - vec2<f32>(scale * 0.5);
++            acc += sample_clamped(center + offset);
++        }
++    }
++    return acc / f32(n * n);
++}
++
++@fragment
++fn fs_blur(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
++    let sigma = max(blur_params.params.y, 0.0001);
++    let dir = blur_params.params.zw;
++    let taps = i32(min(ceil(sigma * 3.0), 64.0));
++    let k = -0.5 / (sigma * sigma);
++    var acc = sample_clamped(frag.xy);
++    var total = 1.0;
++    for (var i = 1; i <= taps; i += 1) {
++        let x = f32(i);
++        let w = exp(x * x * k);
++        acc += w * (sample_clamped(frag.xy + dir * x) + sample_clamped(frag.xy - dir * x));
++        total += 2.0 * w;
++    }
++    return acc / total;
++}
++
++fn blur_corner_radius(center_to_point: vec2<f32>, radii: vec4<f32>) -> f32 {
++    if (center_to_point.x < 0.0) {
++        if (center_to_point.y < 0.0) {
++            return radii.x;
++        }
++        return radii.w;
++    }
++    if (center_to_point.y < 0.0) {
++        return radii.y;
++    }
++    return radii.z;
++}
++
++// Signed distance to a rounded rectangle (x, y, w, h) — negative inside.
++fn rrect_distance(position: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> f32 {
++    let half_size = rect.zw * 0.5;
++    let to_point = position - (rect.xy + half_size);
++    let radius = min(blur_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++    let q = abs(to_point) - half_size + vec2<f32>(radius);
++    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - radius;
++}
++
++// Outward normal of the rounded rectangle at the closest edge.
++fn rrect_normal(position: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>) -> vec2<f32> {
++    let half_size = rect.zw * 0.5;
++    let to_point = position - (rect.xy + half_size);
++    let radius = min(blur_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++    let q = abs(to_point) - half_size + vec2<f32>(radius);
++    let s = select(vec2<f32>(-1.0), vec2<f32>(1.0), to_point >= vec2<f32>(0.0));
++    if (q.x > 0.0 && q.y > 0.0) {
++        return normalize(q) * s;
++    }
++    if (q.x > q.y) {
++        return vec2<f32>(s.x, 0.0);
++    }
++    return vec2<f32>(0.0, s.y);
++}
++
++fn blur_gaussian_1d(x: f32, sigma: f32) -> f32 {
++    return exp(-(x * x) / (2.0 * sigma * sigma)) / (sqrt(2.0 * 3.14159265) * sigma);
++}
++
++fn blur_erf(v: vec2<f32>) -> vec2<f32> {
++    let s = sign(v);
++    let a = abs(v);
++    let r1 = 1.0 + (0.278393 + (0.230389 + (0.000972 + 0.078108 * a) * a) * a) * a;
++    let r2 = r1 * r1;
++    return s - s / (r2 * r2);
++}
++
++fn blur_shadow_along_x(x: f32, y: f32, sigma: f32, corner: f32, half_size: vec2<f32>) -> f32 {
++    let delta = min(half_size.y - corner - abs(y), 0.0);
++    let curved = half_size.x - corner + sqrt(max(0.0, corner * corner - delta * delta));
++    let integral = 0.5 + 0.5 * blur_erf((x + vec2<f32>(-curved, curved)) * (sqrt(0.5) / sigma));
++    return integral.y - integral.x;
++}
++
++// Coverage of a blurred rounded rectangle (same model as gpui's shadows).
++fn shadow_alpha(position: vec2<f32>, rect: vec4<f32>, radii: vec4<f32>, sigma: f32) -> f32 {
++    if (sigma < 0.5) {
++        return clamp(0.5 - rrect_distance(position, rect, radii), 0.0, 1.0);
++    }
++    let half_size = rect.zw * 0.5;
++    let to_point = position - (rect.xy + half_size);
++    let corner = min(blur_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++    let low = to_point.y - half_size.y;
++    let high = to_point.y + half_size.y;
++    let start = clamp(-3.0 * sigma, low, high);
++    let end = clamp(3.0 * sigma, low, high);
++    let step = (end - start) / 4.0;
++    var y = start + step * 0.5;
++    var alpha = 0.0;
++    for (var i = 0; i < 4; i += 1) {
++        alpha += blur_shadow_along_x(to_point.x, to_point.y - y, sigma, corner, half_size)
++            * blur_gaussian_1d(y, sigma) * step;
++        y += step;
++    }
++    return clamp(alpha, 0.0, 1.0);
++}
++
++fn blur_hash(p: vec2<f32>, seed: u32) -> f32 {
++    var x = u32(p.x) * 1664525u + u32(p.y) * 1013904223u + seed * 2654435761u;
++    x = x ^ (x >> 16u);
++    x = x * 0x7feb352du;
++    x = x ^ (x >> 15u);
++    x = x * 0x846ca68bu;
++    x = x ^ (x >> 16u);
++    return f32(x) * (1.0 / 4294967295.0);
++}
++
++fn screen3(a: vec3<f32>, b: vec3<f32>) -> vec3<f32> {
++    return vec3<f32>(1.0) - (vec3<f32>(1.0) - a) * (vec3<f32>(1.0) - b);
++}
++
++fn blend_tint(base: vec3<f32>, tint: vec3<f32>, mode: f32) -> vec3<f32> {
++    if (mode < 0.5) {
++        return tint;
++    }
++    if (mode < 1.5) {
++        return base * tint;
++    }
++    if (mode < 2.5) {
++        return screen3(base, tint);
++    }
++    if (mode < 3.5) {
++        let low = 2.0 * base * tint;
++        let high = vec3<f32>(1.0) - 2.0 * (vec3<f32>(1.0) - base) * (vec3<f32>(1.0) - tint);
++        return select(high, low, base <= vec3<f32>(0.5));
++    }
++    // W3C soft-light.
++    let d = select(sqrt(base), ((16.0 * base - 12.0) * base + 4.0) * base, base <= vec3<f32>(0.25));
++    let soft_low = base - (vec3<f32>(1.0) - 2.0 * tint) * base * (vec3<f32>(1.0) - base);
++    let soft_high = base + (2.0 * tint - vec3<f32>(1.0)) * (d - base);
++    return select(soft_high, soft_low, tint <= vec3<f32>(0.5));
++}
++
++@fragment
++fn fs_composite(@builtin(position) frag: vec4<f32>) -> @location(0) vec4<f32> {
++    let p = blur_params;
++    let shape = p.shape;
++    let distance = rrect_distance(frag.xy, shape, p.radii);
++    let coverage = clamp(0.5 - distance, 0.0, 1.0);
++    let opacity = p.extra.y;
++
++    var plate = vec4<f32>(0.0);
++    if (coverage > 0.0) {
++        let ds = p.extra.w;
++        let sampled = sample_clamped(frag.xy / ds - p.misc.yz);
++        let alpha = sampled.a;
++        var rgb = sampled.rgb / max(alpha, 0.0001);
++
++        // Saturation.
++        let luma = dot(rgb, BLUR_LUMA);
++        rgb = max(mix(vec3<f32>(luma), rgb, p.extra.x), vec3<f32>(0.0));
++
++        // Tint with blend mode (alpha = amount).
++        let tint = p.tint;
++        rgb = mix(rgb, blend_tint(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), tint.rgb, p.light_color.w), tint.a);
++        let out_alpha = alpha + tint.a * (1.0 - alpha);
++
++        // Lighting.
++        let light = p.light_color.rgb;
++        let dir = p.light_dir.xy;
++        let half_size = shape.zw * 0.5;
++        let local = (frag.xy - (shape.xy + half_size)) / max(half_size, vec2<f32>(1.0));
++        let has_dir = dot(dir, dir) > 0.0;
++        if (p.light_dir.z > 0.0 && has_dir) {
++            let g = clamp(dot(local, dir), -1.0, 1.0);
++            let lit = p.light_dir.z * smoothstep(-0.2, 1.0, g);
++            rgb = screen3(rgb, light * lit);
++            rgb = rgb * (1.0 - p.light_dir.z * 0.35 * smoothstep(0.0, 1.0, -g));
++        }
++        if (p.light_dir.w > 0.0) {
++            rgb = screen3(rgb, light * p.light_dir.w);
++        }
++        if (p.light_b.z > 0.0) {
++            // Glossy reflection: a soft diagonal band on the lit side.
++            var r = vec2<f32>(0.70710677, -0.70710677);
++            if (has_dir) {
++                r = normalize(dir + vec2<f32>(-dir.y, dir.x));
++            }
++            let t = dot(local, r);
++            let u = (t - 0.42) / 0.26;
++            let band = exp(-u * u);
++            rgb = screen3(rgb, light * (p.light_b.z * band));
++        }
++        if (p.light_a.z > 0.0) {
++            let spot = shape.xy + p.light_b.xy * shape.zw;
++            let size = max(p.light_a.w, 1.0);
++            let d = frag.xy - spot;
++            let spec = exp(-dot(d, d) / (2.0 * size * size));
++            rgb = screen3(rgb, light * (p.light_a.z * spec));
++        }
++        if (p.light_a.x > 0.0) {
++            let width = max(p.light_a.y, 0.5);
++            let rim = exp(-max(-distance, 0.0) / width);
++            var facing = 1.0;
++            if (has_dir) {
++                let n = rrect_normal(frag.xy, shape, p.radii);
++                facing = 0.3 + 0.7 * max(dot(n, dir), 0.0);
++            }
++            rgb = screen3(rgb, light * (p.light_a.x * rim * facing));
++        }
++
++        // Grain, then a ±0.5 LSB dither so 8-bit output does not band.
++        let grain = (blur_hash(frag.xy, 1u) - 0.5) * 2.0 * p.light_b.w;
++        let dither = (blur_hash(frag.xy, 2u) - blur_hash(frag.xy, 3u)) / 255.0;
++        rgb = clamp(rgb + vec3<f32>(grain + dither), vec3<f32>(0.0), vec3<f32>(1.0));
++
++        // Linear mask.
++        var mask = 1.0;
++        if (dot(p.mask.xy, p.mask.xy) > 0.0) {
++            let t = dot((frag.xy - shape.xy) / max(shape.zw, vec2<f32>(1.0)) - vec2<f32>(0.5), p.mask.xy) + 0.5;
++            mask = clamp((p.mask.w - t) / max(p.mask.w - p.mask.z, 0.0001), 0.0, 1.0);
++        }
++        let a = out_alpha * coverage * opacity * mask;
++        plate = vec4<f32>(rgb * a, a);
++    }
++
++    // Drop shadows, outside the shape only.
++    var shadow = vec4<f32>(0.0);
++    let count = i32(p.misc.x);
++    for (var i = 0; i < 4; i += 1) {
++        if (i >= count) {
++            break;
++        }
++        let geometry = p.shadows[i * 2];
++        let color = p.shadows[i * 2 + 1];
++        let spread = geometry.w;
++        let rect = vec4<f32>(shape.xy + geometry.xy - vec2<f32>(spread), shape.zw + vec2<f32>(spread * 2.0));
++        let radii = max(p.radii + vec4<f32>(spread), vec4<f32>(0.0));
++        let a = shadow_alpha(frag.xy, rect, radii, geometry.z) * color.a;
++        shadow = vec4<f32>(color.rgb * a, a) + shadow * (1.0 - a);
++    }
++    shadow = shadow * ((1.0 - coverage) * opacity);
++
++    let result = plate + shadow * (1.0 - plate.a);
++    if (p.extra.z > 0.5) {
++        return result;
++    }
++    return vec4<f32>(result.rgb / max(result.a, 0.0001), result.a);
++}
+diff -ruN /tmp/gpui-orig/src/platform/blade/blade_renderer.rs vendor/gpui/src/platform/blade/blade_renderer.rs
+--- /tmp/gpui-orig/src/platform/blade/blade_renderer.rs	2026-11-20 01:36:08.781910756 +0900
++++ vendor/gpui/src/platform/blade/blade_renderer.rs	2026-11-20 02:33:05.866141379 +0900
+@@ -2,15 +2,20 @@
+ #![allow(irrefutable_let_patterns)]
+ 
+ use super::{BladeAtlas, BladeContext};
++use crate::backdrop_blur::{
++    BLUR_CACHE_MAX_AGE, BLUR_CACHE_MAX_ENTRIES, BackdropBlurParams, BackdropBlurPlan, BlurSource,
++    blur_cache_enabled,
++};
+ use crate::{
+-    Background, Bounds, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point, PolychromeSprite,
+-    PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, Underline,
++    BackdropBlur, Background, Bounds, DevicePixels, GpuSpecs, MonochromeSprite, Path, Point,
++    PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size, Underline,
+ };
+ use blade_graphics as gpu;
+ use blade_util::{BufferBelt, BufferBeltDescriptor};
+ use bytemuck::{Pod, Zeroable};
+ #[cfg(target_os = "macos")]
+ use media::core_video::CVMetalTextureCache;
++use collections::HashMap;
+ use std::sync::Arc;
+ 
+ const MAX_FRAME_TIME_MS: u32 = 10000;
+@@ -98,6 +103,52 @@
+     b_poly_sprites: gpu::BufferPiece,
+ }
+ 
++// RefineUI patch: backdrop blur. Mirrors `BlurParams` in backdrop_blur.wgsl.
++#[repr(transparent)]
++#[derive(Clone, Copy)]
++struct BlurParams(BackdropBlurParams);
++
++// SAFETY: `BackdropBlurParams` is `repr(C)` and made only of `f32` arrays
++// (no padding, every bit pattern valid).
++unsafe impl Zeroable for BlurParams {}
++unsafe impl Pod for BlurParams {}
++
++#[derive(blade_macros::ShaderData)]
++struct ShaderBlurData {
++    blur_params: BlurParams,
++    t_blur: gpu::TextureView,
++    s_blur: gpu::Sampler,
++}
++
++/// Format of the intermediate blur textures: float, so wide blurs of smooth
++/// gradients do not band.
++const BLUR_TEXTURE_FORMAT: gpu::TextureFormat = gpu::TextureFormat::Rgba16Float;
++
++/// Cached intermediate textures for backdrop blur, sized to the drawable.
++#[derive(Clone, Copy)]
++enum BlurStep {
++    Downsample,
++    Gaussian,
++}
++
++/// A blurred backdrop kept for reuse while what is under it is unchanged.
++struct CachedBlur {
++    texture: gpu::Texture,
++    view: gpu::TextureView,
++    size: (u32, u32),
++    last_used: u64,
++}
++
++struct BlurTargets {
++    /// Copy of the frame region behind the plate (surface format).
++    source: (gpu::Texture, gpu::TextureView),
++    /// Ping-pong float textures (downsampled space).
++    a: (gpu::Texture, gpu::TextureView),
++    b: (gpu::Texture, gpu::TextureView),
++    size: gpu::Extent,
++    needs_init: bool,
++}
++
+ #[derive(blade_macros::ShaderData)]
+ struct ShaderSurfacesData {
+     globals: GlobalParams,
+@@ -131,6 +182,9 @@
+     mono_sprites: gpu::RenderPipeline,
+     poly_sprites: gpu::RenderPipeline,
+     surfaces: gpu::RenderPipeline,
++    blur_downsample: gpu::RenderPipeline,
++    blur_gaussian: gpu::RenderPipeline,
++    blur_composite: gpu::RenderPipeline,
+ }
+ 
+ impl BladePipelines {
+@@ -153,6 +207,15 @@
+         shader.check_struct_size::<Underline>();
+         shader.check_struct_size::<MonochromeSprite>();
+         shader.check_struct_size::<PolychromeSprite>();
++        let blur_shader = gpu.create_shader(gpu::ShaderDesc {
++            source: include_str!("backdrop_blur.wgsl"),
++        });
++        blur_shader.check_struct_size::<BlurParams>();
++        let blur_targets = &[gpu::ColorTargetState {
++            format: BLUR_TEXTURE_FORMAT,
++            blend: None,
++            write_mask: gpu::ColorWrites::default(),
++        }];
+ 
+         // See https://apoorvaj.io/alpha-compositing-opengl-blending-and-premultiplied-alpha/
+         let blend_mode = match surface_info.alpha {
+@@ -300,6 +363,9 @@
+                 color_targets,
+                 multisample_state: gpu::MultisampleState::default(),
+             }),
++            blur_downsample: blur_pipeline(gpu, &blur_shader, "blur_downsample", "fs_downsample", blur_targets),
++            blur_gaussian: blur_pipeline(gpu, &blur_shader, "blur_gaussian", "fs_blur", blur_targets),
++            blur_composite: blur_pipeline(gpu, &blur_shader, "blur_composite", "fs_composite", color_targets),
+         }
+     }
+ 
+@@ -312,9 +378,36 @@
+         gpu.destroy_render_pipeline(&mut self.mono_sprites);
+         gpu.destroy_render_pipeline(&mut self.poly_sprites);
+         gpu.destroy_render_pipeline(&mut self.surfaces);
++        gpu.destroy_render_pipeline(&mut self.blur_downsample);
++        gpu.destroy_render_pipeline(&mut self.blur_gaussian);
++        gpu.destroy_render_pipeline(&mut self.blur_composite);
+     }
+ }
+ 
++fn blur_pipeline(
++    gpu: &gpu::Context,
++    shader: &gpu::Shader,
++    name: &str,
++    fragment: &str,
++    color_targets: &[gpu::ColorTargetState],
++) -> gpu::RenderPipeline {
++    use gpu::ShaderData as _;
++    gpu.create_render_pipeline(gpu::RenderPipelineDesc {
++        name,
++        data_layouts: &[&ShaderBlurData::layout()],
++        vertex: shader.at("vs_blur"),
++        vertex_fetches: &[],
++        primitive: gpu::PrimitiveState {
++            topology: gpu::PrimitiveTopology::TriangleStrip,
++            ..Default::default()
++        },
++        depth_stencil: None,
++        fragment: Some(shader.at(fragment)),
++        color_targets,
++        multisample_state: gpu::MultisampleState::default(),
++    })
++}
++
+ pub struct BladeSurfaceConfig {
+     pub size: gpu::Extent,
+     pub transparent: bool,
+@@ -341,6 +434,10 @@
+     path_intermediate_msaa_texture: Option<gpu::Texture>,
+     path_intermediate_msaa_texture_view: Option<gpu::TextureView>,
+     rendering_parameters: RenderingParameters,
++    blur_targets: Option<BlurTargets>,
++    blur_cache: HashMap<u64, CachedBlur>,
++    blur_cache_enabled: bool,
++    frame_index: u64,
+ }
+ 
+ impl BladeRenderer {
+@@ -351,7 +448,9 @@
+     ) -> anyhow::Result<Self> {
+         let surface_config = gpu::SurfaceConfig {
+             size: config.size,
+-            usage: gpu::TextureUsage::TARGET,
++            // COPY: backdrop blur copies the region behind a plate out of
++            // the drawable (RefineUI patch).
++            usage: gpu::TextureUsage::TARGET | gpu::TextureUsage::COPY,
+             display_sync: gpu::DisplaySync::Recent,
+             color_space: gpu::ColorSpace::Srgb,
+             allow_exclusive_full_screen: false,
+@@ -427,6 +526,10 @@
+             path_intermediate_msaa_texture,
+             path_intermediate_msaa_texture_view,
+             rendering_parameters,
++            blur_targets: None,
++            blur_cache: HashMap::default(),
++            blur_cache_enabled: blur_cache_enabled(),
++            frame_index: 0,
+         })
+     }
+ 
+@@ -479,6 +582,8 @@
+             self.surface_config.size = gpu_size;
+             self.gpu
+                 .reconfigure_surface(&mut self.surface, self.surface_config);
++            self.destroy_blur_targets();
++            self.destroy_blur_cache();
+             self.gpu.destroy_texture(self.path_intermediate_texture);
+             self.gpu
+                 .destroy_texture_view(self.path_intermediate_texture_view);
+@@ -629,6 +734,8 @@
+         self.gpu.destroy_command_encoder(&mut self.command_encoder);
+         self.pipelines.destroy(&self.gpu);
+         self.gpu.destroy_surface(&mut self.surface);
++        self.destroy_blur_targets();
++        self.destroy_blur_cache();
+         self.gpu.destroy_texture(self.path_intermediate_texture);
+         self.gpu
+             .destroy_texture_view(self.path_intermediate_texture_view);
+@@ -640,6 +747,304 @@
+         }
+     }
+ 
++    fn destroy_blur_targets(&mut self) {
++        if let Some(targets) = self.blur_targets.take() {
++            for (texture, view) in [targets.source, targets.a, targets.b] {
++                self.gpu.destroy_texture_view(view);
++                self.gpu.destroy_texture(texture);
++            }
++        }
++    }
++
++    fn ensure_blur_targets(&mut self) {
++        let size = self.surface_config.size;
++        if self.blur_targets.as_ref().is_some_and(|t| t.size == size) {
++            return;
++        }
++        self.destroy_blur_targets();
++        let make = |name: &str, format: gpu::TextureFormat, usage: gpu::TextureUsage| {
++            let texture = self.gpu.create_texture(gpu::TextureDesc {
++                name,
++                format,
++                size,
++                array_layer_count: 1,
++                mip_level_count: 1,
++                sample_count: 1,
++                dimension: gpu::TextureDimension::D2,
++                usage,
++                external: None,
++            });
++            let view = self.gpu.create_texture_view(
++                texture,
++                gpu::TextureViewDesc {
++                    name,
++                    format,
++                    dimension: gpu::ViewDimension::D2,
++                    subresources: &Default::default(),
++                },
++            );
++            (texture, view)
++        };
++        let source = make(
++            "backdrop source",
++            self.surface.info().format,
++            gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
++        );
++        let float_usage =
++            gpu::TextureUsage::RESOURCE | gpu::TextureUsage::TARGET | gpu::TextureUsage::COPY;
++        let a = make("backdrop blur a", BLUR_TEXTURE_FORMAT, float_usage);
++        let b = make("backdrop blur b", BLUR_TEXTURE_FORMAT, float_usage);
++        self.blur_targets = Some(BlurTargets {
++            source,
++            a,
++            b,
++            size,
++            needs_init: true,
++        });
++    }
++
++    fn destroy_blur_cache(&mut self) {
++        for (_, entry) in self.blur_cache.drain() {
++            self.gpu.destroy_texture_view(entry.view);
++            self.gpu.destroy_texture(entry.texture);
++        }
++    }
++
++    /// Release cached blurs not used in the last few frames.
++    fn evict_blur_cache(&mut self) {
++        let frame = self.frame_index;
++        let stale: Vec<u64> = self
++            .blur_cache
++            .iter()
++            .filter(|(_, e)| frame.saturating_sub(e.last_used) > BLUR_CACHE_MAX_AGE)
++            .map(|(k, _)| *k)
++            .collect();
++        for key in stale {
++            if let Some(entry) = self.blur_cache.remove(&key) {
++                self.gpu.destroy_texture_view(entry.view);
++                self.gpu.destroy_texture(entry.texture);
++            }
++        }
++    }
++
++    /// RefineUI patch: copy the frame region behind `blur`, downsample, run a
++    /// separable Gaussian and composite it back inside the rounded shape.
++    /// Called between render passes (the main pass is closed). With a `key`
++    /// the blurred result is also kept for reuse in later frames.
++    fn draw_backdrop_blur(
++        &mut self,
++        blur: &BackdropBlur,
++        plan: &BackdropBlurPlan,
++        key: Option<u64>,
++        frame: &gpu::Frame,
++        premultiplied: bool,
++    ) {
++        let (x0, y0, x1, y1) = (plan.copy[0], plan.copy[1], plan.copy[2], plan.copy[3]);
++        self.ensure_blur_targets();
++        let Some(targets) = self.blur_targets.as_mut() else {
++            return;
++        };
++        if targets.needs_init {
++            targets.needs_init = false;
++            self.command_encoder.init_texture(targets.source.0);
++            self.command_encoder.init_texture(targets.a.0);
++            self.command_encoder.init_texture(targets.b.0);
++            // Clear the float textures once: bilinear taps at the edge of a
++            // region touch neighbouring texels with weight 0, and garbage
++            // there can be NaN, which survives a zero weight.
++            for view in [targets.a.1, targets.b.1] {
++                let _clear = self.command_encoder.render(
++                    "backdrop clear",
++                    gpu::RenderTargetSet {
++                        colors: &[gpu::RenderTarget {
++                            view,
++                            init_op: gpu::InitOp::Clear(gpu::TextureColor::TransparentBlack),
++                            finish_op: gpu::FinishOp::Store,
++                        }],
++                        depth_stencil: None,
++                    },
++                );
++            }
++        }
++        let (source, a, b) = (targets.source, targets.a, targets.b);
++
++        // 1. Copy the region out of the drawable.
++        if let mut transfer = self.command_encoder.transfer("backdrop copy") {
++            transfer.copy_texture_to_texture(
++                gpu::TexturePiece {
++                    texture: frame.texture(),
++                    mip_level: 0,
++                    array_layer: 0,
++                    origin: [x0 as u32, y0 as u32, 0],
++                },
++                gpu::TexturePiece {
++                    texture: source.0,
++                    mip_level: 0,
++                    array_layer: 0,
++                    origin: [x0 as u32, y0 as u32, 0],
++                },
++                gpu::Extent {
++                    width: (x1 - x0) as u32,
++                    height: (y1 - y0) as u32,
++                    depth: 1,
++                },
++            );
++        }
++
++        // 2. Downsample into `a`.
++        let down = plan.downsample_params();
++        self.blur_pass("backdrop downsample", a.1, source.1, down, BlurStep::Downsample);
++        // 3. Gaussian, horizontal into `b`, vertical back into `a`.
++        let h = plan.gaussian_params(true);
++        self.blur_pass("backdrop blur h", b.1, a.1, h, BlurStep::Gaussian);
++        let v = plan.gaussian_params(false);
++        self.blur_pass("backdrop blur v", a.1, b.1, v, BlurStep::Gaussian);
++
++        // 4. Keep the result for later frames.
++        if let Some(key) = key
++            && self.blur_cache_enabled
++        {
++            self.store_cached_blur(key, plan, a.0);
++        }
++
++        // 5. Composite into the drawable.
++        let composite = blur.composite_params(plan, BlurSource::Targets, premultiplied);
++        if let mut pass = self.command_encoder.render(
++            "backdrop composite",
++            gpu::RenderTargetSet {
++                colors: &[gpu::RenderTarget {
++                    view: frame.texture_view(),
++                    init_op: gpu::InitOp::Load,
++                    finish_op: gpu::FinishOp::Store,
++                }],
++                depth_stencil: None,
++            },
++        ) {
++            let mut encoder = pass.with(&self.pipelines.blur_composite);
++            encoder.bind(
++                0,
++                &ShaderBlurData {
++                    blur_params: BlurParams(composite),
++                    t_blur: a.1,
++                    s_blur: self.atlas_sampler,
++                },
++            );
++            encoder.draw(0, 4, 0, 1);
++        }
++    }
++
++    /// Copy the blurred region of `result` into a cache texture for `key`.
++    fn store_cached_blur(&mut self, key: u64, plan: &BackdropBlurPlan, result: gpu::Texture) {
++        let size = plan.result_size();
++        let reusable = self.blur_cache.get(&key).is_some_and(|e| e.size == size);
++        if !reusable {
++            if self.blur_cache.len() >= BLUR_CACHE_MAX_ENTRIES {
++                return;
++            }
++            if let Some(old) = self.blur_cache.remove(&key) {
++                self.gpu.destroy_texture_view(old.view);
++                self.gpu.destroy_texture(old.texture);
++            }
++            let extent = gpu::Extent {
++                width: size.0,
++                height: size.1,
++                depth: 1,
++            };
++            let texture = self.gpu.create_texture(gpu::TextureDesc {
++                name: "backdrop blur cache",
++                format: BLUR_TEXTURE_FORMAT,
++                size: extent,
++                array_layer_count: 1,
++                mip_level_count: 1,
++                sample_count: 1,
++                dimension: gpu::TextureDimension::D2,
++                usage: gpu::TextureUsage::COPY | gpu::TextureUsage::RESOURCE,
++                external: None,
++            });
++            let view = self.gpu.create_texture_view(
++                texture,
++                gpu::TextureViewDesc {
++                    name: "backdrop blur cache",
++                    format: BLUR_TEXTURE_FORMAT,
++                    dimension: gpu::ViewDimension::D2,
++                    subresources: &Default::default(),
++                },
++            );
++            self.command_encoder.init_texture(texture);
++            self.blur_cache.insert(
++                key,
++                CachedBlur {
++                    texture,
++                    view,
++                    size,
++                    last_used: self.frame_index,
++                },
++            );
++        }
++        let Some(entry) = self.blur_cache.get_mut(&key) else {
++            return;
++        };
++        entry.last_used = self.frame_index;
++        let texture = entry.texture;
++        if let mut transfer = self.command_encoder.transfer("backdrop cache store") {
++            transfer.copy_texture_to_texture(
++                gpu::TexturePiece {
++                    texture: result,
++                    mip_level: 0,
++                    array_layer: 0,
++                    origin: [plan.region_ds[0] as u32, plan.region_ds[1] as u32, 0],
++                },
++                gpu::TexturePiece {
++                    texture,
++                    mip_level: 0,
++                    array_layer: 0,
++                    origin: [0, 0, 0],
++                },
++                gpu::Extent {
++                    width: size.0,
++                    height: size.1,
++                    depth: 1,
++                },
++            );
++        }
++    }
++
++    fn blur_pass(
++        &mut self,
++        label: &str,
++        target: gpu::TextureView,
++        source: gpu::TextureView,
++        params: BackdropBlurParams,
++        step: BlurStep,
++    ) {
++        if let mut pass = self.command_encoder.render(
++            label,
++            gpu::RenderTargetSet {
++                colors: &[gpu::RenderTarget {
++                    view: target,
++                    init_op: gpu::InitOp::Load,
++                    finish_op: gpu::FinishOp::Store,
++                }],
++                depth_stencil: None,
++            },
++        ) {
++            let pipeline = match step {
++                BlurStep::Downsample => &self.pipelines.blur_downsample,
++                BlurStep::Gaussian => &self.pipelines.blur_gaussian,
++            };
++            let mut encoder = pass.with(pipeline);
++            encoder.bind(
++                0,
++                &ShaderBlurData {
++                    blur_params: BlurParams(params),
++                    t_blur: source,
++                    s_blur: self.atlas_sampler,
++                },
++            );
++            encoder.draw(0, 4, 0, 1);
++        }
++    }
++
+     pub fn draw(&mut self, scene: &Scene) {
+         self.command_encoder.start();
+         self.atlas.before_frame(&mut self.command_encoder);
+@@ -674,6 +1079,17 @@
+             },
+         );
+ 
++        // RefineUI patch: backdrop blur cache keys for this frame.
++        self.frame_index += 1;
++        let blur_keys = if self.blur_cache_enabled && !scene.backdrop_blurs.is_empty() {
++            scene.backdrop_blur_keys(Size {
++                width: ScaledPixels(self.surface_config.size.width as f32),
++                height: ScaledPixels(self.surface_config.size.height as f32),
++            })
++        } else {
++            Vec::new()
++        };
++
+         profiling::scope!("render pass");
+         for batch in scene.batches() {
+             match batch {
+@@ -813,6 +1229,61 @@
+                     );
+                     encoder.draw(0, 4, 0, sprites.len() as u32);
+                 }
++                PrimitiveBatch::BackdropBlurs(blurs) => {
++                    let premultiplied = globals.premultiplied_alpha != 0;
++                    let (width, height) = (
++                        self.surface_config.size.width as f32,
++                        self.surface_config.size.height as f32,
++                    );
++                    for blur in blurs {
++                        let Some(plan) = blur.plan(width, height) else {
++                            continue;
++                        };
++                        // SAFETY: `blurs` is a sub-slice of `scene.backdrop_blurs`.
++                        let index = unsafe {
++                            (blur as *const BackdropBlur).offset_from(scene.backdrop_blurs.as_ptr())
++                        } as usize;
++                        let key = blur_keys.get(index).copied().flatten();
++                        let hit = key.and_then(|key| {
++                            let entry = self.blur_cache.get_mut(&key)?;
++                            (entry.size == plan.result_size()
++                                && entry.last_used + 1 >= self.frame_index)
++                                .then(|| {
++                                    entry.last_used = self.frame_index;
++                                    entry.view
++                                })
++                        });
++                        if let Some(view) = hit {
++                            // Same backdrop as before: composite only, inside
++                            // the main pass.
++                            let params = blur.composite_params(&plan, BlurSource::Cached, premultiplied);
++                            let mut encoder = pass.with(&self.pipelines.blur_composite);
++                            encoder.bind(
++                                0,
++                                &ShaderBlurData {
++                                    blur_params: BlurParams(params),
++                                    t_blur: view,
++                                    s_blur: self.atlas_sampler,
++                                },
++                            );
++                            encoder.draw(0, 4, 0, 1);
++                            continue;
++                        }
++                        drop(pass);
++                        self.draw_backdrop_blur(blur, &plan, key, &frame, premultiplied);
++                        pass = self.command_encoder.render(
++                            "main",
++                            gpu::RenderTargetSet {
++                                colors: &[gpu::RenderTarget {
++                                    view: frame.texture_view(),
++                                    init_op: gpu::InitOp::Load,
++                                    finish_op: gpu::FinishOp::Store,
++                                }],
++                                depth_stencil: None,
++                            },
++                        );
++                    }
++                }
+                 PrimitiveBatch::Surfaces(surfaces) => {
+                     let mut _encoder = pass.with(&self.pipelines.surfaces);
+ 
+@@ -915,6 +1386,8 @@
+ 
+         self.wait_for_gpu();
+         self.last_sync_point = Some(sync_point);
++        // RefineUI patch: the previous frame is done with its textures.
++        self.evict_blur_cache();
+     }
+ }
+ 
+diff -ruN /tmp/gpui-orig/src/platform/mac/metal_renderer.rs vendor/gpui/src/platform/mac/metal_renderer.rs
+--- /tmp/gpui-orig/src/platform/mac/metal_renderer.rs	2026-11-20 01:36:08.781910756 +0900
++++ vendor/gpui/src/platform/mac/metal_renderer.rs	2026-11-20 02:38:05.007775468 +0900
+@@ -1,4 +1,8 @@
+ use super::metal_atlas::MetalAtlas;
++use crate::backdrop_blur::{
++    BLUR_CACHE_MAX_AGE, BLUR_CACHE_MAX_ENTRIES, BackdropBlurParams, BackdropBlurPlan, BlurSource,
++    blur_cache_enabled,
++};
+ use crate::{
+     AtlasTextureId, Background, Bounds, ContentMask, DevicePixels, MonochromeSprite, PaintSurface,
+     Path, Point, PolychromeSprite, PrimitiveBatch, Quad, ScaledPixels, Scene, Shadow, Size,
+@@ -25,6 +29,7 @@
+ use objc::{self, msg_send, sel, sel_impl};
+ use parking_lot::Mutex;
+ 
++use collections::HashMap;
+ use std::{cell::Cell, ffi::c_void, mem, ptr, sync::Arc};
+ 
+ // Exported to metal
+@@ -109,6 +114,16 @@
+     monochrome_sprites_pipeline_state: metal::RenderPipelineState,
+     polychrome_sprites_pipeline_state: metal::RenderPipelineState,
+     surfaces_pipeline_state: metal::RenderPipelineState,
++    // RefineUI patch: backdrop blur.
++    blur_downsample_pipeline_state: metal::RenderPipelineState,
++    blur_gaussian_pipeline_state: metal::RenderPipelineState,
++    blur_composite_pipeline_state: metal::RenderPipelineState,
++    blur_textures: Option<(metal::Texture, metal::Texture, metal::Texture)>,
++    /// Blurred backdrops reused while what is under them is unchanged:
++    /// key → (texture, size in texels, last frame used).
++    blur_cache: HashMap<u64, (metal::Texture, (u32, u32), u64)>,
++    blur_cache_enabled: bool,
++    frame_index: u64,
+     unit_vertices: metal::Buffer,
+     #[allow(clippy::arc_with_non_send_sync)]
+     instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>,
+@@ -144,6 +159,8 @@
+         layer.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
+         layer.set_opaque(false);
+         layer.set_maximum_drawable_count(3);
++        // RefineUI patch: backdrop blur blits out of the drawable.
++        layer.set_framebuffer_only(false);
+         unsafe {
+             let _: () = msg_send![&*layer, setAllowsNextDrawableTimeout: NO];
+             let _: () = msg_send![&*layer, setNeedsDisplayOnBoundsChange: YES];
+@@ -249,6 +266,31 @@
+             MTLPixelFormat::BGRA8Unorm,
+         );
+ 
++        let blur_downsample_pipeline_state = build_blur_pipeline_state(
++            &device,
++            &library,
++            "blur_downsample",
++            "refine_blur_downsample_fragment",
++            MTLPixelFormat::RGBA16Float,
++            false,
++        );
++        let blur_gaussian_pipeline_state = build_blur_pipeline_state(
++            &device,
++            &library,
++            "blur_gaussian",
++            "refine_blur_gaussian_fragment",
++            MTLPixelFormat::RGBA16Float,
++            false,
++        );
++        let blur_composite_pipeline_state = build_blur_pipeline_state(
++            &device,
++            &library,
++            "blur_composite",
++            "refine_blur_composite_fragment",
++            MTLPixelFormat::BGRA8Unorm,
++            true,
++        );
++
+         let command_queue = device.new_command_queue();
+         let sprite_atlas = Arc::new(MetalAtlas::new(device.clone()));
+         let core_video_texture_cache =
+@@ -267,6 +309,13 @@
+             monochrome_sprites_pipeline_state,
+             polychrome_sprites_pipeline_state,
+             surfaces_pipeline_state,
++            blur_downsample_pipeline_state,
++            blur_gaussian_pipeline_state,
++            blur_composite_pipeline_state,
++            blur_textures: None,
++            blur_cache: HashMap::default(),
++            blur_cache_enabled: blur_cache_enabled(),
++            frame_index: 0,
+             unit_vertices,
+             instance_buffer_pool,
+             sprite_atlas,
+@@ -311,6 +360,8 @@
+             height: DevicePixels(size.height as i32),
+         };
+         self.update_path_intermediate_textures(device_pixels_size);
++        self.blur_textures = None;
++        self.blur_cache.clear();
+     }
+ 
+     fn update_path_intermediate_textures(&mut self, size: Size<DevicePixels>) {
+@@ -438,6 +489,17 @@
+             },
+         );
+ 
++        // RefineUI patch: backdrop blur cache keys for this frame.
++        self.frame_index += 1;
++        let blur_keys = if self.blur_cache_enabled && !scene.backdrop_blurs.is_empty() {
++            scene.backdrop_blur_keys(size(
++                ScaledPixels(viewport_size.width.0 as f32),
++                ScaledPixels(viewport_size.height.0 as f32),
++            ))
++        } else {
++            Vec::new()
++        };
++
+         for batch in scene.batches() {
+             let ok = match batch {
+                 PrimitiveBatch::Shadows(shadows) => self.draw_shadows(
+@@ -522,6 +584,51 @@
+                     viewport_size,
+                     command_encoder,
+                 ),
++                PrimitiveBatch::BackdropBlurs(blurs) => {
++                    let width = viewport_size.width.0 as f32;
++                    let height = viewport_size.height.0 as f32;
++                    for blur in blurs {
++                        let Some(plan) = blur.plan(width, height) else {
++                            continue;
++                        };
++                        // SAFETY: `blurs` is a sub-slice of `scene.backdrop_blurs`.
++                        let index = unsafe {
++                            (blur as *const crate::BackdropBlur)
++                                .offset_from(scene.backdrop_blurs.as_ptr())
++                        } as usize;
++                        let key = blur_keys.get(index).copied().flatten();
++                        if let Some(texture) = self.cached_blur(key, &plan) {
++                            // Same backdrop as before: composite only, in the
++                            // main encoder.
++                            let params = blur.composite_params(&plan, BlurSource::Cached, false);
++                            encode_blur_step(
++                                command_encoder,
++                                &self.blur_composite_pipeline_state,
++                                &params,
++                                &texture,
++                            );
++                            continue;
++                        }
++                        command_encoder.end_encoding();
++                        self.draw_backdrop_blur(
++                            blur,
++                            &plan,
++                            key,
++                            command_buffer,
++                            drawable,
++                            viewport_size,
++                        );
++                        command_encoder = new_command_encoder(
++                            command_buffer,
++                            drawable,
++                            viewport_size,
++                            |color_attachment| {
++                                color_attachment.set_load_action(metal::MTLLoadAction::Load);
++                            },
++                        );
++                    }
++                    true
++                }
+             };
+             if !ok {
+                 command_encoder.end_encoding();
+@@ -540,6 +647,12 @@
+ 
+         command_encoder.end_encoding();
+ 
++        // RefineUI patch: release blurred backdrops not used recently (command
++        // buffers retain the textures they still reference).
++        let frame = self.frame_index;
++        self.blur_cache
++            .retain(|_, (_, _, last_used)| frame.saturating_sub(*last_used) <= BLUR_CACHE_MAX_AGE);
++
+         instance_buffer.metal_buffer.did_modify_range(NSRange {
+             location: 0,
+             length: instance_offset as NSUInteger,
+@@ -547,6 +660,191 @@
+         Ok(command_buffer.to_owned())
+     }
+ 
++    /// RefineUI patch: the cached blurred backdrop for `key`, if it is
++    /// still valid for this plan (used in the previous frame, same size).
++    fn cached_blur(&mut self, key: Option<u64>, plan: &BackdropBlurPlan) -> Option<metal::Texture> {
++        let frame = self.frame_index;
++        let (texture, size, last_used) = self.blur_cache.get_mut(&key?)?;
++        if *size != plan.result_size() || *last_used + 1 < frame {
++            return None;
++        }
++        *last_used = frame;
++        Some(texture.clone())
++    }
++
++    /// RefineUI patch: blit the region behind `blur` out of the drawable,
++    /// downsample, run a separable Gaussian and composite it back inside the
++    /// rounded shape. Mirrors `BladeRenderer::draw_backdrop_blur`.
++    fn draw_backdrop_blur(
++        &mut self,
++        blur: &crate::BackdropBlur,
++        plan: &BackdropBlurPlan,
++        key: Option<u64>,
++        command_buffer: &metal::CommandBufferRef,
++        drawable: &metal::MetalDrawableRef,
++        viewport_size: Size<DevicePixels>,
++    ) {
++        let width = viewport_size.width.0 as f32;
++        let height = viewport_size.height.0 as f32;
++        let (x0, y0, x1, y1) = (plan.copy[0], plan.copy[1], plan.copy[2], plan.copy[3]);
++
++        if self.blur_textures.is_none() {
++            let make = |format: MTLPixelFormat, usage: metal::MTLTextureUsage| {
++                let descriptor = metal::TextureDescriptor::new();
++                descriptor.set_width(viewport_size.width.0 as u64);
++                descriptor.set_height(viewport_size.height.0 as u64);
++                descriptor.set_pixel_format(format);
++                descriptor.set_usage(usage);
++                descriptor.set_storage_mode(metal::MTLStorageMode::Private);
++                self.device.new_texture(&descriptor)
++            };
++            let float_usage =
++                metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead;
++            let textures = (
++                make(MTLPixelFormat::BGRA8Unorm, metal::MTLTextureUsage::ShaderRead),
++                make(MTLPixelFormat::RGBA16Float, float_usage),
++                make(MTLPixelFormat::RGBA16Float, float_usage),
++            );
++            // Clear the float textures once (NaN-free edges for bilinear taps).
++            for texture in [&textures.1, &textures.2] {
++                let descriptor = metal::RenderPassDescriptor::new();
++                let attachment = descriptor.color_attachments().object_at(0).unwrap();
++                attachment.set_texture(Some(texture));
++                attachment.set_load_action(metal::MTLLoadAction::Clear);
++                attachment.set_clear_color(metal::MTLClearColor::new(0., 0., 0., 0.));
++                attachment.set_store_action(metal::MTLStoreAction::Store);
++                command_buffer
++                    .new_render_command_encoder(descriptor)
++                    .end_encoding();
++            }
++            self.blur_textures = Some(textures);
++        }
++        let Some((source, a, b)) = self.blur_textures.clone() else {
++            return;
++        };
++
++        let blit = command_buffer.new_blit_command_encoder();
++        blit.copy_from_texture(
++            drawable.texture(),
++            0,
++            0,
++            metal::MTLOrigin {
++                x: x0 as u64,
++                y: y0 as u64,
++                z: 0,
++            },
++            metal::MTLSize {
++                width: (x1 - x0) as u64,
++                height: (y1 - y0) as u64,
++                depth: 1,
++            },
++            &source,
++            0,
++            0,
++            metal::MTLOrigin {
++                x: x0 as u64,
++                y: y0 as u64,
++                z: 0,
++            },
++        );
++        blit.end_encoding();
++
++        let pass = |target: &metal::TextureRef,
++                    source: &metal::TextureRef,
++                    pipeline: &metal::RenderPipelineStateRef,
++                    params: &BackdropBlurParams| {
++            let descriptor = metal::RenderPassDescriptor::new();
++            let attachment = descriptor.color_attachments().object_at(0).unwrap();
++            attachment.set_texture(Some(target));
++            attachment.set_load_action(metal::MTLLoadAction::Load);
++            attachment.set_store_action(metal::MTLStoreAction::Store);
++            let encoder = command_buffer.new_render_command_encoder(descriptor);
++            encoder.set_viewport(metal::MTLViewport {
++                originX: 0.,
++                originY: 0.,
++                width: width as f64,
++                height: height as f64,
++                znear: 0.,
++                zfar: 1.,
++            });
++            encode_blur_step(encoder, pipeline, params, source);
++            encoder.end_encoding();
++        };
++        pass(
++            &a,
++            &source,
++            &self.blur_downsample_pipeline_state,
++            &plan.downsample_params(),
++        );
++        pass(
++            &b,
++            &a,
++            &self.blur_gaussian_pipeline_state,
++            &plan.gaussian_params(true),
++        );
++        pass(
++            &a,
++            &b,
++            &self.blur_gaussian_pipeline_state,
++            &plan.gaussian_params(false),
++        );
++
++        // Keep the result for later frames.
++        if let Some(key) = key
++            && self.blur_cache_enabled
++        {
++            let size = plan.result_size();
++            let reusable = self
++                .blur_cache
++                .get(&key)
++                .is_some_and(|(_, cached, _)| *cached == size);
++            if !reusable && self.blur_cache.len() < BLUR_CACHE_MAX_ENTRIES {
++                let descriptor = metal::TextureDescriptor::new();
++                descriptor.set_width(size.0 as u64);
++                descriptor.set_height(size.1 as u64);
++                descriptor.set_pixel_format(MTLPixelFormat::RGBA16Float);
++                descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
++                descriptor.set_storage_mode(metal::MTLStorageMode::Private);
++                let texture = self.device.new_texture(&descriptor);
++                self.blur_cache.insert(key, (texture, size, self.frame_index));
++            }
++            if let Some((texture, _, last_used)) = self.blur_cache.get_mut(&key) {
++                *last_used = self.frame_index;
++                let blit = command_buffer.new_blit_command_encoder();
++                blit.copy_from_texture(
++                    &a,
++                    0,
++                    0,
++                    metal::MTLOrigin {
++                        x: plan.region_ds[0] as u64,
++                        y: plan.region_ds[1] as u64,
++                        z: 0,
++                    },
++                    metal::MTLSize {
++                        width: size.0 as u64,
++                        height: size.1 as u64,
++                        depth: 1,
++                    },
++                    texture,
++                    0,
++                    0,
++                    metal::MTLOrigin { x: 0, y: 0, z: 0 },
++                );
++                blit.end_encoding();
++            }
++        }
++
++        // Straight alpha: the Metal pipelines blend SourceAlpha /
++        // OneMinusSourceAlpha like the other gpui pipelines.
++        let composite = blur.composite_params(plan, BlurSource::Targets, false);
++        pass(
++            drawable.texture(),
++            &a,
++            &self.blur_composite_pipeline_state,
++            &composite,
++        );
++    }
++
+     fn draw_paths_to_intermediate(
+         &self,
+         paths: &[Path<ScaledPixels>],
+@@ -1183,6 +1481,60 @@
+     command_encoder
+ }
+ 
++/// RefineUI patch: encode one blur step (`RefineBlurParams` in
++/// shaders.metal is `BackdropBlurParams`) into `encoder`.
++fn encode_blur_step(
++    encoder: &metal::RenderCommandEncoderRef,
++    pipeline: &metal::RenderPipelineStateRef,
++    params: &BackdropBlurParams,
++    source: &metal::TextureRef,
++) {
++    encoder.set_render_pipeline_state(pipeline);
++    let len = mem::size_of::<BackdropBlurParams>() as u64;
++    let ptr = params as *const BackdropBlurParams as *const c_void;
++    encoder.set_vertex_bytes(0, len, ptr);
++    encoder.set_fragment_bytes(0, len, ptr);
++    encoder.set_fragment_texture(0, Some(source));
++    encoder.draw_primitives(metal::MTLPrimitiveType::TriangleStrip, 0, 4);
++}
++
++/// RefineUI patch: pipeline for one backdrop blur step. `blend` matches the
++/// other gpui pipelines (straight alpha) for the composite step.
++fn build_blur_pipeline_state(
++    device: &metal::DeviceRef,
++    library: &metal::LibraryRef,
++    label: &str,
++    fragment_fn_name: &str,
++    pixel_format: metal::MTLPixelFormat,
++    blend: bool,
++) -> metal::RenderPipelineState {
++    let vertex_fn = library
++        .get_function("refine_blur_vertex", None)
++        .expect("error locating vertex function");
++    let fragment_fn = library
++        .get_function(fragment_fn_name, None)
++        .expect("error locating fragment function");
++    let descriptor = metal::RenderPipelineDescriptor::new();
++    descriptor.set_label(label);
++    descriptor.set_vertex_function(Some(vertex_fn.as_ref()));
++    descriptor.set_fragment_function(Some(fragment_fn.as_ref()));
++    let color_attachment = descriptor.color_attachments().object_at(0).unwrap();
++    color_attachment.set_pixel_format(pixel_format);
++    color_attachment.set_blending_enabled(blend);
++    if blend {
++        color_attachment.set_rgb_blend_operation(metal::MTLBlendOperation::Add);
++        color_attachment.set_alpha_blend_operation(metal::MTLBlendOperation::Add);
++        color_attachment.set_source_rgb_blend_factor(metal::MTLBlendFactor::SourceAlpha);
++        color_attachment.set_source_alpha_blend_factor(metal::MTLBlendFactor::One);
++        color_attachment
++            .set_destination_rgb_blend_factor(metal::MTLBlendFactor::OneMinusSourceAlpha);
++        color_attachment.set_destination_alpha_blend_factor(metal::MTLBlendFactor::One);
++    }
++    device
++        .new_render_pipeline_state(&descriptor)
++        .expect("could not create render pipeline state")
++}
++
+ fn build_pipeline_state(
+     device: &metal::DeviceRef,
+     library: &metal::LibraryRef,
+diff -ruN /tmp/gpui-orig/src/platform/mac/shaders.metal vendor/gpui/src/platform/mac/shaders.metal
+--- /tmp/gpui-orig/src/platform/mac/shaders.metal	2026-11-20 01:36:08.781910756 +0900
++++ vendor/gpui/src/platform/mac/shaders.metal	2026-11-20 02:43:19.962129576 +0900
+@@ -1237,3 +1237,277 @@
+ 
+   return color;
+ }
++
++// ---------------------------------------------------------------------------
++// RefineUI patch: real backdrop blur (mirrors blade/backdrop_blur.wgsl).
++// Unverified on hardware at the time of writing; see vendor/gpui/REFINEUI_PATCH.md.
++
++struct RefineBlurParams {
++  float4 dst_rect;
++  float4 target_size;
++  float4 src_size;
++  float4 src_clamp;
++  float4 params;
++  float4 shape;
++  float4 radii;
++  float4 tint;
++  float4 extra;
++  float4 light_dir;
++  float4 light_a;
++  float4 light_b;
++  float4 light_color;
++  float4 mask;
++  float4 misc;
++  float4 shadows[8];
++};
++
++struct RefineBlurVarying {
++  float4 position [[position]];
++};
++
++constexpr sampler refine_blur_sampler(mag_filter::linear, min_filter::linear,
++                                      address::clamp_to_edge);
++
++vertex RefineBlurVarying refine_blur_vertex(
++    uint vertex_id [[vertex_id]],
++    constant RefineBlurParams *p [[buffer(0)]]) {
++  float2 unit = float2(float(vertex_id & 1u), float((vertex_id >> 1u) & 1u));
++  float2 position = p->dst_rect.xy + unit * p->dst_rect.zw;
++  float2 ndc = position / p->target_size.xy * float2(2.0, -2.0) + float2(-1.0, 1.0);
++  return RefineBlurVarying{float4(ndc, 0.0, 1.0)};
++}
++
++float4 refine_blur_sample(texture2d<float> t, constant RefineBlurParams *p,
++                          float2 position) {
++  float2 c = clamp(position, p->src_clamp.xy + float2(0.5), p->src_clamp.zw - float2(0.5));
++  return t.sample(refine_blur_sampler, c * p->src_size.zw, level(0.0));
++}
++
++fragment float4 refine_blur_downsample_fragment(
++    RefineBlurVarying input [[stage_in]],
++    constant RefineBlurParams *p [[buffer(0)]],
++    texture2d<float> t [[texture(0)]]) {
++  float scale = p->params.x;
++  float2 center = input.position.xy * scale;
++  if (scale < 2.0) {
++    return refine_blur_sample(t, p, center);
++  }
++  int n = int(scale * 0.5);
++  float4 acc = float4(0.0);
++  for (int j = 0; j < n; j++) {
++    for (int i = 0; i < n; i++) {
++      float2 offset = float2(float(i) * 2.0 + 1.0, float(j) * 2.0 + 1.0) - float2(scale * 0.5);
++      acc += refine_blur_sample(t, p, center + offset);
++    }
++  }
++  return acc / float(n * n);
++}
++
++fragment float4 refine_blur_gaussian_fragment(
++    RefineBlurVarying input [[stage_in]],
++    constant RefineBlurParams *p [[buffer(0)]],
++    texture2d<float> t [[texture(0)]]) {
++  float sigma = max(p->params.y, 0.0001);
++  float2 dir = p->params.zw;
++  int taps = int(min(ceil(sigma * 3.0), 64.0));
++  float k = -0.5 / (sigma * sigma);
++  float4 acc = refine_blur_sample(t, p, input.position.xy);
++  float total = 1.0;
++  for (int i = 1; i <= taps; i++) {
++    float x = float(i);
++    float w = exp(x * x * k);
++    acc += w * (refine_blur_sample(t, p, input.position.xy + dir * x) +
++                refine_blur_sample(t, p, input.position.xy - dir * x));
++    total += 2.0 * w;
++  }
++  return acc / total;
++}
++
++float refine_corner_radius(float2 to_point, float4 radii) {
++  return to_point.x < 0.0 ? (to_point.y < 0.0 ? radii.x : radii.w)
++                          : (to_point.y < 0.0 ? radii.y : radii.z);
++}
++
++// Signed distance to a rounded rectangle (x, y, w, h) — negative inside.
++float refine_rrect_distance(float2 position, float4 rect, float4 radii) {
++  float2 half_size = rect.zw * 0.5;
++  float2 to_point = position - (rect.xy + half_size);
++  float radius = min(refine_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++  float2 q = abs(to_point) - half_size + float2(radius);
++  return length(max(q, float2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
++}
++
++float2 refine_rrect_normal(float2 position, float4 rect, float4 radii) {
++  float2 half_size = rect.zw * 0.5;
++  float2 to_point = position - (rect.xy + half_size);
++  float radius = min(refine_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++  float2 q = abs(to_point) - half_size + float2(radius);
++  float2 s = select(float2(-1.0), float2(1.0), to_point >= float2(0.0));
++  if (q.x > 0.0 && q.y > 0.0) {
++    return normalize(q) * s;
++  }
++  if (q.x > q.y) {
++    return float2(s.x, 0.0);
++  }
++  return float2(0.0, s.y);
++}
++
++// Coverage of a blurred rounded rectangle (gpui's shadow model).
++float refine_shadow_alpha(float2 position, float4 rect, float4 radii, float sigma) {
++  if (sigma < 0.5) {
++    return saturate(0.5 - refine_rrect_distance(position, rect, radii));
++  }
++  float2 half_size = rect.zw * 0.5;
++  float2 to_point = position - (rect.xy + half_size);
++  float corner = min(refine_corner_radius(to_point, radii), min(half_size.x, half_size.y));
++  float low = to_point.y - half_size.y;
++  float high = to_point.y + half_size.y;
++  float start = clamp(-3.0 * sigma, low, high);
++  float end = clamp(3.0 * sigma, low, high);
++  float dy = (end - start) / 4.0;
++  float y = start + dy * 0.5;
++  float alpha = 0.0;
++  for (int i = 0; i < 4; i++) {
++    alpha += blur_along_x(to_point.x, to_point.y - y, sigma, corner, half_size) *
++             gaussian(y, sigma) * dy;
++    y += dy;
++  }
++  return saturate(alpha);
++}
++
++float refine_hash(float2 p, uint seed) {
++  uint x = uint(p.x) * 1664525u + uint(p.y) * 1013904223u + seed * 2654435761u;
++  x ^= x >> 16u;
++  x *= 0x7feb352du;
++  x ^= x >> 15u;
++  x *= 0x846ca68bu;
++  x ^= x >> 16u;
++  return float(x) * (1.0 / 4294967295.0);
++}
++
++float3 refine_screen(float3 a, float3 b) {
++  return float3(1.0) - (float3(1.0) - a) * (float3(1.0) - b);
++}
++
++float3 refine_blend_tint(float3 base, float3 tint, float mode) {
++  if (mode < 0.5) {
++    return tint;
++  }
++  if (mode < 1.5) {
++    return base * tint;
++  }
++  if (mode < 2.5) {
++    return refine_screen(base, tint);
++  }
++  if (mode < 3.5) {
++    float3 low = 2.0 * base * tint;
++    float3 high = float3(1.0) - 2.0 * (float3(1.0) - base) * (float3(1.0) - tint);
++    return select(high, low, base <= float3(0.5));
++  }
++  float3 d = select(sqrt(base), ((16.0 * base - 12.0) * base + 4.0) * base, base <= float3(0.25));
++  float3 soft_low = base - (float3(1.0) - 2.0 * tint) * base * (float3(1.0) - base);
++  float3 soft_high = base + (2.0 * tint - float3(1.0)) * (d - base);
++  return select(soft_high, soft_low, tint <= float3(0.5));
++}
++
++fragment float4 refine_blur_composite_fragment(
++    RefineBlurVarying input [[stage_in]],
++    constant RefineBlurParams *p [[buffer(0)]],
++    texture2d<float> t [[texture(0)]]) {
++  float2 frag = input.position.xy;
++  float4 shape = p->shape;
++  float distance = refine_rrect_distance(frag, shape, p->radii);
++  float coverage = saturate(0.5 - distance);
++  float opacity = p->extra.y;
++
++  float4 plate = float4(0.0);
++  if (coverage > 0.0) {
++    float ds = p->extra.w;
++    float4 sampled = refine_blur_sample(t, p, frag / ds - p->misc.yz);
++    float alpha = sampled.a;
++    float3 rgb = sampled.rgb / max(alpha, 0.0001);
++
++    float luma = dot(rgb, float3(0.2126, 0.7152, 0.0722));
++    rgb = max(mix(float3(luma), rgb, p->extra.x), float3(0.0));
++
++    float4 tint = p->tint;
++    rgb = mix(rgb, refine_blend_tint(saturate(rgb), tint.rgb, p->light_color.w), tint.a);
++    float out_alpha = alpha + tint.a * (1.0 - alpha);
++
++    float3 light = p->light_color.rgb;
++    float2 dir = p->light_dir.xy;
++    float2 half_size = shape.zw * 0.5;
++    float2 local = (frag - (shape.xy + half_size)) / max(half_size, float2(1.0));
++    bool has_dir = dot(dir, dir) > 0.0;
++    if (p->light_dir.z > 0.0 && has_dir) {
++      float g = clamp(dot(local, dir), -1.0, 1.0);
++      float lit = p->light_dir.z * smoothstep(-0.2, 1.0, g);
++      rgb = refine_screen(rgb, light * lit);
++      rgb = rgb * (1.0 - p->light_dir.z * 0.35 * smoothstep(0.0, 1.0, -g));
++    }
++    if (p->light_dir.w > 0.0) {
++      rgb = refine_screen(rgb, light * p->light_dir.w);
++    }
++    if (p->light_b.z > 0.0) {
++      float2 r = float2(0.70710677, -0.70710677);
++      if (has_dir) {
++        r = normalize(dir + float2(-dir.y, dir.x));
++      }
++      float tt = dot(local, r);
++      float u = (tt - 0.42) / 0.26;
++      float band = exp(-u * u);
++      rgb = refine_screen(rgb, light * (p->light_b.z * band));
++    }
++    if (p->light_a.z > 0.0) {
++      float2 spot = shape.xy + p->light_b.xy * shape.zw;
++      float spot_size = max(p->light_a.w, 1.0);
++      float2 d = frag - spot;
++      float spec = exp(-dot(d, d) / (2.0 * spot_size * spot_size));
++      rgb = refine_screen(rgb, light * (p->light_a.z * spec));
++    }
++    if (p->light_a.x > 0.0) {
++      float width = max(p->light_a.y, 0.5);
++      float rim = exp(-max(-distance, 0.0) / width);
++      float facing = 1.0;
++      if (has_dir) {
++        float2 n = refine_rrect_normal(frag, shape, p->radii);
++        facing = 0.3 + 0.7 * max(dot(n, dir), 0.0);
++      }
++      rgb = refine_screen(rgb, light * (p->light_a.x * rim * facing));
++    }
++
++    float grain = (refine_hash(frag, 1u) - 0.5) * 2.0 * p->light_b.w;
++    float dither = (refine_hash(frag, 2u) - refine_hash(frag, 3u)) / 255.0;
++    rgb = saturate(rgb + float3(grain + dither));
++
++    float mask = 1.0;
++    if (dot(p->mask.xy, p->mask.xy) > 0.0) {
++      float tm = dot((frag - shape.xy) / max(shape.zw, float2(1.0)) - float2(0.5), p->mask.xy) + 0.5;
++      mask = saturate((p->mask.w - tm) / max(p->mask.w - p->mask.z, 0.0001));
++    }
++    float a = out_alpha * coverage * opacity * mask;
++    plate = float4(rgb * a, a);
++  }
++
++  float4 shadow = float4(0.0);
++  int count = int(p->misc.x);
++  for (int i = 0; i < 4; i++) {
++    if (i >= count) {
++      break;
++    }
++    float4 geometry = p->shadows[i * 2];
++    float4 color = p->shadows[i * 2 + 1];
++    float spread = geometry.w;
++    float4 rect = float4(shape.xy + geometry.xy - float2(spread), shape.zw + float2(spread * 2.0));
++    float4 radii = max(p->radii + float4(spread), float4(0.0));
++    float a = refine_shadow_alpha(frag, rect, radii, geometry.z) * color.a;
++    shadow = float4(color.rgb * a, a) + shadow * (1.0 - a);
++  }
++  shadow = shadow * ((1.0 - coverage) * opacity);
++
++  float4 result = plate + shadow * (1.0 - plate.a);
++  if (p->extra.z > 0.5) {
++    return result;
++  }
++  return float4(result.rgb / max(result.a, 0.0001), result.a);
++}
+diff -ruN /tmp/gpui-orig/src/platform/windows/directx_renderer.rs vendor/gpui/src/platform/windows/directx_renderer.rs
+--- /tmp/gpui-orig/src/platform/windows/directx_renderer.rs	2026-11-20 01:36:08.781910756 +0900
++++ vendor/gpui/src/platform/windows/directx_renderer.rs	2026-11-20 01:39:39.323648401 +0900
+@@ -303,6 +303,10 @@
+                     sprites,
+                 } => self.draw_polychrome_sprites(texture_id, sprites),
+                 PrimitiveBatch::Surfaces(surfaces) => self.draw_surfaces(surfaces),
++                // RefineUI patch: not implemented on DirectX yet;
++                // `backdrop_blur_supported()` is false on Windows, so callers
++                // paint their fallback and never emit this batch.
++                PrimitiveBatch::BackdropBlurs(_) => Ok(()),
+             }.context(format!("scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces",
+                     scene.paths.len(),
+                     scene.shadows.len(),
+diff -ruN /tmp/gpui-orig/src/scene.rs vendor/gpui/src/scene.rs
+--- /tmp/gpui-orig/src/scene.rs	2026-11-20 01:36:08.785910805 +0900
++++ vendor/gpui/src/scene.rs	2026-11-20 02:56:51.459896888 +0900
+@@ -25,6 +25,8 @@
+     pub(crate) paint_operations: Vec<PaintOperation>,
+     primitive_bounds: BoundsTree<ScaledPixels>,
+     layer_stack: Vec<DrawOrder>,
++    /// RefineUI patch: bounds of each open layer (parallel to `layer_stack`).
++    layer_bounds: Vec<Bounds<ScaledPixels>>,
+     pub(crate) shadows: Vec<Shadow>,
+     pub(crate) quads: Vec<Quad>,
+     pub(crate) paths: Vec<Path<ScaledPixels>>,
+@@ -32,6 +34,8 @@
+     pub(crate) monochrome_sprites: Vec<MonochromeSprite>,
+     pub(crate) polychrome_sprites: Vec<PolychromeSprite>,
+     pub(crate) surfaces: Vec<PaintSurface>,
++    // RefineUI patch: real backdrop blur.
++    pub(crate) backdrop_blurs: Vec<BackdropBlur>,
+ }
+ 
+ impl Scene {
+@@ -39,6 +43,7 @@
+         self.paint_operations.clear();
+         self.primitive_bounds.clear();
+         self.layer_stack.clear();
++        self.layer_bounds.clear();
+         self.paths.clear();
+         self.shadows.clear();
+         self.quads.clear();
+@@ -46,6 +51,7 @@
+         self.monochrome_sprites.clear();
+         self.polychrome_sprites.clear();
+         self.surfaces.clear();
++        self.backdrop_blurs.clear();
+     }
+ 
+     pub fn len(&self) -> usize {
+@@ -55,30 +61,55 @@
+     pub fn push_layer(&mut self, bounds: Bounds<ScaledPixels>) {
+         let order = self.primitive_bounds.insert(bounds);
+         self.layer_stack.push(order);
++        self.layer_bounds.push(bounds);
+         self.paint_operations
+             .push(PaintOperation::StartLayer(bounds));
+     }
+ 
+     pub fn pop_layer(&mut self) {
+         self.layer_stack.pop();
++        self.layer_bounds.pop();
+         self.paint_operations.push(PaintOperation::EndLayer);
+     }
+ 
+     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
+         let mut primitive = primitive.into();
+-        let clipped_bounds = primitive
+-            .bounds()
+-            .intersect(&primitive.content_mask().bounds);
++        let clipped_bounds = match &primitive {
++            // A backdrop blur reads pixels around its shape too (the kernel
++            // footprint), so it must be ordered after everything painted
++            // earlier in that wider region.
++            Primitive::BackdropBlur(blur) => blur.paint_bounds(),
++            _ => primitive
++                .bounds()
++                .intersect(&primitive.content_mask().bounds),
++        };
+ 
+         if clipped_bounds.is_empty() {
+             return;
+         }
+ 
+-        let order = self
+-            .layer_stack
+-            .last()
+-            .copied()
+-            .unwrap_or_else(|| self.primitive_bounds.insert(clipped_bounds));
++        let order = match (&primitive, self.layer_stack.last().copied()) {
++            // RefineUI patch: a backdrop blur inside a layer must still come
++            // after everything painted earlier under it, even in the same
++            // layer. Order it by the tree (including the layer's own bounds)
++            // and move the rest of the layer up to that order: later layer
++            // content shares it and, sorted after the blur, draws on top.
++            (Primitive::BackdropBlur(_), Some(layer_order)) => {
++                // Insert the layer's bounds too, so primitives painted after
++                // the layer still order above all of its content.
++                let bounds = match self.layer_bounds.last() {
++                    Some(layer) => clipped_bounds.union(layer),
++                    None => clipped_bounds,
++                };
++                let order = self.primitive_bounds.insert(bounds).max(layer_order + 1);
++                if let Some(top) = self.layer_stack.last_mut() {
++                    *top = order;
++                }
++                order
++            }
++            (_, Some(layer_order)) => layer_order,
++            (_, None) => self.primitive_bounds.insert(clipped_bounds),
++        };
+         match &mut primitive {
+             Primitive::Shadow(shadow) => {
+                 shadow.order = order;
+@@ -109,6 +140,10 @@
+                 surface.order = order;
+                 self.surfaces.push(surface.clone());
+             }
++            Primitive::BackdropBlur(blur) => {
++                blur.order = order;
++                self.backdrop_blurs.push(blur.clone());
++            }
+         }
+         self.paint_operations
+             .push(PaintOperation::Primitive(primitive));
+@@ -134,6 +169,7 @@
+         self.polychrome_sprites
+             .sort_by_key(|sprite| (sprite.order, sprite.tile.tile_id));
+         self.surfaces.sort_by_key(|surface| surface.order);
++        self.backdrop_blurs.sort_by_key(|blur| blur.order);
+     }
+ 
+     #[cfg_attr(
+@@ -166,6 +202,9 @@
+             surfaces: &self.surfaces,
+             surfaces_start: 0,
+             surfaces_iter: self.surfaces.iter().peekable(),
++            backdrop_blurs: &self.backdrop_blurs,
++            backdrop_blurs_start: 0,
++            backdrop_blurs_iter: self.backdrop_blurs.iter().peekable(),
+         }
+     }
+ }
+@@ -179,6 +218,9 @@
+     allow(dead_code)
+ )]
+ pub(crate) enum PrimitiveKind {
++    // First, so that within one draw order the blur runs before the quads
++    // and text it sits under.
++    BackdropBlur,
+     Shadow,
+     #[default]
+     Quad,
+@@ -204,6 +246,7 @@
+     MonochromeSprite(MonochromeSprite),
+     PolychromeSprite(PolychromeSprite),
+     Surface(PaintSurface),
++    BackdropBlur(BackdropBlur),
+ }
+ 
+ impl Primitive {
+@@ -216,6 +259,7 @@
+             Primitive::MonochromeSprite(sprite) => &sprite.bounds,
+             Primitive::PolychromeSprite(sprite) => &sprite.bounds,
+             Primitive::Surface(surface) => &surface.bounds,
++            Primitive::BackdropBlur(blur) => &blur.bounds,
+         }
+     }
+ 
+@@ -228,6 +272,7 @@
+             Primitive::MonochromeSprite(sprite) => &sprite.content_mask,
+             Primitive::PolychromeSprite(sprite) => &sprite.content_mask,
+             Primitive::Surface(surface) => &surface.content_mask,
++            Primitive::BackdropBlur(blur) => &blur.content_mask,
+         }
+     }
+ }
+@@ -261,6 +306,9 @@
+     surfaces: &'a [PaintSurface],
+     surfaces_start: usize,
+     surfaces_iter: Peekable<slice::Iter<'a, PaintSurface>>,
++    backdrop_blurs: &'a [BackdropBlur],
++    backdrop_blurs_start: usize,
++    backdrop_blurs_iter: Peekable<slice::Iter<'a, BackdropBlur>>,
+ }
+ 
+ impl<'a> Iterator for BatchIterator<'a> {
+@@ -269,6 +317,10 @@
+     fn next(&mut self) -> Option<Self::Item> {
+         let mut orders_and_kinds = [
+             (
++                self.backdrop_blurs_iter.peek().map(|b| b.order),
++                PrimitiveKind::BackdropBlur,
++            ),
++            (
+                 self.shadows_iter.peek().map(|s| s.order),
+                 PrimitiveKind::Shadow,
+             ),
+@@ -302,6 +354,22 @@
+         };
+ 
+         match batch_kind {
++            PrimitiveKind::BackdropBlur => {
++                let start = self.backdrop_blurs_start;
++                let mut end = start + 1;
++                self.backdrop_blurs_iter.next();
++                while self
++                    .backdrop_blurs_iter
++                    .next_if(|blur| (blur.order, batch_kind) < max_order_and_kind)
++                    .is_some()
++                {
++                    end += 1;
++                }
++                self.backdrop_blurs_start = end;
++                Some(PrimitiveBatch::BackdropBlurs(
++                    &self.backdrop_blurs[start..end],
++                ))
++            }
+             PrimitiveKind::Shadow => {
+                 let shadows_start = self.shadows_start;
+                 let mut shadows_end = shadows_start + 1;
+@@ -446,6 +514,7 @@
+         sprites: &'a [PolychromeSprite],
+     },
+     Surfaces(&'a [PaintSurface]),
++    BackdropBlurs(&'a [BackdropBlur]),
+ }
+ 
+ #[derive(Default, Debug, Clone)]
+@@ -668,6 +737,130 @@
+     }
+ }
+ 
++/// RefineUI patch: blur whatever was painted behind `bounds`, then tint it.
++///
++/// The renderer copies the sampled region of the frame, blurs it (downsample
++/// + separable Gaussian) and composites the result inside the rounded shape.
++#[derive(Clone, Debug)]
++pub(crate) struct BackdropBlur {
++    pub order: DrawOrder,
++    pub bounds: Bounds<ScaledPixels>,
++    pub content_mask: ContentMask<ScaledPixels>,
++    pub corner_radii: Corners<ScaledPixels>,
++    /// Gaussian standard deviation in device pixels (CSS `blur()` semantics).
++    pub sigma: ScaledPixels,
++    /// Color laid over the blurred backdrop (its alpha is the mix amount).
++    pub tint: Hsla,
++    /// 1 = unchanged, 0 = grayscale, > 1 = more vivid.
++    pub saturation: f32,
++    /// Overall opacity of the blurred plate (element opacity).
++    pub opacity: f32,
++    /// How the tint combines with the backdrop (`BackdropBlend as u32`).
++    pub tint_blend: u32,
++    /// Monochrome grain amplitude (0 = none). Dithering is always on.
++    pub noise: f32,
++    /// Lighting, evaluated on the GPU inside the shape.
++    pub light: BackdropBlurLight,
++    /// Linear alpha mask across the shape: (dir.x, dir.y, start, end);
++    /// a zero direction disables it.
++    pub mask: [f32; 4],
++    /// Drop shadows drawn by the composite pass *outside* the shape only
++    /// (CSS `box-shadow` clipping), so they never end up in the backdrop.
++    pub shadows: [BackdropBlurShadow; 4],
++}
++
++/// RefineUI patch: [`BackdropBlur`] lighting in device pixels.
++#[derive(Clone, Copy, Debug, Default, PartialEq)]
++pub(crate) struct BackdropBlurLight {
++    pub direction: [f32; 2],
++    pub color: Hsla,
++    pub directional: f32,
++    pub ambient: f32,
++    pub edge: f32,
++    pub edge_width: ScaledPixels,
++    pub specular: f32,
++    /// Shape-relative (0..1) position of the specular highlight.
++    pub specular_position: [f32; 2],
++    pub specular_size: ScaledPixels,
++    pub reflection: f32,
++}
++
++/// RefineUI patch: a [`BackdropBlur`] drop shadow in device pixels; a
++/// transparent color means unused.
++#[derive(Clone, Copy, Debug, Default, PartialEq)]
++pub(crate) struct BackdropBlurShadow {
++    pub offset: Point<ScaledPixels>,
++    pub blur_radius: ScaledPixels,
++    pub spread_radius: ScaledPixels,
++    pub color: Hsla,
++}
++
++impl BackdropBlurShadow {
++    pub(crate) fn is_visible(&self) -> bool {
++        self.color.a > 0.0
++    }
++
++    /// The area the shadow can touch, around `shape`.
++    pub(crate) fn extent(&self, shape: &Bounds<ScaledPixels>) -> Bounds<ScaledPixels> {
++        let grow = self.spread_radius.0.max(0.0) + self.blur_radius.0.max(0.0) * 3.0 + 1.0;
++        Bounds {
++            origin: point(
++                shape.origin.x + self.offset.x - ScaledPixels(grow),
++                shape.origin.y + self.offset.y - ScaledPixels(grow),
++            ),
++            size: Size {
++                width: shape.size.width + ScaledPixels(grow * 2.0),
++                height: shape.size.height + ScaledPixels(grow * 2.0),
++            },
++        }
++    }
++}
++
++impl BackdropBlur {
++    /// The region the composite writes: the shape and its shadows, clipped
++    /// to the content mask.
++    pub(crate) fn draw_bounds(&self) -> Bounds<ScaledPixels> {
++        let mut bounds = self.bounds;
++        for shadow in self.shadows.iter().filter(|s| s.is_visible()) {
++            bounds = bounds.union(&shadow.extent(&self.bounds));
++        }
++        bounds.intersect(&self.content_mask.bounds)
++    }
++
++    /// Everything the blur reads or writes, used for draw ordering.
++    pub(crate) fn paint_bounds(&self) -> Bounds<ScaledPixels> {
++        let sample = self.sample_bounds();
++        let draw = self.draw_bounds();
++        if sample.is_empty() {
++            return sample;
++        }
++        sample.union(&draw)
++    }
++
++    /// The region the blur reads: the visible shape grown by the kernel
++    /// footprint (3σ).
++    pub(crate) fn sample_bounds(&self) -> Bounds<ScaledPixels> {
++        let visible = self.bounds.intersect(&self.content_mask.bounds);
++        if visible.is_empty() {
++            return visible;
++        }
++        let grow = ScaledPixels((self.sigma.0 * 3.0).ceil() + 8.0);
++        Bounds {
++            origin: point(visible.origin.x - grow, visible.origin.y - grow),
++            size: Size {
++                width: visible.size.width + grow + grow,
++                height: visible.size.height + grow + grow,
++            },
++        }
++    }
++}
++
++impl From<BackdropBlur> for Primitive {
++    fn from(blur: BackdropBlur) -> Self {
++        Primitive::BackdropBlur(blur)
++    }
++}
++
+ #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+ pub(crate) struct PathId(pub(crate) usize);
+ 
+@@ -831,3 +1024,325 @@
+         }
+     }
+ }
++
++// RefineUI patch: backdrop blur cache keys.
++//
++// A blurred backdrop only depends on what was drawn before the blur inside the
++// region it samples. Hashing those primitives gives a key; when a blur has the
++// same key as in the previous frame, the renderer reuses its blurred texture
++// and only runs the cheap composite (no copy, no blur passes, no pass break).
++mod backdrop_keys {
++    use super::*;
++    use std::hash::{DefaultHasher, Hash, Hasher};
++
++    fn f(h: &mut DefaultHasher, x: f32) {
++        h.write_u32(x.to_bits());
++    }
++    fn sp(h: &mut DefaultHasher, x: ScaledPixels) {
++        f(h, x.0);
++    }
++    fn bounds(h: &mut DefaultHasher, b: &Bounds<ScaledPixels>) {
++        sp(h, b.origin.x);
++        sp(h, b.origin.y);
++        sp(h, b.size.width);
++        sp(h, b.size.height);
++    }
++    fn hsla(h: &mut DefaultHasher, c: &Hsla) {
++        f(h, c.h);
++        f(h, c.s);
++        f(h, c.l);
++        f(h, c.a);
++    }
++    fn corners(h: &mut DefaultHasher, c: &Corners<ScaledPixels>) {
++        sp(h, c.top_left);
++        sp(h, c.top_right);
++        sp(h, c.bottom_right);
++        sp(h, c.bottom_left);
++    }
++    fn background(h: &mut DefaultHasher, b: &Background) {
++        h.write_u32(b.tag as u32);
++        h.write_u32(b.color_space as u32);
++        hsla(h, &b.solid);
++        f(h, b.gradient_angle_or_pattern_height);
++        for stop in &b.colors {
++            hsla(h, &stop.color);
++            f(h, stop.percentage);
++        }
++    }
++    fn tile(h: &mut DefaultHasher, t: &AtlasTile) {
++        t.texture_id.hash(h);
++        h.write_u32(t.tile_id.0);
++        h.write_i32(t.bounds.origin.x.0);
++        h.write_i32(t.bounds.origin.y.0);
++        h.write_i32(t.bounds.size.width.0);
++        h.write_i32(t.bounds.size.height.0);
++    }
++
++    fn touches(
++        b: &Bounds<ScaledPixels>,
++        mask: &ContentMask<ScaledPixels>,
++        region: &Bounds<ScaledPixels>,
++    ) -> bool {
++        !b.intersect(&mask.bounds).intersect(region).is_empty()
++    }
++
++    /// Hash of the blur's own parameters that affect its composite output.
++    pub(super) fn hash_blur_output(h: &mut DefaultHasher, b: &BackdropBlur) {
++        bounds(h, &b.bounds);
++        bounds(h, &b.content_mask.bounds);
++        corners(h, &b.corner_radii);
++        sp(h, b.sigma);
++        hsla(h, &b.tint);
++        f(h, b.saturation);
++        f(h, b.opacity);
++        h.write_u32(b.tint_blend);
++        f(h, b.noise);
++        let l = &b.light;
++        f(h, l.direction[0]);
++        f(h, l.direction[1]);
++        hsla(h, &l.color);
++        for x in [l.directional, l.ambient, l.edge, l.edge_width.0, l.specular] {
++            f(h, x);
++        }
++        for x in [
++            l.specular_position[0],
++            l.specular_position[1],
++            l.specular_size.0,
++            l.reflection,
++        ] {
++            f(h, x);
++        }
++        for x in b.mask {
++            f(h, x);
++        }
++        for s in &b.shadows {
++            sp(h, s.offset.x);
++            sp(h, s.offset.y);
++            sp(h, s.blur_radius);
++            sp(h, s.spread_radius);
++            hsla(h, &s.color);
++        }
++    }
++
++    impl Scene {
++        /// One key per entry of `backdrop_blurs` (after `finish`); `None`
++        /// means the backdrop must be re-blurred (e.g. a video surface is
++        /// underneath). `viewport` is the drawable size.
++        pub(crate) fn backdrop_blur_keys(&self, viewport: Size<ScaledPixels>) -> Vec<Option<u64>> {
++            let mut keys: Vec<Option<u64>> = Vec::with_capacity(self.backdrop_blurs.len());
++            for (index, blur) in self.backdrop_blurs.iter().enumerate() {
++                let region = blur.sample_bounds();
++                let order = blur.order;
++                let mut h = DefaultHasher::new();
++                f(&mut h, viewport.width.0);
++                f(&mut h, viewport.height.0);
++                bounds(&mut h, &region);
++                sp(&mut h, blur.sigma);
++
++                let mut cacheable = true;
++                for s in self.surfaces.iter().take_while(|s| s.order < order) {
++                    if touches(&s.bounds, &s.content_mask, &region) {
++                        cacheable = false;
++                    }
++                }
++                for s in self.shadows.iter().take_while(|s| s.order < order) {
++                    if touches(&s.bounds, &s.content_mask, &region) {
++                        h.write_u8(1);
++                        bounds(&mut h, &s.bounds);
++                        bounds(&mut h, &s.content_mask.bounds);
++                        corners(&mut h, &s.corner_radii);
++                        sp(&mut h, s.blur_radius);
++                        hsla(&mut h, &s.color);
++                    }
++                }
++                for q in self.quads.iter().take_while(|q| q.order < order) {
++                    if touches(&q.bounds, &q.content_mask, &region) {
++                        h.write_u8(2);
++                        h.write_u32(q.border_style as u32);
++                        bounds(&mut h, &q.bounds);
++                        bounds(&mut h, &q.content_mask.bounds);
++                        background(&mut h, &q.background);
++                        hsla(&mut h, &q.border_color);
++                        corners(&mut h, &q.corner_radii);
++                        let w = &q.border_widths;
++                        for x in [w.top, w.right, w.bottom, w.left] {
++                            sp(&mut h, x);
++                        }
++                    }
++                }
++                for p in self.paths.iter().take_while(|p| p.order < order) {
++                    if touches(&p.bounds, &p.content_mask, &region) {
++                        h.write_u8(3);
++                        bounds(&mut h, &p.bounds);
++                        bounds(&mut h, &p.content_mask.bounds);
++                        background(&mut h, &p.color);
++                        h.write_usize(p.vertices.len());
++                        for v in &p.vertices {
++                            sp(&mut h, v.xy_position.x);
++                            sp(&mut h, v.xy_position.y);
++                            f(&mut h, v.st_position.x);
++                            f(&mut h, v.st_position.y);
++                        }
++                    }
++                }
++                for u in self.underlines.iter().take_while(|u| u.order < order) {
++                    if touches(&u.bounds, &u.content_mask, &region) {
++                        h.write_u8(4);
++                        bounds(&mut h, &u.bounds);
++                        bounds(&mut h, &u.content_mask.bounds);
++                        hsla(&mut h, &u.color);
++                        sp(&mut h, u.thickness);
++                        h.write_u32(u.wavy);
++                    }
++                }
++                for s in self.monochrome_sprites.iter().take_while(|s| s.order < order) {
++                    if touches(&s.bounds, &s.content_mask, &region) {
++                        h.write_u8(5);
++                        bounds(&mut h, &s.bounds);
++                        bounds(&mut h, &s.content_mask.bounds);
++                        hsla(&mut h, &s.color);
++                        tile(&mut h, &s.tile);
++                        let t = &s.transformation;
++                        for x in [
++                            t.rotation_scale[0][0],
++                            t.rotation_scale[0][1],
++                            t.rotation_scale[1][0],
++                            t.rotation_scale[1][1],
++                            t.translation[0],
++                            t.translation[1],
++                        ] {
++                            f(&mut h, x);
++                        }
++                    }
++                }
++                for s in self.polychrome_sprites.iter().take_while(|s| s.order < order) {
++                    if touches(&s.bounds, &s.content_mask, &region) {
++                        h.write_u8(6);
++                        h.write_u8(s.grayscale as u8);
++                        f(&mut h, s.opacity);
++                        bounds(&mut h, &s.bounds);
++                        bounds(&mut h, &s.content_mask.bounds);
++                        corners(&mut h, &s.corner_radii);
++                        tile(&mut h, &s.tile);
++                    }
++                }
++                // Earlier blurs drawn into the region: their output depends on
++                // their own key and composite parameters.
++                for (earlier, key) in self.backdrop_blurs[..index].iter().zip(&keys) {
++                    if earlier.order < order && !earlier.draw_bounds().intersect(&region).is_empty() {
++                        match key {
++                            Some(key) => {
++                                h.write_u8(7);
++                                h.write_u64(*key);
++                                hash_blur_output(&mut h, earlier);
++                            }
++                            None => cacheable = false,
++                        }
++                    }
++                }
++                keys.push(cacheable.then(|| h.finish()));
++            }
++            keys
++        }
++    }
++}
++
++// RefineUI patch: ordering + cache-key tests.
++#[cfg(test)]
++mod backdrop_tests {
++    use super::*;
++
++    fn rect(x: f32, y: f32, w: f32, h: f32) -> Bounds<ScaledPixels> {
++        Bounds {
++            origin: point(ScaledPixels(x), ScaledPixels(y)),
++            size: Size {
++                width: ScaledPixels(w),
++                height: ScaledPixels(h),
++            },
++        }
++    }
++
++    fn quad(b: Bounds<ScaledPixels>, color: Hsla) -> Quad {
++        Quad {
++            bounds: b,
++            content_mask: ContentMask {
++                bounds: rect(0., 0., 4000., 4000.),
++            },
++            background: color.into(),
++            ..Default::default()
++        }
++    }
++
++    fn blur(b: Bounds<ScaledPixels>) -> BackdropBlur {
++        BackdropBlur {
++            order: 0,
++            bounds: b,
++            content_mask: ContentMask {
++                bounds: rect(0., 0., 4000., 4000.),
++            },
++            corner_radii: Corners::default(),
++            sigma: ScaledPixels(8.0),
++            tint: Hsla::transparent_black(),
++            saturation: 1.0,
++            opacity: 1.0,
++            tint_blend: 0,
++            noise: 0.0,
++            light: BackdropBlurLight::default(),
++            mask: [0.0; 4],
++            shadows: [BackdropBlurShadow::default(); 4],
++        }
++    }
++
++    fn red() -> Hsla {
++        Hsla {
++            h: 0.,
++            s: 1.,
++            l: 0.5,
++            a: 1.,
++        }
++    }
++
++    fn scene(under: Hsla, elsewhere: Hsla) -> Scene {
++        let mut s = Scene::default();
++        s.insert_primitive(quad(rect(0., 0., 300., 300.), under));
++        s.insert_primitive(quad(rect(900., 900., 50., 50.), elsewhere));
++        s.insert_primitive(blur(rect(50., 50., 100., 100.)));
++        s.finish();
++        s
++    }
++
++    #[test]
++    fn blur_in_a_layer_draws_below_later_layer_content() {
++        let mut s = Scene::default();
++        s.insert_primitive(quad(rect(0., 0., 300., 300.), red()));
++        s.push_layer(rect(40., 40., 200., 200.));
++        s.insert_primitive(quad(rect(40., 40., 200., 200.), red()));
++        s.insert_primitive(blur(rect(50., 50., 100., 100.)));
++        // e.g. a label painted on the material, same layer
++        s.insert_primitive(quad(rect(60., 60., 20., 10.), Hsla::white()));
++        s.pop_layer();
++        s.insert_primitive(quad(rect(100., 100., 20., 10.), Hsla::white()));
++        s.finish();
++        let blur_order = s.backdrop_blurs[0].order;
++        let orders: Vec<_> = s.quads.iter().map(|q| q.order).collect();
++        // background + layer fill before the blur, label and later content at/after it
++        assert!(orders[0] < blur_order && orders[1] < blur_order);
++        assert!(orders[2] >= blur_order && orders[3] >= blur_order);
++    }
++
++    #[test]
++    fn cache_key_tracks_only_the_sampled_region() {
++        let view = Size {
++            width: ScaledPixels(1000.),
++            height: ScaledPixels(1000.),
++        };
++        let a = scene(red(), red()).backdrop_blur_keys(view);
++        let same = scene(red(), red()).backdrop_blur_keys(view);
++        let outside = scene(red(), Hsla::white()).backdrop_blur_keys(view);
++        let under = scene(Hsla::white(), red()).backdrop_blur_keys(view);
++        assert!(a[0].is_some());
++        assert_eq!(a, same);
++        assert_eq!(a, outside);
++        assert_ne!(a, under);
++    }
++}
+diff -ruN /tmp/gpui-orig/src/taffy.rs vendor/gpui/src/taffy.rs
+--- /tmp/gpui-orig/src/taffy.rs	2026-11-20 01:36:08.785910805 +0900
++++ vendor/gpui/src/taffy.rs	2026-11-20 01:39:35.107628200 +0900
+@@ -309,7 +309,7 @@
+             unit: &Option<u16>,
+         ) -> Vec<taffy::GridTemplateComponent<T>> {
+             // grid-template-columns: repeat(<number>, minmax(0, 1fr));
+-            unit.map(|count| vec![repeat(count, vec![minmax(length(0.0), fr(1.0))])])
++            unit.map(|count| vec![repeat(count, vec![minmax(length(0.0_f32), fr(1.0_f32))])])
+                 .unwrap_or_default()
+         }
+ 
+diff -ruN /tmp/gpui-orig/src/window.rs vendor/gpui/src/window.rs
+--- /tmp/gpui-orig/src/window.rs	2026-11-20 01:36:08.785910805 +0900
++++ vendor/gpui/src/window.rs	2026-11-20 02:30:08.872585421 +0900
+@@ -3174,6 +3174,88 @@
+         Ok(())
+     }
+ 
++    /// RefineUI patch: blur the pixels already painted behind `bounds` and
++    /// draw them back inside the rounded shape, tinted.
++    ///
++    /// This samples the real backdrop (not a translucent fill). Everything
++    /// painted earlier that overlaps the kernel footprint is included;
++    /// anything painted later draws on top. Check [`backdrop_blur_supported`]
++    /// and paint a fallback when it returns `false` — the call is a no-op on
++    /// renderers without support.
++    ///
++    /// This method should only be called as part of the paint phase of element drawing.
++    pub fn paint_backdrop_blur(&mut self, bounds: Bounds<Pixels>, blur: BackdropBlurStyle) {
++        use crate::{BackdropBlur, BackdropBlurLight, BackdropBlurShadow};
++
++        self.invalidator.debug_assert_paint();
++        if !backdrop_blur_supported() || blur.radius < px(0.) {
++            return;
++        }
++        let scale_factor = self.scale_factor();
++        let opacity = self.element_opacity() * blur.opacity;
++        if opacity <= 0. {
++            return;
++        }
++        let light = &blur.light;
++        let direction = {
++            let length = (light.direction.x * light.direction.x
++                + light.direction.y * light.direction.y)
++                .sqrt();
++            if length > 0.0001 {
++                [light.direction.x / length, light.direction.y / length]
++            } else {
++                [0.0, 0.0]
++            }
++        };
++        let mask = match blur.mask {
++            Some(mask) => {
++                let length =
++                    (mask.direction.x * mask.direction.x + mask.direction.y * mask.direction.y).sqrt();
++                if length > 0.0001 {
++                    [mask.direction.x / length, mask.direction.y / length, mask.start, mask.end]
++                } else {
++                    [0.0; 4]
++                }
++            }
++            None => [0.0; 4],
++        };
++        let mut shadows = [BackdropBlurShadow::default(); 4];
++        for (slot, shadow) in shadows.iter_mut().zip(blur.shadows.iter().flatten()) {
++            *slot = BackdropBlurShadow {
++                offset: shadow.offset.scale(scale_factor),
++                blur_radius: shadow.blur_radius.scale(scale_factor),
++                spread_radius: shadow.spread_radius.scale(scale_factor),
++                color: shadow.color,
++            };
++        }
++        self.next_frame.scene.insert_primitive(BackdropBlur {
++            order: 0,
++            bounds: bounds.scale(scale_factor),
++            content_mask: self.content_mask().scale(scale_factor),
++            corner_radii: blur.corner_radii.scale(scale_factor),
++            sigma: blur.radius.scale(scale_factor),
++            tint: blur.tint,
++            saturation: blur.saturation,
++            opacity,
++            tint_blend: blur.tint_blend as u32,
++            noise: blur.noise.max(0.0),
++            light: BackdropBlurLight {
++                direction,
++                color: light.color,
++                directional: light.directional,
++                ambient: light.ambient,
++                edge: light.edge,
++                edge_width: light.edge_width.scale(scale_factor),
++                specular: light.specular,
++                specular_position: [light.specular_position.x, light.specular_position.y],
++                specular_size: light.specular_size.scale(scale_factor),
++                reflection: light.reflection,
++            },
++            mask,
++            shadows,
++        });
++    }
++
+     /// Paint a surface into the scene for the next frame at the current z-index.
+     ///
+     /// This method should only be called as part of the paint phase of element drawing.
+@@ -5101,3 +5183,141 @@
+         border_style,
+     }
+ }
++
++/// RefineUI patch: parameters for [`Window::paint_backdrop_blur`].
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub struct BackdropBlurStyle {
++    /// Blur radius as a Gaussian standard deviation (CSS `blur()` semantics).
++    pub radius: Pixels,
++    /// Rounded-rectangle clip of the blurred plate.
++    pub corner_radii: Corners<Pixels>,
++    /// Color mixed over the blurred backdrop; its alpha is the mix amount.
++    pub tint: Hsla,
++    /// Saturation of the blurred backdrop: 1 = unchanged, 0 = grayscale.
++    pub saturation: f32,
++    /// Opacity of the whole plate (multiplied by the element opacity).
++    pub opacity: f32,
++    /// How the tint combines with the blurred backdrop.
++    pub tint_blend: BackdropBlend,
++    /// Monochrome grain amplitude, e.g. `0.03` (0 = none). Output is always
++    /// dithered, so smooth gradients do not band.
++    pub noise: f32,
++    /// Lighting evaluated per pixel inside the shape.
++    pub light: BackdropLight,
++    /// Optional linear alpha mask (fade) across the shape.
++    pub mask: Option<BackdropMask>,
++    /// Up to four drop shadows, drawn outside the shape only (like CSS
++    /// `box-shadow`), so they never end up in the blurred backdrop.
++    pub shadows: [Option<BackdropShadow>; 4],
++}
++
++impl Default for BackdropBlurStyle {
++    fn default() -> Self {
++        Self {
++            radius: px(20.),
++            corner_radii: Corners::default(),
++            tint: Hsla::transparent_black(),
++            saturation: 1.,
++            opacity: 1.,
++            tint_blend: BackdropBlend::Normal,
++            noise: 0.,
++            light: BackdropLight::default(),
++            mask: None,
++            shadows: [None; 4],
++        }
++    }
++}
++
++/// RefineUI patch: blend mode of a backdrop blur's tint.
++#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
++#[repr(u32)]
++pub enum BackdropBlend {
++    /// Mix the tint over the backdrop (alpha = amount).
++    #[default]
++    Normal = 0,
++    /// Darken: backdrop × tint.
++    Multiply = 1,
++    /// Lighten: 1 − (1 − backdrop)(1 − tint).
++    Screen = 2,
++    /// Multiply darks, screen lights (contrast).
++    Overlay = 3,
++    /// Gentle contrast (W3C soft-light).
++    SoftLight = 4,
++}
++
++/// RefineUI patch: lighting of a backdrop blur plate. All intensities are
++/// 0..1 and default to 0 (off).
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub struct BackdropLight {
++    /// Direction *towards* the light in screen space, e.g. `(0, -1)` = above.
++    pub direction: Point<f32>,
++    /// Light color (white by default).
++    pub color: Hsla,
++    /// Brightens the side facing the light and shades the far side.
++    pub directional: f32,
++    /// Uniform lift.
++    pub ambient: f32,
++    /// Rim highlight along the edge, strongest where it faces the light.
++    pub edge: f32,
++    /// Rim falloff width.
++    pub edge_width: Pixels,
++    /// Soft specular highlight.
++    pub specular: f32,
++    /// Shape-relative position (0..1) of the specular highlight.
++    pub specular_position: Point<f32>,
++    /// Gaussian size of the specular highlight.
++    pub specular_size: Pixels,
++    /// Diagonal glossy reflection band.
++    pub reflection: f32,
++}
++
++impl Default for BackdropLight {
++    fn default() -> Self {
++        Self {
++            direction: Point { x: 0., y: -1. },
++            color: Hsla::white(),
++            directional: 0.,
++            ambient: 0.,
++            edge: 0.,
++            edge_width: px(1.5),
++            specular: 0.,
++            specular_position: Point { x: 0.25, y: 0.12 },
++            specular_size: px(48.),
++            reflection: 0.,
++        }
++    }
++}
++
++/// RefineUI patch: linear alpha mask of a backdrop blur plate. Positions
++/// run 0..1 across the shape along `direction`; opaque before `start`,
++/// transparent after `end`.
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub struct BackdropMask {
++    /// Fade direction, e.g. `(0, 1)` = fade out towards the bottom.
++    pub direction: Point<f32>,
++    /// Where the fade starts (fully opaque before).
++    pub start: f32,
++    /// Where the fade ends (fully transparent after).
++    pub end: f32,
++}
++
++/// RefineUI patch: a drop shadow of a backdrop blur plate.
++#[derive(Clone, Copy, Debug, PartialEq)]
++pub struct BackdropShadow {
++    /// Shadow color.
++    pub color: Hsla,
++    /// Offset from the shape.
++    pub offset: Point<Pixels>,
++    /// Gaussian blur radius (same meaning as [`BoxShadow::blur_radius`]).
++    pub blur_radius: Pixels,
++    /// Grows the shadow shape before blurring.
++    pub spread_radius: Pixels,
++}
++
++/// RefineUI patch: whether this build's renderer implements
++/// [`Window::paint_backdrop_blur`] (Blade on Linux / FreeBSD and macOS
++/// with `macos-blade`, Metal on macOS). DirectX on Windows does not yet.
++pub const fn backdrop_blur_supported() -> bool {
++    !cfg!(target_os = "windows")
++}
++

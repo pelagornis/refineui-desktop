@@ -2,7 +2,7 @@
 title: Search Field
 description: "Filled search input with a leading search icon and clear button (web `SearchField`)."
 sidebar:
-  order: 10
+  order: 14
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -14,7 +14,8 @@ Filled search input with a leading search icon and clear button (web `SearchFiel
 ## Usage
 
 - `SearchField::new(cx)` returns a filled `TextInput`: `backgroundSurfaceHover` plate, `backgroundSurfaceActive` on hover, a thin `borderDefault` while focused.
-- Escape clears the text; the leading icon is small / medium / large per size.
+- Sizes match the web exactly and ignore `Density`: 36 / 44 / 52px tall, with a 20 / 24 / 28px leading `search` icon.
+- A filled `dismiss` button appears once there is text; clicking it or pressing Escape clears the field and emits `InputEvent::Change("")`.
 
 ```rust
 use refineui::prelude::*;

@@ -171,6 +171,7 @@ impl RenderOnce for DateInput {
                 disabled: self.disabled,
                 open: is_open,
                 full_width: self.full_width,
+                content: None,
             },
             window,
             cx,

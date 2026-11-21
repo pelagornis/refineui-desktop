@@ -4,7 +4,7 @@ use gpui::{
     AnyElement, App, ElementId, Hsla, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 use smallvec::SmallVec;
 
 use crate::{

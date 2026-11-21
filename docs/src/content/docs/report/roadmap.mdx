@@ -1,0 +1,62 @@
+---
+title: Limitations and roadmap
+description: Known limitations of the current release and what comes next.
+sidebar:
+  order: 5
+---
+
+## Known limitations
+
+**Rendering**
+
+- No backdrop blur on Windows (DirectX). Materials paint the opaque
+  fallback. A DirectX blur pass would mirror the Blade one.
+- Blur covers rounded rectangles only. The popover / tooltip arrow stays an
+  opaque fill that matches the panel.
+- A material samples only what the same window drew earlier in the frame.
+  Showing the desktop behind the window needs a transparent or blurred OS
+  window (`ApplicationShell::vibrant`).
+- Floating Panels use OS-level blur, not the Material Engine.
+- Specular light on the fallback path is approximated by a clipped glow.
+  Blend modes and the reflection band exist only with real blur.
+- Frame pacing in benchmarks is capped at the refresh rate. Per-panel GPU
+  time is not measured directly (no GPU timestamps in gpui).
+
+**Components**
+
+- `ShortcutRecorder` records one stroke, or a two-stroke chord with
+  `chords(true)` and a 1 s window. Longer sequences are not supported.
+- The Notification Center is a view: the app owns the list, unread state
+  and grouping. There is no system notification bridge.
+- `PreferencesWindow` is a layout. Persisting settings is up to the app.
+- Accessibility: roles and keyboard contracts are enforced, but GPUI does
+  not expose an accessibility tree (AccessKit) yet.
+
+**Validation**
+
+- Windows has not been run on a real machine.
+- Hardware Linux GPUs and Wayland are not covered.
+- macOS visual baselines and benchmark results still need to be recorded
+  on the Mac.
+
+## Roadmap
+
+1. **Validation**:
+   - Record macOS baselines and benchmarks.
+   - Add a CI job with a display (Linux Xvfb with `--strict`, macOS runner).
+   - Run the suite and gallery on Windows.
+2. **DirectX blur**: port the downsample, Gaussian and composite passes to
+   HLSL behind `backdrop_blur_supported()`.
+3. **Shaped blur**: SDF masks for arrows and arbitrary paths, so the
+   popover beak blurs too.
+4. **GPU timing**: timestamp queries in the patched renderers, so the
+   benchmark reports per-panel GPU time instead of frame pacing.
+5. **Accessibility**: wire contract roles to AccessKit when gpui exposes
+   it.
+6. **System integration**:
+   - Bridge `NotificationCenter` to OS notifications.
+   - A Window Switcher.
+   - Color and Font pickers.
+   - A Progress Dialog (inventory, System).
+7. **Upstreaming**: propose the `BackdropBlur` primitive to gpui, so the
+   vendored patch can be dropped.

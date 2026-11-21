@@ -1,0 +1,152 @@
+{
+  "$schema": "../schema.json",
+  "id": "tab-bar",
+  "name": "Tab Bar",
+  "layer": "composition",
+  "status": "new",
+  "phase": 3,
+  "feature": null,
+  "desktop_target": "Document Tabs",
+  "rust_types": [
+    "TabBar",
+    "TabGroup"
+  ],
+  "a11y_role": "tablist",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "implemented",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "desktop",
+    "compact": {
+      "row_height": 26,
+      "tree_row_height": 22,
+      "tab_height": 28,
+      "toolbar_height": 32,
+      "status_bar_height": 22,
+      "panel_header_height": 28,
+      "activity_bar_width": 40,
+      "activity_item": 32,
+      "panel_padding": 8,
+      "gap": 4,
+      "icon": 16,
+      "splitter_hit": 4
+    },
+    "comfortable": {
+      "row_height": 32,
+      "tree_row_height": 28,
+      "tab_height": 36,
+      "toolbar_height": 40,
+      "status_bar_height": 24,
+      "panel_header_height": 36,
+      "activity_bar_width": 48,
+      "activity_item": 36,
+      "panel_padding": 10,
+      "gap": 6,
+      "icon": 16,
+      "splitter_hit": 6
+    },
+    "spacious": {
+      "row_height": 40,
+      "tree_row_height": 32,
+      "tab_height": 40,
+      "toolbar_height": 48,
+      "status_bar_height": 28,
+      "panel_header_height": 44,
+      "activity_bar_width": 56,
+      "activity_item": 44,
+      "panel_padding": 16,
+      "gap": 8,
+      "icon": 20,
+      "splitter_hit": 8
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrand",
+      "backgroundPrimary",
+      "backgroundPrimaryActive",
+      "backgroundPrimaryHover",
+      "borderFocus",
+      "borderStrong",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "surfaceSunken"
+    ],
+    "radius": [
+      "roundedMedium",
+      "roundedSmall"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXSmall",
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodySm"
+    ],
+    "stroke": [
+      "strokeWidthHairline",
+      "strokeWidthThick"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "left",
+      "action": "previous tab"
+    },
+    {
+      "keys": "right",
+      "action": "next tab"
+    },
+    {
+      "keys": "home",
+      "action": "first tab"
+    },
+    {
+      "keys": "end",
+      "action": "last tab"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

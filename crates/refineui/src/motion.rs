@@ -12,6 +12,10 @@
 //!   view keeps repainting with `request_animation_frame` until it settles.
 //! * [`presence`] — enter / exit progress for overlays that must stay mounted
 //!   while they animate out (dialog, drawer, popover, menu, select, toast).
+//! * [`Spring`] / [`animate_spring`] — a damped spring (stiffness, damping,
+//!   mass) that keeps its **velocity** when the target changes mid-flight, so
+//!   interrupted motion (drag release, rapid toggles) never jumps or restarts.
+//! * Every helper honours [`ReducedMotion`]: values snap to their target.
 //! * [`use_interaction`] + [`TrackInteraction`] — hover / pressed tracking so a
 //!   component can compute its state colors in `render` and transition them.
 //!
@@ -29,7 +33,7 @@ use gpui::{
     MouseButton, Pixels, Rgba, Stateful, StatefulInteractiveElement, Styled, Window, canvas, point,
     px,
 };
-pub use refineui_tokens::motion::{CubicBezier, FLOAT_DISTANCE, duration, easing, scale};
+pub use refineui_foundation::motion::{CubicBezier, FLOAT_DISTANCE, duration, easing, scale};
 
 /// A transition timing: duration plus easing curve.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -65,6 +69,10 @@ impl Motion {
     pub const SUBMENU: Self = Self::new(duration::FAST, easing::STANDARD);
     /// `componentTokens.motion.panel` — dialog / drawer panel (320ms, panel curve).
     pub const PANEL: Self = Self::new(duration::PANEL, easing::PANEL);
+    /// Trailing sheet / notification center enter (240ms, ease-out).
+    pub const SHEET_ENTER: Self = Self::new(duration::SLOW, easing::EASE_OUT);
+    /// Trailing sheet / notification center leave (180ms, ease-in).
+    pub const SHEET_LEAVE: Self = Self::new(duration::NORMAL, easing::EASE_IN);
     /// Scrim fade (`duration-overlay`, panel curve).
     pub const SCRIM: Self = Self::new(duration::OVERLAY, easing::PANEL);
     /// Accordion / collapsible / tree height (380ms, panel curve).
@@ -103,9 +111,9 @@ pub fn skeleton_pulse() -> Animation {
 pub fn skeleton_pulse_opacity(t: f32) -> f32 {
     // keyframes 0%,100% → 1; 50% → 0.5, each half eased with ease-in-out.
     let (from, to, local) = if t < 0.5 {
-        (1.0, refineui_tokens::opacity::DISABLED, t * 2.0)
+        (1.0, refineui_foundation::opacity::DISABLED, t * 2.0)
     } else {
-        (refineui_tokens::opacity::DISABLED, 1.0, (t - 0.5) * 2.0)
+        (refineui_foundation::opacity::DISABLED, 1.0, (t - 0.5) * 2.0)
     };
     from + (to - from) * easing::EASE_IN_OUT.ease(local)
 }
@@ -183,6 +191,135 @@ impl<T: Lerp> Tween<T> {
         } else {
             (T::lerp(self.from, self.to, self.motion.ease(t)), false)
         }
+    }
+}
+
+/// A damped harmonic spring (SwiftUI / CSS `linear()` spring semantics).
+///
+/// Integrated per frame with semi-implicit Euler at a fixed 4 ms step, so
+/// the result is frame-rate independent. Retargeting keeps the current
+/// position **and velocity** — the motion is interruptible.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spring {
+    /// Spring constant (higher = faster).
+    pub stiffness: f32,
+    /// Damping coefficient (critical damping is `2·√(stiffness·mass)`).
+    pub damping: f32,
+    /// Mass.
+    pub mass: f32,
+}
+
+impl Spring {
+    /// Smooth, no overshoot (critically damped, ~300 ms) — panels, indicators.
+    pub const SMOOTH: Self = Self {
+        stiffness: 170.,
+        damping: 26.,
+        mass: 1.,
+    };
+    /// Slight overshoot (~400 ms) — popovers, toasts, floating panels.
+    pub const BOUNCY: Self = Self {
+        stiffness: 260.,
+        damping: 20.,
+        mass: 1.,
+    };
+    /// Quick and firm (~180 ms) — press feedback, small controls.
+    pub const SNAPPY: Self = Self {
+        stiffness: 420.,
+        damping: 40.,
+        mass: 1.,
+    };
+
+    /// New spring.
+    pub const fn new(stiffness: f32, damping: f32, mass: f32) -> Self {
+        Self {
+            stiffness,
+            damping,
+            mass,
+        }
+    }
+
+    /// Advance `(position, velocity)` toward `target` by `dt` seconds.
+    pub fn step(&self, position: f32, velocity: f32, target: f32, dt: f32) -> (f32, f32) {
+        const H: f32 = 0.004;
+        let (mut x, mut v) = (position, velocity);
+        let mut left = dt.clamp(0., 0.1);
+        let mass = self.mass.max(0.001);
+        while left > 0. {
+            let h = left.min(H);
+            let force = -self.stiffness * (x - target) - self.damping * v;
+            v += force / mass * h;
+            x += v * h;
+            left -= h;
+        }
+        (x, v)
+    }
+
+    /// Whether `(position, velocity)` has settled at `target`.
+    pub fn settled(position: f32, velocity: f32, target: f32) -> bool {
+        (position - target).abs() < 0.0005 && velocity.abs() < 0.005
+    }
+}
+
+struct SpringState {
+    position: f32,
+    velocity: f32,
+    last: Instant,
+}
+
+/// A float that follows `target` with `spring`, starting settled at `initial`
+/// on the first render. Interruptible: a new target keeps the velocity.
+/// Snaps to `target` under [`ReducedMotion`].
+pub fn animate_spring(
+    key: impl Into<ElementId>,
+    initial: f32,
+    target: f32,
+    spring: Spring,
+    window: &mut Window,
+    cx: &mut App,
+) -> f32 {
+    if reduced(cx) {
+        return target;
+    }
+    let now = Instant::now();
+    let state = window.use_keyed_state(key, cx, |_, _| SpringState {
+        position: initial,
+        velocity: 0.,
+        last: now,
+    });
+    let (value, done) = state.update(cx, |s, _| {
+        let dt = now.saturating_duration_since(s.last).as_secs_f32();
+        s.last = now;
+        let (x, v) = spring.step(s.position, s.velocity, target, dt);
+        if Spring::settled(x, v, target) {
+            s.position = target;
+            s.velocity = 0.;
+            (target, true)
+        } else {
+            s.position = x;
+            s.velocity = v;
+            (x, false)
+        }
+    });
+    if !done {
+        window.request_animation_frame();
+    }
+    value
+}
+
+/// [`presence`] driven by a spring: `progress` may overshoot 1 slightly
+/// with a bouncy spring (use it for offsets / scale, clamp it for opacity).
+pub fn spring_presence(
+    key: impl Into<ElementId>,
+    open: bool,
+    spring: Spring,
+    window: &mut Window,
+    cx: &mut App,
+) -> Presence {
+    let progress = animate_spring(key, 0., if open { 1. } else { 0. }, spring, window, cx);
+    Presence {
+        mounted: open || progress > 0.001,
+        progress,
+        open,
     }
 }
 
@@ -267,7 +404,7 @@ pub fn press_scale(
     cx: &mut App,
 ) -> f32 {
     let target = if pressed {
-        refineui_tokens::motion::scale::PRESS
+        refineui_foundation::motion::scale::PRESS
     } else {
         1.0
     };
@@ -549,5 +686,63 @@ mod tests {
         assert!((skeleton_pulse_opacity(0.0) - 1.0).abs() < 1e-3);
         assert!((skeleton_pulse_opacity(0.5) - 0.5).abs() < 1e-3);
         assert!((skeleton_pulse_opacity(1.0) - 1.0).abs() < 1e-3);
+    }
+}
+
+#[cfg(test)]
+mod spring_tests {
+    use super::Spring;
+
+    fn run(spring: Spring, from: f32, to: f32, secs: f32) -> (f32, f32) {
+        let (mut x, mut v) = (from, 0.);
+        let mut t = 0.;
+        while t < secs {
+            (x, v) = spring.step(x, v, to, 1. / 60.);
+            t += 1. / 60.;
+        }
+        (x, v)
+    }
+
+    #[test]
+    fn springs_settle_on_target() {
+        for s in [Spring::SMOOTH, Spring::BOUNCY, Spring::SNAPPY] {
+            let (x, v) = run(s, 0., 1., 2.);
+            assert!(Spring::settled(x, v, 1.), "{s:?} {x} {v}");
+        }
+    }
+
+    #[test]
+    fn smooth_does_not_overshoot_but_bouncy_does() {
+        let peak = |s: Spring| {
+            let (mut x, mut v, mut m) = (0f32, 0f32, 0f32);
+            for _ in 0..120 {
+                (x, v) = s.step(x, v, 1., 1. / 60.);
+                m = m.max(x);
+            }
+            m
+        };
+        assert!(peak(Spring::SMOOTH) <= 1.001);
+        assert!(peak(Spring::BOUNCY) > 1.01);
+    }
+
+    #[test]
+    fn retarget_keeps_velocity() {
+        let s = Spring::SMOOTH;
+        let (x, v) = run(s, 0., 1., 0.1);
+        assert!(v > 0.);
+        // Reverse mid-flight: the first step still moves forward (momentum).
+        let (x2, _) = s.step(x, v, 0., 1. / 120.);
+        assert!(x2 > x);
+    }
+
+    #[test]
+    fn step_is_frame_rate_independent() {
+        let s = Spring::BOUNCY;
+        let a = run(s, 0., 1., 0.3).0;
+        let (mut x, mut v) = (0f32, 0f32);
+        for _ in 0..36 {
+            (x, v) = s.step(x, v, 1., 0.3 / 36.);
+        }
+        assert!((a - x).abs() < 0.02, "{a} vs {x}");
     }
 }

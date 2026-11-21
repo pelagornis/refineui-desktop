@@ -24,7 +24,7 @@ use gpui::{
     Animation, AnimationExt, App, ElementId, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{motion::duration, radius, spacing, stroke, typography::role};
+use refineui_foundation::{motion::duration, radius, spacing, stroke, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, skeleton_pulse_opacity, use_focus_handle,
@@ -52,13 +52,20 @@ pub(crate) const OTP_DEFAULT_SIZE: ControlSize = ControlSize::Large;
 /// Gap between slots (`sizeSmall`).
 pub(crate) const OTP_GAP: f32 = spacing::SMALL;
 
-/// Slot `(side, radius, digit style)`: a `controlHeight` square (36 / 44 / 52
-/// at web density) with `roundedLarge / XLarge / XXLarge`.
+/// Slot `(side, radius, digit style)`: a web `controlHeight` square (36 / 44 / 52)
+/// with `roundedLarge / XLarge / XXLarge`.
+///
+/// Slots are deliberately **density-independent**: the web radii (8 / 12 / 16)
+/// are tuned for these sides. Before this was pinned, `Density::Compact`
+/// shrank the side to the compact field height (24 / 28 / 32) while keeping
+/// the radius, so `lg` became a 32px square with a 16px radius: a circle.
 pub(crate) fn otp_slot(
-    density: refineui_tokens::size::Density,
+    _density: refineui_foundation::size::Density,
     size: ControlSize,
-) -> (f32, f32, refineui_tokens::typography::TextStyle) {
-    let side = density.field(size).height;
+) -> (f32, f32, refineui_foundation::typography::TextStyle) {
+    let side = refineui_foundation::size::Density::Comfortable
+        .field(size)
+        .height;
     match size {
         ControlSize::Small => (side, radius::LARGE, role::SUBTITLE_LG),
         ControlSize::Medium => (side, radius::X_LARGE, role::TITLE_SM),
@@ -174,14 +181,20 @@ impl RenderOnce for InputOtp {
             let bg = animate(
                 child_id(&cid, "bg"),
                 bg,
-                Motion::new(duration::FAST, refineui_tokens::motion::easing::EMPHASIZED),
+                Motion::new(
+                    duration::FAST,
+                    refineui_foundation::motion::easing::EMPHASIZED,
+                ),
                 window,
                 cx,
             );
             let border = animate(
                 child_id(&cid, "bd"),
                 border,
-                Motion::new(duration::FAST, refineui_tokens::motion::easing::EMPHASIZED),
+                Motion::new(
+                    duration::FAST,
+                    refineui_foundation::motion::easing::EMPHASIZED,
+                ),
                 window,
                 cx,
             );
@@ -351,7 +364,7 @@ impl RenderOnce for InputOtp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use refineui_tokens::size::Density;
+    use refineui_foundation::size::Density;
 
     /// Pins web `InputOTP` slots so the size cannot regress silently.
     #[test]
@@ -363,9 +376,13 @@ mod tests {
             (ControlSize::Medium, 44., 12.),
             (ControlSize::Large, 52., 16.),
         ];
-        for (size, side, r) in rows {
-            let (s, rr, _) = otp_slot(Density::Comfortable, size);
-            assert_eq!((s, rr), (side, r), "{size:?}");
+        for density in Density::ALL {
+            for (size, side, r) in rows {
+                let (s, rr, _) = otp_slot(density, size);
+                assert_eq!((s, rr), (side, r), "{density:?} {size:?}");
+                // Guard: a slot must stay a soft square, never a circle.
+                assert!(rr * 2. < s * 0.75, "{density:?} {size:?} slot turned round");
+            }
         }
     }
 }

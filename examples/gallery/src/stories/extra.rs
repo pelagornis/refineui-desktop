@@ -1,10 +1,8 @@
 //! Stories for the components added with RefineUI web 0.5.0 (Toolbar, Button
 //! Group, Command, Date / Time Input, conversation primitives, Chart,
-//! Carousel, Navigation Menu, Footer, layout primitives…).
+//! Carousel, layout primitives…).
 
-use gpui::{
-    AnyElement, App, Div, InteractiveElement, IntoElement, ParentElement, Styled, Window, div, px,
-};
+use gpui::{AnyElement, App, Focusable, IntoElement, ParentElement, Styled, Window, div, px};
 use refineui::prelude::*;
 use refineui::{Axis, FrostMode, frost_mode, set_frost_mode};
 
@@ -68,8 +66,8 @@ pub(super) fn stories() -> Vec<Story> {
             id: "result",
             name: "Result",
             group: StoryGroup::Display,
-            summary: "Outcome screen: icon, title, description and actions.",
-            shot: (800., 300.),
+            summary: "Outcome screen: success, error (with details), empty and compact.",
+            shot: (800., 720.),
             render: result,
         },
         Story {
@@ -115,49 +113,17 @@ pub(super) fn stories() -> Vec<Story> {
         Story {
             id: "carousel",
             name: "Carousel",
-            group: StoryGroup::Optional,
+            group: StoryGroup::Display,
             summary: "Looping slides with outline buttons and a sliding-pill meter.",
             shot: (640., 360.),
             render: carousel,
-        },
-        Story {
-            id: "navigation-menu",
-            name: "Navigation Menu",
-            group: StoryGroup::Optional,
-            summary: "Top navigation with links and dropdown panels.",
-            shot: (640., 120.),
-            render: navigation_menu,
-        },
-        Story {
-            id: "navigation-menu-mega",
-            name: "Navigation Menu · Mega",
-            group: StoryGroup::Optional,
-            summary: "Floating mega panel centred under the bar (layout = floating).",
-            shot: (900., 380.),
-            render: navigation_menu_mega,
-        },
-        Story {
-            id: "navigation-menu-overlay",
-            name: "Navigation Menu · Overlay",
-            group: StoryGroup::Optional,
-            summary: "Full-width sheet from the bar's edge over a scrim (layout = overlay).",
-            shot: (900., 380.),
-            render: navigation_menu_overlay,
-        },
-        Story {
-            id: "footer",
-            name: "Footer",
-            group: StoryGroup::Optional,
-            summary: "Sitemap groups and a social | brand | locale meta row.",
-            shot: (800., 320.),
-            render: footer,
         },
         Story {
             id: "command",
             name: "Command",
             group: StoryGroup::Overlays,
             summary: "Searchable command list with groups, shortcuts and keyboard navigation.",
-            shot: (520., 420.),
+            shot: (520., 640.),
             render: command,
         },
         Story {
@@ -376,25 +342,65 @@ fn tag(_w: &mut Window, _cx: &mut App) -> AnyElement {
 }
 
 fn result(_w: &mut Window, _cx: &mut App) -> AnyElement {
-    row()
-        .items_start()
-        .gap(px(16.))
+    v_stack(16.)
         .child(
-            div().w(px(340.)).child(
-                ResultView::new(ResultVariant::Success)
-                    .title("Payment received")
-                    .description("Your receipt was sent to your email.")
-                    .action(Button::new("r-done", "Done").variant(ButtonVariant::Primary))
-                    .action(Button::new("r-view", "View receipt")),
-            ),
+            row()
+                .items_start()
+                .gap(px(16.))
+                .child(
+                    div().w(px(340.)).child(
+                        ResultView::new(ResultVariant::Success)
+                            .title("Payment received")
+                            .description("Your receipt was sent to your email.")
+                            .action(Button::new("r-done", "Done").variant(ButtonVariant::Primary))
+                            .action(Button::new("r-view", "View receipt")),
+                    ),
+                )
+                .child(
+                    div().w(px(340.)).child(
+                        ResultView::new(ResultVariant::Error)
+                            .title("Couldn't load the library")
+                            .description("The server took too long to respond.")
+                            .details("ETIMEDOUT · api.refineui.dev:443")
+                            .action(Button::new("r-retry", "Try again")),
+                    ),
+                ),
         )
         .child(
-            div().w(px(340.)).child(
-                ResultView::new(ResultVariant::Error)
-                    .title("Something went wrong")
-                    .description("Check your connection and try again.")
-                    .action(Button::new("r-retry", "Try again")),
-            ),
+            row()
+                .items_start()
+                .gap(px(16.))
+                .child(
+                    div().w(px(340.)).child(
+                        ResultView::new(ResultVariant::Empty)
+                            .icon(IconName::Document)
+                            .title("No documents yet")
+                            .description("Create a document or drop files here to start a project.")
+                            .action(
+                                Button::new("r-new", "New Document")
+                                    .variant(ButtonVariant::Primary),
+                            )
+                            .action(
+                                Button::new("r-import", "Import…")
+                                    .variant(ButtonVariant::Secondary),
+                            ),
+                    ),
+                )
+                .child(
+                    v_stack(8.)
+                        .w(px(340.))
+                        .child(
+                            ResultView::new(ResultVariant::Empty)
+                                .icon(IconName::Search)
+                                .title("No results for \u{201c}tokens\u{201d}")
+                                .compact(true),
+                        )
+                        .child(
+                            ResultView::new(ResultVariant::Error)
+                                .title("Preview unavailable")
+                                .compact(true),
+                        ),
+                ),
         )
         .into_any_element()
 }
@@ -548,174 +554,6 @@ fn carousel(_w: &mut Window, _cx: &mut App) -> AnyElement {
         .into_any_element()
 }
 
-fn navigation_menu(_w: &mut Window, _cx: &mut App) -> AnyElement {
-    NavigationMenu::new("nav")
-        .link("Overview", true, |_, _| {})
-        .menu(
-            "Products",
-            [
-                NavigationLink::new("Design system")
-                    .description("Tokens and components")
-                    .icon(IconName::Board),
-                NavigationLink::new("Icons")
-                    .description("RefineUI System Icons")
-                    .icon(IconName::Star),
-                NavigationLink::new("Desktop")
-                    .description("GPUI for macOS apps")
-                    .icon(IconName::Code),
-            ],
-        )
-        .menu(
-            "Resources",
-            [
-                NavigationLink::new("Docs"),
-                NavigationLink::new("Changelog"),
-            ],
-        )
-        .link("Pricing", false, |_, _| {})
-        .disabled_link("Careers")
-        .into_any_element()
-}
-
-fn mega_column(
-    title: &'static str,
-    links: [(&'static str, &'static str, IconName); 3],
-    cx: &App,
-) -> Div {
-    let c = cx.theme().colors;
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(2.))
-        .w(px(260.))
-        .child(
-            div()
-                .px(px(12.))
-                .py(px(6.))
-                .text_size(px(12.))
-                .text_color(c.foreground_tertiary)
-                .child(title),
-        )
-        .children(links.into_iter().map(|(label, desc, icon)| {
-            div()
-                .flex()
-                .gap(px(12.))
-                .items_start()
-                .px(px(12.))
-                .py(px(8.))
-                .rounded(px(12.))
-                .hover(move |s| s.bg(c.background_primary_hover))
-                .child(Icon::new(icon).color(c.foreground_secondary))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .text_size(px(14.))
-                                .text_color(c.foreground_primary)
-                                .child(label),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(c.foreground_tertiary)
-                                .child(desc),
-                        ),
-                )
-        }))
-}
-
-fn mega_content(_w: &mut Window, cx: &mut App) -> AnyElement {
-    div()
-        .flex()
-        .gap(px(8.))
-        .p(px(8.))
-        .child(mega_column(
-            "Build",
-            [
-                ("Components", "Accessible building blocks", IconName::Board),
-                ("Tokens", "Colour, type and motion", IconName::Star),
-                ("Icons", "RefineUI System Icons", IconName::Heart),
-            ],
-            cx,
-        ))
-        .child(mega_column(
-            "Ship",
-            [
-                ("Desktop", "GPUI for macOS apps", IconName::Code),
-                ("Web", "React 19 + Tailwind", IconName::Link),
-                ("Docs", "Guides and references", IconName::Mail),
-            ],
-            cx,
-        ))
-        .child(mega_column(
-            "Learn",
-            [
-                ("Changelog", "What shipped lately", IconName::Calendar),
-                ("Examples", "Full app templates", IconName::Board),
-                ("Community", "Discussions and help", IconName::Heart),
-            ],
-            cx,
-        ))
-        .into_any_element()
-}
-
-fn nav_layout(id: &'static str, layout: NavigationLayout) -> AnyElement {
-    div()
-        .w(px(900.))
-        .h(px(380.))
-        .child(
-            NavigationMenu::new(id)
-                .link("Overview", true, |_, _| {})
-                .panel("Products", layout, mega_content)
-                .menu(
-                    "Resources",
-                    [
-                        NavigationLink::new("Docs"),
-                        NavigationLink::new("Changelog"),
-                    ],
-                )
-                .link("Pricing", false, |_, _| {})
-                .default_open(1),
-        )
-        .into_any_element()
-}
-
-fn navigation_menu_mega(_w: &mut Window, _cx: &mut App) -> AnyElement {
-    nav_layout("nav-mega", NavigationLayout::Floating)
-}
-
-fn navigation_menu_overlay(_w: &mut Window, _cx: &mut App) -> AnyElement {
-    nav_layout("nav-overlay", NavigationLayout::Overlay)
-}
-
-fn footer(_w: &mut Window, _cx: &mut App) -> AnyElement {
-    div()
-        .w(px(760.))
-        .child(
-            Footer::new("footer")
-                .group(FooterGroup::new(
-                    "Product",
-                    ["Components", "Tokens", "Icons"],
-                ))
-                .group(FooterGroup::new(
-                    "Resources",
-                    ["Docs", "Changelog", "GitHub"],
-                ))
-                .group(FooterGroup::new("Company", ["About", "Blog", "Contact"]))
-                .brand(None, "RefineUI", Some("© 2026 Pelagornis".into()))
-                .social([IconName::Mail, IconName::Link, IconName::Heart])
-                .end(
-                    Button::new("locale", "English")
-                        .variant(ButtonVariant::Outline)
-                        .size(ControlSize::Small)
-                        .icon_end(IconName::ChevronDown),
-                ),
-        )
-        .into_any_element()
-}
-
 fn command(w: &mut Window, cx: &mut App) -> AnyElement {
     let cmd = w.use_keyed_state("command-story", cx, |window, cx| {
         Command::new(window, cx)
@@ -744,7 +582,61 @@ fn command(w: &mut Window, cx: &mut App) -> AnyElement {
                     .item(CommandItem::new("Keyboard shortcuts").icon(IconName::Keyboard)),
             )
     });
-    div().w(px(440.)).child(cmd).into_any_element()
+    let open = state("command-dialog-open", w, cx, || false);
+    let is_open = *open.read(cx);
+    let dialog_cmd = w.use_keyed_state("command-dialog-story", cx, |window, cx| {
+        Command::new(window, cx).group(
+            CommandGroup::new("Suggestions")
+                .item(CommandItem::new("Calendar").icon(IconName::Calendar))
+                .item(
+                    CommandItem::new("Search files")
+                        .icon(IconName::Search)
+                        .shortcut("⌘P"),
+                ),
+        )
+    });
+    let empty_cmd = w.use_keyed_state("command-empty-story", cx, |window, cx| {
+        Command::new(window, cx).empty_text("No results found")
+    });
+    v_stack(12.)
+        .child(div().w(px(440.)).child(cmd))
+        .child(
+            v_stack(4.)
+                .child(
+                    Text::new("Empty")
+                        .role(TextRole::CaptionMd)
+                        .color(TextColor::Tertiary),
+                )
+                .child(div().w(px(440.)).child(empty_cmd)),
+        )
+        .child(
+            Button::new("open-command-dialog", "Open CommandDialog")
+                .variant(ButtonVariant::Outline)
+                .size(ControlSize::Small)
+                .on_click({
+                    let open = open.clone();
+                    let dialog_cmd = dialog_cmd.clone();
+                    move |_, window, cx| {
+                        open.update(cx, |o, cx| {
+                            *o = true;
+                            cx.notify();
+                        });
+                        let search = dialog_cmd.read(cx).search().clone();
+                        window.focus(&search.focus_handle(cx));
+                    }
+                }),
+        )
+        .child(
+            CommandDialog::new("command-dialog", dialog_cmd)
+                .open(is_open)
+                .on_close(move |_, cx| {
+                    open.update(cx, |o, cx| {
+                        *o = false;
+                        cx.notify();
+                    })
+                }),
+        )
+        .into_any_element()
 }
 
 fn dropdown_items(menu: Menu) -> Menu {

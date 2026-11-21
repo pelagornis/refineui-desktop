@@ -10,7 +10,9 @@ use gpui::{
     Animation, AnimationExt, App, ElementId, IntoElement, ParentElement, RenderOnce, SharedString,
     Styled, Window, div, prelude::*, px, relative,
 };
-use refineui_tokens::{motion::easing::EASE_IN_OUT, size::component, spacing, typography::role};
+use refineui_foundation::{
+    motion::easing::EASE_IN_OUT, size::component, spacing, typography::role,
+};
 
 use crate::motion::{Motion, animate_from, child_id};
 use crate::{ActiveTheme, StyledExt};

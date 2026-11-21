@@ -59,7 +59,7 @@ impl WindowPreset {
     /// Minimum size.
     pub const fn min_size(self) -> (f32, f32) {
         match self {
-            Self::Main => refineui_tokens::window::MIN_WINDOW,
+            Self::Main => refineui_foundation::window::MIN_WINDOW,
             Self::Document => (480., 360.),
             Self::Settings => (560., 420.),
             Self::Utility => (280., 240.),

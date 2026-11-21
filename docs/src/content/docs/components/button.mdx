@@ -2,7 +2,7 @@
 title: Button
 description: "Primary, secondary, outline and ghost buttons in three sizes, with icons, loading and disabled states."
 sidebar:
-  order: 4
+  order: 8
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -58,6 +58,7 @@ A push button. Focusable (Tab), activates on click, Enter or Space.
 | `fn icon_end(mut self, icon: IconName) -> Self` | Trailing icon. |
 | `fn disabled(mut self, disabled: bool) -> Self` | Disable interaction. |
 | `fn loading(mut self, loading: bool) -> Self` | Show a spinner and ignore clicks (web `data-state="loading"`). |
+| `fn glass(mut self, glass: bool) -> Self` | Glass button: the plate is the Glass material (real blur, lit edges) with a hover / press veil, for controls floating over content (HUDs, media overlays). Only when `crate::materials_active`; otherwise the variant paints as usual. Default `false`. |
 | `fn selected(mut self, selected: bool) -> Self` | Pressed / toggled-on appearance (used by toolbars and `crate::ToggleButton`). |
 | `fn full_width(mut self, full_width: bool) -> Self` | Stretch to the parent's width. |
 | `fn tooltip_action(mut self, action: impl Into<SharedString>) -> Self` | Hover tooltip that also shows the shortcut bound to a GPUI action (from the installed keymap, in the platform's notation), e.g. `.tooltip("Toggle Sidebar").tooltip_action("workspace::ToggleSidebar")`. |

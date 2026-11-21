@@ -1,0 +1,134 @@
+{
+  "$schema": "../schema.json",
+  "id": "command",
+  "name": "Command",
+  "layer": "interaction",
+  "status": "adapt",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Command Palette",
+  "rust_types": [
+    "Command"
+  ],
+  "a11y_role": "combobox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "planned",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "implemented",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "planned",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "row",
+    "compact": {
+      "row_height": 26
+    },
+    "comfortable": {
+      "row_height": 32
+    },
+    "spacious": {
+      "row_height": 40
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundPrimary",
+      "backgroundSurface",
+      "backgroundSurfaceActive",
+      "backgroundSurfaceHover",
+      "borderDefault",
+      "borderSubtle",
+      "foregroundBrand",
+      "foregroundDisabled",
+      "foregroundPrimary",
+      "foregroundPrimaryHover",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedMedium",
+      "roundedXLarge",
+      "roundedXxLarge"
+    ],
+    "spacing": [
+      "sizeMedium",
+      "sizeSmall",
+      "sizeXSmall",
+      "sizeXxLarge",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyLg",
+      "bodyMd",
+      "bodySm",
+      "bodyXs",
+      "captionLg"
+    ],
+    "motion": [
+      "motion.frosted"
+    ],
+    "elevation": [
+      "elevation.surface"
+    ],
+    "stroke": [
+      "strokeWidthHairline",
+      "strokeWidthThin"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next result"
+    },
+    {
+      "keys": "up",
+      "action": "previous result"
+    },
+    {
+      "keys": "enter",
+      "action": "run result"
+    },
+    {
+      "keys": "escape",
+      "action": "close"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

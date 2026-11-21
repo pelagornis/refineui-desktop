@@ -32,6 +32,8 @@ export default defineConfig({
         { label: 'Components', items: [{ autogenerate: { directory: 'components' } }] },
         { label: 'Desktop shell', items: [{ autogenerate: { directory: 'shell' } }] },
         { label: 'Guides', items: [{ autogenerate: { directory: 'guides' } }] },
+        { label: 'API reference', items: [{ autogenerate: { directory: 'reference' } }] },
+        { label: 'Final report', items: [{ autogenerate: { directory: 'report' } }] },
       ],
     }),
   ],

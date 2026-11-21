@@ -1,8 +1,8 @@
-//! GPUI-resolved semantic colors. Generated from `refineui_tokens::SemanticColors`;
+//! GPUI-resolved semantic colors. Generated from `refineui_foundation::SemanticColors`;
 //! field names match the web alias tokens in snake_case.
 
 use gpui::Hsla;
-use refineui_tokens::SemanticColors;
+use refineui_foundation::SemanticColors;
 
 use crate::theme::to_hsla;
 

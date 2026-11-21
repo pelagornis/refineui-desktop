@@ -13,16 +13,13 @@ name = "refineui-gallery"
 path = "src/main.rs"
 
 [[bin]]
-name = "refineui-shell"
-path = "src/bin/shell.rs"
-
-[[bin]]
 name = "refineui-screenshots"
 path = "src/bin/screenshots.rs"
 
 [dependencies]
 gpui.workspace = true
-refineui = { workspace = true, features = ["web-extras"] }
+refineui = { workspace = true, features = ["web-extras", "material"] }
+refineui-material.workspace = true
 anyhow.workspace = true
 png.workspace = true
 

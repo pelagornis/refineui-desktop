@@ -1,24 +1,22 @@
 ---
 title: Activity Bar
-description: "A vertical rail of views (Explorer, Search, Source Control …) — RefineUI style by default, fully restylable: shape, size, indicator, colours, labels, custom faces."
+description: "One vertical rail of views (Explorer, Search, Source Control, chats …) in RefineUI style."
 sidebar:
-  order: 55
+  order: 61
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-A vertical rail of views (Explorer, Search, Source Control …) — RefineUI style by default, fully restylable: shape, size, indicator, colours, labels, custom faces.
+One vertical rail of views (Explorer, Search, Source Control, chats …) in RefineUI style.
 
 <Screenshot id="activity-bar" alt="Activity Bar variants and states" />
 
 ## Usage
 
-- **Refine** (default) — density-sized bar (48px comfortable), 36px rounded tiles, the selected item sits on a `backgroundSurfaceSelected` plate; tooltips name each item.
-- **Navigation rail** — 80px, captions under the icons (`LabelMode::Below`). **Expanded** — `expanded(true)` shows labels beside the icons at `expanded_width`.
-- **Rail preset** — `ActivityBar::rail` keeps the former Side Dock look (circle → squircle morph, edge pill, brand fill) for chat-style apps.
-- Every knob is on `ActivityBarStyle`: `shape` (Rounded / Square / Circle / Morph), `indicator` (None / Bar / Dot / Plate), `item_size`, `gap`, `icon`, `border` and every colour. `render_item` draws the face yourself; the bar keeps hit-testing, focus, indicator and tooltip.
-- Items: `icon`, `image`, `initials` (+`tint`), `folder`; `badge(n)`, `dot()`, `unread`, `disabled`, `action` (shows the keymap shortcut in the tooltip). `header` / `footer` slots and `footer_item`s pin to the ends.
-- Keyboard: the bar is one tab stop; ↑ / ↓ move, Enter / Space activate, **⌥↑ / ⌥↓** reorder when `on_reorder` is set (drag also reorders, with a drop indicator).
+- There is a single look — no presets or variants: density-sized bar (48px comfortable), rounded tiles that morph toward a squircle when selected, a `backgroundBrandSubtle` selected plate with `foregroundBrand` ink and a brand bar indicator on the edge. Tooltips name each item.
+- Items: `icon`, `image` (external URL, asset, or bytes), `folder`; `badge(n)`, `dot()`, `unread`, `disabled`, `action` (shows the keymap shortcut in the tooltip). `header` / `footer` slots and `footer_item`s pin to the ends. `render_item` draws a custom face; the bar keeps hit-testing, focus, indicator and tooltip.
+- **Folders** — `ActivityItem::folder` groups items in a Toolbar-style tube (hairline `borderDefault`, `backgroundBrandSubtle`, `XXX_SMALL` padding, radius = tile radius + pad). A closed folder shows a 2×2 stacked preview of up to four members and a count badge when there are more than four (unless the item already has a badge). An open folder shows the FolderOpen icon; members sit inside the same plate, which grows and shrinks with accordion height motion (`default_open(true)` seeds the first frame).
+- Keyboard: the bar is one tab stop; ↑ / ↓ move (open-folder children are in the order), Enter / Space activate and also toggle a focused folder, **⌥↑ / ⌥↓** reorder main items when `on_reorder` is set (folder children are skipped; drag also reorders, with a drop indicator).
 
 ```rust
 use refineui::prelude::*;
@@ -28,10 +26,16 @@ ActivityBar::new("activity")
         ActivityItem::icon("explorer", "Explorer", IconName::Document),
         ActivityItem::icon("search", "Search", IconName::Search).action("workspace::Find"),
         ActivityItem::icon("git", "Source Control", IconName::Git).badge(3),
+        ActivityItem::folder("apps", "Apps", [
+            ActivityItem::icon("mail", "Mail", IconName::Mail),
+            ActivityItem::icon("photo", "Photos", IconName::Grid),
+        ]),
+        ActivityItem::folder("projects", "Projects", [
+            ActivityItem::icon("docs", "Docs", IconName::Document),
+        ]).default_open(true),
+        ActivityItem::image("workspace", "Workspace", workspace_logo),
     ])
     .footer_item(ActivityItem::icon("settings", "Settings", IconName::Settings))
-    .indicator(IndicatorStyle::Bar)
-    .shape(ItemShape::Rounded(8.))
     .selected(self.view.clone())
     .on_select(cx.listener(|this, id: &SharedString, _, cx| { this.view = id.clone(); cx.notify(); }))
     .on_reorder(move |from, to, _window, cx| {
@@ -47,7 +51,7 @@ cargo run -p refineui-gallery -- --story activity-bar
 
 ## Motion
 
-Item fill, ink and the indicator tween over `duration-fast`; `ItemShape::Morph` tiles round → squircle over `duration-fast`; the bar indicator grows over `duration-medium` (emphasized); tooltips fade and slide 6px over `duration-fast`.
+Folders expand and collapse with accordion height motion (`ACCORDION_PANEL` / `ACCORDION_CONTENT`); the group tube grows with the members, and the tile switches from a 2×2 member preview to the FolderOpen icon over `Motion::CHEVRON`. Item fill, ink and the indicator tween over `duration-fast`; tiles morph round → squircle over `duration-fast`; the bar indicator grows over `duration-medium` (emphasized); tooltips fade and slide 6px over `duration-fast`.
 
 ## API
 
@@ -59,17 +63,7 @@ The bar. See the module docs.
 
 | Method | Description |
 | --- | --- |
-| `fn new(id: impl Into<ElementId>) -> Self` | Bar with the default (Refine) look. |
-| `fn rail(id: impl Into<ElementId>) -> Self` | Bar with the former Side Dock look. |
-| `fn navigation_rail(id: impl Into<ElementId>) -> Self` | Labelled navigation rail. |
-| `fn style(mut self, style: ActivityBarStyle) -> Self` | Whole style. |
-| `fn preset(self, preset: ActivityBarPreset) -> Self` | Preset. |
-| `fn restyle(mut self, f: impl FnOnce(&mut ActivityBarStyle)) -> Self` | Edit the style in place: `.restyle(\|s\| s.badge = Some(red))`. |
-| `fn shape(mut self, shape: ItemShape) -> Self` | Item shape. |
-| `fn indicator(mut self, indicator: IndicatorStyle) -> Self` | Indicator. |
-| `fn item_size(mut self, size: f32) -> Self` | Item size. |
-| `fn labels(mut self, mode: LabelMode) -> Self` | Label mode. |
-| `fn expanded(mut self, expanded: bool) -> Self` | Expanded (labels beside icons) or collapsed (tooltips). |
+| `fn new(id: impl Into<ElementId>) -> Self` | New bar (collapsed). |
 | `fn side(mut self, side: BarSide) -> Self` | Docked edge. |
 | `fn header(mut self, e: impl IntoElement) -> Self` | Element above the items (logo, workspace switcher). |
 | `fn footer(mut self, e: impl IntoElement) -> Self` | Element below the pinned footer items (account, sync state). |
@@ -90,10 +84,9 @@ One destination.
 | Method | Description |
 | --- | --- |
 | `fn icon(id: impl Into<SharedString>, label: impl Into<SharedString>, icon: IconName) -> Self` | Icon item. |
-| `fn image(id: impl Into<SharedString>, label: impl Into<SharedString>, src: impl Into<ImageSource>) -> Self` | Picture item (avatar / workspace logo). |
-| `fn initials(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | Initials item (up to three letters of the label). |
-| `fn tint(mut self, color: AvatarColor) -> Self` | Tint an initials item. |
-| `fn folder(id: impl Into<SharedString>, label: impl Into<SharedString>, members: impl IntoIterator<Item = ActivityItem>) -> Self` | Group of items shown as a two-item cluster. |
+| `fn image(id: impl Into<SharedString>, label: impl Into<SharedString>, src: impl Into<ImageSource>) -> Self` | Picture item from an external image source (URL, asset, or bytes). |
+| `fn folder(id: impl Into<SharedString>, label: impl Into<SharedString>, members: impl IntoIterator<Item = ActivityItem>) -> Self` | Folder of items. Clicking the tile expands or collapses the members inside a shared Toolbar-style tube. Closed, the tile shows a 2×2 stacked preview of the members; open, it shows the FolderOpen icon. |
+| `fn default_open(mut self, open: bool) -> Self` | Open this folder on first show (folders only). |
 | `fn badge(mut self, count: u32) -> Self` | Count badge (`0` hides it). |
 | `fn dot(mut self) -> Self` | Dot badge. |
 | `fn unread(mut self, unread: bool) -> Self` | Unread mark (indicator-dependent: short bar / muted dot). |
@@ -102,52 +95,6 @@ One destination.
 | `fn id(&self) -> &SharedString` | Id. |
 | `fn label(&self) -> &SharedString` | Label. |
 | `fn icon_name(&self) -> Option<IconName>` | Icon, for icon items. |
-
-### ActivityBarStyle
-
-The complete look of an `ActivityBar`; `None` colours resolve from the theme.
-
-### ActivityBarPreset
-
-Preset shorthands.
-
-| Variant | Description |
-| --- | --- |
-| `Refine` | `ActivityBarStyle::refine`. |
-| `Rail` | `ActivityBarStyle::rail`. |
-| `NavigationRail` | `ActivityBarStyle::navigation_rail`. |
-
-### ItemShape
-
-Item corner shape.
-
-| Variant | Description |
-| --- | --- |
-| `Rounded(f32)` | Rounded square with this radius. |
-| `Square` | Sharp square. |
-| `Circle` | Circle. |
-| `Morph` | Circle at rest, `roundedXXLarge` square when hovered / selected (the Rail preset). |
-
-### IndicatorStyle
-
-Selection indicator.
-
-| Variant | Description |
-| --- | --- |
-| `None` | No indicator (pair with a selected colour). |
-| `Bar` | Bar on the docked edge (grows on hover / select; a short mark for unread items). |
-| `Dot` | Dot under the icon (selected: ink, unread: muted). |
-| `Plate` | Filled plate behind the selected item. |
-
-### LabelMode
-
-How item names show.
-
-| Variant | Description |
-| --- | --- |
-| `Tooltip` | Tooltip beside the item (icon-only bar). |
-| `Below` | Caption under each icon (navigation rail). |
-| `Beside` | Label beside the icon in a wider bar (expanded). |
 
 ### BarSide
 

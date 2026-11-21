@@ -1,0 +1,137 @@
+---
+title: Materials
+description: "Material Engine (`refineui-material`): surfaces with real backdrop blur, tint, saturation, lighting, grain and elevation."
+sidebar:
+  order: 4
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Material Engine (`refineui-material`): surfaces with real backdrop blur, tint, saturation, lighting, grain and elevation.
+
+<Screenshot id="materials" alt="Materials variants and states" />
+
+## Usage
+
+- Materials sample the pixels already painted behind them — the renderer copies that region, blurs it (downsample + separable Gaussian in a float texture) and composites it inside the rounded shape. It is not a translucent fill.
+- Roles come from foundation tokens (`MaterialRole`): **thin**, **regular** (menus, popovers), **thick**, **chrome** (titlebars, sidebars), **glass** (clear, vivid, lit edges, grain) and **scrim** (modal backdrop). Each has a near-opaque `fallback` fill.
+- Paint order: shadows → backdrop (blur + saturation + blended tint) → lighting → grain → mask → inner shadows → border → children. Drop shadows are drawn outside the shape only, so a material never blurs its own shadow. Nested materials blur whatever the outer one composited.
+- Ready-made recipes live in `refineui_material::recipes` (sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim, glass). The **Material Effects** and **Material Recipes** pages show every effect and recipe.
+- Real blur on Blade (Linux / FreeBSD) and Metal (macOS, unverified on hardware). On DirectX (Windows) or with `MaterialSettings { reduced_transparency: true }` surfaces draw their fallback fill — check `BlurSupport::current()`.
+- The blur is a small patch to GPUI (`vendor/gpui`, see the Material Engine architecture page).
+
+```rust
+use refineui::prelude::*;
+
+use refineui_material::prelude::*;
+
+material_surface(Material::role(MaterialRole::Regular, Mode::Light))
+    .w(px(240.))
+    .p(px(12.))
+    .child("Frosted panel");
+
+material_surface(
+    Material::glass(Mode::Dark)
+        .radius(px(24.))
+        .lighting(Lighting::edge(0.9).angle(90.)),
+)
+.child(content);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story materials
+```
+
+## API
+
+Source: [`crates/refineui-material/src/element.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui-material/src/element.rs)
+
+### MaterialSurface
+
+A container drawn as a material. Style it like a `div` (size, padding, flex); the corner radius comes from the material.
+
+| Method | Description |
+| --- | --- |
+| `fn material(mut self, material: Material) -> Self` | Replace the material. |
+
+### Material
+
+Everything that defines how a material surface looks: backdrop (blur, saturation), tint and its blend mode, opacity, mask, border, radius, lighting, grain, drop and inner shadows. Build one from a foundation role with `Material::role` and adjust with the builder methods.
+
+| Method | Description |
+| --- | --- |
+| `fn role(role: MaterialRole, mode: Mode) -> Self` | The foundation recipe for `role` in `mode`, with radius 16. |
+| `fn glass(mode: Mode) -> Self` | Clear glass (`MaterialRole::Glass`). |
+| `fn regular(mode: Mode) -> Self` | Default frosted surface (`MaterialRole::Regular`). |
+| `fn blur(mut self, radius: Pixels) -> Self` | Blur radius. |
+| `fn saturation(mut self, saturation: f32) -> Self` | Backdrop saturation. |
+| `fn tint(mut self, tint: Hsla) -> Self` | Tint color. |
+| `fn tint_blend(mut self, mode: BlendMode) -> Self` | Tint blend mode. |
+| `fn mask(mut self, mask: Mask) -> Self` | Linear fade mask. |
+| `fn inner_shadow(mut self, shadow: InnerShadow) -> Self` | Add an inner shadow. |
+| `fn opacity(mut self, opacity: f32) -> Self` | Whole-surface opacity. |
+| `fn radius(mut self, radius: Pixels) -> Self` | Corner radius. |
+| `fn border(mut self, border: Option<Hsla>) -> Self` | Border color (or none). |
+| `fn border_width(mut self, width: Pixels) -> Self` | Border width (e.g. a 0.5px hairline). |
+| `fn lighting(mut self, lighting: Lighting) -> Self` | Lighting. |
+| `fn noise(mut self, noise: f32) -> Self` | Grain opacity. |
+| `fn shadows(mut self, shadows: Vec<BoxShadow>) -> Self` | Shadow layers. |
+| `fn fallback(mut self, fallback: Hsla) -> Self` | Fallback fill. |
+| `fn backdrop_style(&self) -> gpui::BackdropBlurStyle` | The blur style handed to the renderer: blur, tint, blend, light, grain, mask and the first `MAX_BACKDROP_SHADOWS` drop shadows. |
+| `fn extra_shadows(&self) -> &[BoxShadow]` | Shadows the renderer cannot take with the blur (painted by GPUI). |
+
+### Lighting
+
+Light on a material surface. Every strength is 0–1 (0 = off).
+
+| Method | Description |
+| --- | --- |
+| `fn edge(strength: f32) -> Self` | Top light: an edge highlight of `strength` with a matching soft directional sheen. |
+| `fn glass(edge: f32, reflection: f32, specular: f32) -> Self` | Glass light: rim, sheen, reflection band and a specular highlight. |
+| `fn angle(mut self, angle: f32) -> Self` | Light direction (degrees; 0 = top). |
+| `fn color(mut self, color: Hsla) -> Self` | Light color. |
+| `fn ambient(mut self, ambient: f32) -> Self` | Ambient lift. |
+| `fn directional(mut self, directional: f32) -> Self` | Directional sheen. |
+| `fn rim(mut self, edge: f32, width: Pixels) -> Self` | Rim highlight strength and falloff width. |
+| `fn specular(mut self, specular: f32) -> Self` | Specular highlight strength. |
+| `fn specular_at(mut self, position: Point<f32>, size: Pixels) -> Self` | Specular highlight position (shape-relative, 0–1) and size. |
+| `fn reflection(mut self, reflection: f32) -> Self` | Reflection band strength. |
+| `fn is_none(&self) -> bool` | `true` when nothing would be drawn. |
+| `fn direction(&self) -> Point<f32>` | Unit vector pointing *towards* the light (screen space, y down). |
+| `fn to_backdrop(&self) -> BackdropLight` | The renderer's per-pixel lighting parameters (real-blur path). |
+| `fn paint(&self, bounds: Bounds<Pixels>, radius: Pixels, opacity: f32, window: &mut Window)` | Paint an approximation of the light over `bounds` with quads (the fallback path, after the opaque fill). The reflection band is GPU only. |
+
+### ShadowPreset
+
+Shadow presets beyond the elevation scale.
+
+| Variant | Description |
+| --- | --- |
+| `Elevation(Elevation)` | A foundation elevation level (key + ambient). |
+| `Layered(Mode)` | Light from `angle` degrees (0 = top): the shadow falls the other way, `distance` px, softened by `blur` px. Light direction in degrees. Offset length. Blur radius. Shadow color. Three stacked layers (contact, mid, ambient) for floating glass. |
+
+| Method | Description |
+| --- | --- |
+| `fn shadows(self, mode: Mode) -> Vec<BoxShadow>` | Resolve to shadow layers. |
+
+### BlurSupport
+
+What the current renderer can do for backdrop blur.
+
+| Variant | Description |
+| --- | --- |
+| `Real` | Real blur of the pixels behind the surface (Blade on Linux / FreeBSD, Metal on macOS). |
+| `Fallback` | No blur in this renderer (DirectX on Windows): materials draw their opaque fallback fill. |
+
+### MaterialSettings
+
+App-wide material settings (a GPUI global).
+
+| Method | Description |
+| --- | --- |
+| `fn get(cx: &App) -> Self` | Current settings (defaults when never set). |
+| `fn set(settings: Self, cx: &mut App)` | Replace the settings and refresh every window. |
+| `fn blur_enabled(cx: &App) -> bool` | Whether surfaces should draw real blur right now. |
+

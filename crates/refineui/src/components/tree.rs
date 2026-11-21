@@ -8,7 +8,7 @@ use gpui::{
     SharedString, StatefulInteractiveElement, Styled, Transformation, Window, div, prelude::*, px,
     radians,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::components::disclosure::collapse_panel;
 use crate::components::plate::row_plate;

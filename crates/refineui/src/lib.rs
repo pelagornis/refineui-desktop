@@ -16,9 +16,8 @@
 //! | Platform | [`platform`] | macOS / Windows / Linux adapters |
 //!
 //! Shared contracts (tokens, density, z-order, window metrics, component
-//! contracts) live in the GPUI-free `refineui-tokens` crate. Web-oriented
-//! components (Carousel, Footer, NavigationMenu, Link, `container()`) are
-//! behind the optional `web-extras` feature.
+//! contracts) live in the GPUI-free `refineui-foundation` crate. The web page
+//! helper `container()` is behind the optional `web-extras` feature.
 //!
 //! ```no_run
 //! use gpui::{App, Application, Bounds, WindowBounds, WindowOptions, px, size, prelude::*};
@@ -56,6 +55,7 @@ mod icon;
 mod icon_names;
 pub mod interaction;
 mod layer;
+pub mod material;
 pub mod motion;
 pub mod platform;
 mod root;
@@ -71,11 +71,14 @@ pub use components::*;
 pub use icon::{Icon, IconSize, IconStyle};
 pub use icon_names::IconName;
 pub use layer::{Layer, layer};
-pub use refineui_tokens as tokens;
-pub use refineui_tokens::{
+pub use material::{SurfaceKind, materials_active};
+pub use refineui_foundation as tokens;
+pub use refineui_foundation::{
     shadow::Elevation,
     size::{ControlMetrics, ControlSize, Density},
 };
+/// The full RefineUI System Icons crate (890 glyphs); use with [`Icon::named`].
+pub use refineui_system_icons as system_icons;
 pub use root::{FocusNext, FocusPrevious, root};
 pub use styles::StyledExt;
 pub use theme::{ActiveTheme, Appearance, Theme};
@@ -91,14 +94,25 @@ pub mod prelude {
     pub use crate::motion::{Motion, TrackInteraction};
     pub use crate::platform::{Os, PlatformAdapter, ScrollbarStyle};
     pub use crate::shell::{
-        ActivityBar, ActivityBarPreset, ActivityBarStyle, ActivityItem, AppMenu, ApplicationShell,
-        BarSide, IndicatorStyle, ItemBadge, ItemShape, LabelMode, MenuBar, RailEdge, ShellDock,
-        ShellSpec, StatusBar, StatusItem, StatusTone, Titlebar, ToolbarPlacement, WindowControls,
-        WindowFrame, WindowPreset, WindowSpec, WindowState,
+        ActivityBar, ActivityItem, AppMenu, ApplicationShell, BarSide, ItemBadge, MenuBar,
+        RailEdge, ShellDock, ShellSpec, StatusBar, StatusItem, StatusTone, Titlebar,
+        ToolbarPlacement, WindowControls, WindowFrame, WindowPreset, WindowSpec, WindowState,
+    };
+    pub use crate::shell::{
+        FloatingPanelEvent, FloatingPanelFrame, FloatingPanelOptions, open_floating_panel,
+    };
+    pub use crate::shell::{
+        Notification, NotificationCenter, NotificationTone, PreferencesGroup, PreferencesRow,
+        PreferencesSection, PreferencesWindow,
+    };
+    pub use crate::workspace::{
+        Dock, DockArea, DockSide, DocumentTab, Inspector, InspectorSection, PaneNode, PaneTree,
+        Panel, PanelDrag, PanelEntry, PanelGroup, PanelGroupMode, ResizeHandle, SplitAxis,
+        SplitView, TabBar, TabCommand, TabDrag, TabGroup, WorkspaceLayout, ZoomTarget,
     };
     pub use crate::{
         ActiveTheme, Appearance, ControlSize, Density, Elevation, Icon, IconName, IconSize,
-        IconStyle, StyledExt, Theme,
+        IconStyle, StyledExt, SurfaceKind, Theme, materials_active,
     };
 }
 

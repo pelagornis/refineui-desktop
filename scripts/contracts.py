@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Component contracts helper (crates/refineui-tokens/contracts).
+"""Component contracts helper (crates/refineui-foundation/contracts).
 
 The JSON files are canonical and hand-editable. This script:
 
@@ -11,14 +11,14 @@ The JSON files are canonical and hand-editable. This script:
                                 each state's implemented/planned status
   contracts.py index            rewrite contracts/index.rs (embedded list)
 
-Run `cargo test -p refineui-tokens` / `cargo test -p refineui` afterwards:
+Run `cargo test -p refineui-foundation` / `cargo test -p refineui` afterwards:
 the validator checks schema shape, coverage of every public component and
 that embedded sizes equal the Rust density metrics.
 """
 import json, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CDIR = os.path.join(ROOT, 'crates/refineui-tokens/contracts')
+CDIR = os.path.join(ROOT, 'crates/refineui-foundation/contracts')
 COMP = os.path.join(CDIR, 'components')
 SRC = os.path.join(ROOT, 'crates/refineui/src')
 STATES = ['default', 'hovered', 'pressed', 'focused', 'disabled', 'loading', 'selected', 'dragging']
@@ -117,6 +117,12 @@ KEYS = {
               ('secondary-shift-p', 'command palette')],
     'selection': [('secondary-a', 'select all'), ('escape', 'clear selection'), ('right', 'next item'), ('left', 'previous item'),
                   ('shift-right', 'extend selection'), ('shift-left', 'extend selection')],
+    'sortable': [('down', 'next item'), ('up', 'previous item'), ('space', 'lift / drop'), ('enter', 'drop'),
+                 ('escape', 'cancel drag'), ('left', 'move to previous list'), ('right', 'move to next list'),
+                 ('alt-up', 'move item up'), ('alt-down', 'move item down')],
+    'dock': [('secondary-j', 'toggle dock'), ('escape', 'leave zoom')],
+    'recorder': [('enter', 'start recording'), ('space', 'start recording'), ('escape', 'cancel recording'),
+                 ('backspace', 'clear shortcut')],
     'none': [],
 }
 TAB = {'action': 'single', 'toggle': 'single', 'field': 'single', 'select': 'single', 'collection': 'roving',
@@ -126,7 +132,7 @@ TAB = {'action': 'single', 'toggle': 'single', 'field': 'single', 'select': 'sin
 CURSOR = {'action': 'default', 'toggle': 'default', 'field': 'text', 'select': 'default', 'collection': 'default',
           'overlay': 'default', 'group': 'default', 'container': 'default', 'slider': 'default', 'splitter': 'resize-col',
           'display': 'default', 'drag': 'grab'}
-HAND = {'link', 'footer', 'navigation-menu', 'carousel'}
+HAND = {'link', 'carousel'}
 # Per-contract tweaks applied on bootstrap.
 OVERRIDES = {
     'window-controls': {'focus': {'tab_stop': 'none', 'ring': 'none', 'restores_focus': False},
@@ -148,7 +154,7 @@ C = [
  ('button-group','Button Group',['ButtonGroup'],['button_group'],'group','tabs','group','components','exists',4,None,None,'button'),
  ('calendar','Calendar',['Calendar'],['calendar'],'collection','calendar','grid','components','exists',4,None,None,'fixed'),
  ('card','Card',['Card'],['card'],'action','action','group','components','exists',4,None,None,'content'),
- ('carousel','Carousel',['Carousel'],['carousel'],'collection','carousel','region','components','optional',4,'web-extras',None,'content'),
+ ('carousel','Carousel',['Carousel'],['carousel'],'collection','carousel','region','components','exists',4,None,None,'content'),
  ('chart','Chart',['Chart'],['chart'],'display','none','img','components','exists',4,None,None,'content'),
  ('checkbox','Checkbox',['Checkbox'],['checkbox'],'toggle','toggle','checkbox','components','exists',4,None,None,'fixed'),
  ('tag','Tag',['Chip'],['chip'],'action','action','button','components','exists',4,None,None,'chip'),
@@ -160,30 +166,29 @@ C = [
  ('drawer','Drawer',['Drawer'],['dialog'],'overlay','dialog','dialog','components','adapt',4,None,'Sheet / Inspector overlay','content'),
  ('divider','Divider',['Divider'],['divider'],'display','none','separator','components','exists',4,None,None,'fixed'),
  ('field','Field',['Field'],['field'],'display','none','group','components','exists',4,None,None,'content'),
- ('footer','Footer',['Footer'],['footer'],'collection','collection','contentinfo','components','optional',4,'web-extras',None,'content'),
  ('input','Input',['TextInput'],['input'],'field','field','textbox','components','exists',4,None,None,'field'),
  ('textarea','Textarea',['TextInput'],['input'],'field','field','textbox','components','exists',4,None,None,'field'),
  ('search-field','Search Field',['TextInput'],['input'],'field','field','searchbox','components','exists',4,None,None,'field'),
  ('input-otp','Input OTP',['InputOtp'],['input_otp'],'field','otp','group','components','exists',4,None,None,'field'),
  ('kbd','Kbd',['Kbd'],['kbd'],'display','none','none','interaction','adapt',2,None,'Shortcut Hint','fixed'),
- ('link','Link',['Link'],['link'],'action','action','link','components','optional',4,'web-extras',None,'content'),
+ ('link','Link',['Link'],['link'],'action','action','link','components','exists',4,None,None,'content'),
  ('marker','Marker',['Marker'],['marker'],'display','none','mark','components','exists',4,None,None,'content'),
  ('menu','Menu',['Menu'],['menu'],'collection','menu','menu','components','exists',4,None,None,'row'),
  ('dropdown','Dropdown',['DropdownMenu'],['menu'],'collection','menu','menu','components','exists',4,None,None,'row'),
  ('message','Message',['Message'],['message'],'display','none','article','components','exists',4,None,None,'content'),
- ('navigation-menu','Navigation Menu',['NavigationMenu'],['navigation_menu'],'collection','menu','navigation','components','optional',4,'web-extras',None,'content'),
  ('pagination','Pagination',['Pagination'],['pagination'],'collection','tabs','navigation','components','exists',4,None,None,'button'),
  ('popover','Popover',['Popover'],['popover'],'overlay','overlay','dialog','components','exists',4,None,None,'content'),
  ('progress','Progress',['Progress'],['progress'],'display','none','progressbar','components','exists',4,None,None,'fixed'),
  ('progress-stepper','Progress Stepper',['ProgressStepper'],['progress_stepper'],'display','none','list','components','exists',4,None,None,'content'),
  ('radio','Radio',['Radio','RadioGroup'],['radio'],'toggle','radio','radiogroup','components','exists',4,None,None,'fixed'),
  ('resizable','Resizable',['ResizablePanelGroup'],['resizable'],'splitter','splitter','separator','composition','adapt',3,None,'Split View / Resizable Handle','desktop'),
- ('result','Result',['ResultView'],['result'],'display','none','status','components','adapt',4,None,'Empty State / Error State','content'),
+ ('result','Result',['ResultView'],['result'],'display','none','status','components','adapt',4,None,None,'content'),
  ('scroll-area','Scroll Area',['ScrollArea','ScrollEdgeItem'],['scroll_area'],'display','none','scrollbar','components','exists',4,None,None,'content'),
  ('segmented-control','Segmented Control',['SegmentedControl'],['segmented_control'],'toggle','tabs','radiogroup','components','exists',4,None,None,'button'),
  ('select','Select',['Select'],['select'],'select','select','combobox','components','exists',4,None,None,'select'),
  ('sidebar','Sidebar',['Sidebar','SidebarPeek'],['sidebar'],'collection','collection','navigation','composition','adapt',3,None,'Panel (navigation)','desktop'),
  ('skeleton','Skeleton',['Skeleton'],['skeleton'],'display','none','none','components','exists',4,None,None,'content'),
+ ('surface','Surface',['Surface'],['surface'],'display','none','group','components','exists',4,None,None,'content'),
  ('slider','Slider',['Slider'],['slider'],'slider','slider','slider','components','exists',4,None,None,'fixed'),
  ('spin-button','Spin Button',['SpinButton'],['spin_button'],'field','spin','spinbutton','components','exists',4,None,None,'field'),
  ('spinner','Spinner',['Spinner'],['spinner'],'display','none','progressbar','components','exists',4,None,None,'fixed'),
@@ -212,7 +217,19 @@ C = [
  ('drag-preview','Drag Preview',['DragPreview'],['drag'],'display','none','none','interaction','new',2,None,'Drag Preview','content'),
  ('drop-zone','Drop Zone',['DropIndicator','DropZone'],['drag'],'display','none','none','interaction','new',2,None,'Drop Zone','content'),
  ('selection-box','Selection Box',['SelectionArea'],['selection_box'],'collection','selection','listbox','interaction','new',2,None,'Selection Box','content'),
- ('command-palette','Command Palette',['CommandPalette'],['command_palette','command'],'overlay','command','dialog','application','new',2,None,'Command Palette','content'),
+ ('command-palette','Command Palette',['CommandPalette','CommandDialog'],['command_palette','command'],'overlay','command','dialog','application','new',2,None,'Command Palette','content'),
+ ('sortable-list','Sortable List',['SortableList','SortableDrag'],['sortable'],'collection','sortable','listbox','interaction','new',2,None,'Drag and Drop (lists)','row'),
+ # Phase 3 — workspace.
+ ('dock','Dock',['Dock','DockArea'],['../workspace/dock'],'group','dock','complementary','composition','new',3,None,'Dock','desktop'),
+ ('panel','Panel',['Panel','PanelGroup'],['../workspace/panel'],'group','tabs','region','composition','new',3,None,'Panel','desktop'),
+ ('split-view','Split View',['SplitView','PaneTree','ResizeHandle','ResizeDragGhost'],['../workspace/split_view'],'splitter','splitter','group','composition','new',3,None,'Split View','desktop'),
+ ('tab-bar','Tab Bar',['TabBar','TabGroup'],['../workspace/tabs'],'collection','tabs','tablist','composition','new',3,None,'Document Tabs','desktop'),
+ ('inspector','Inspector',['Inspector'],['../workspace/inspector'],'container','container','complementary','composition','new',3,None,'Inspector','desktop'),
+ # Phase 5 — desktop pieces.
+ ('shortcut-recorder','Shortcut Recorder',['ShortcutRecorder'],['shortcut_recorder'],'action','recorder','button','interaction','new',5,None,'Shortcut Recorder','fixed'),
+ ('notification-center','Notification Center',['NotificationCenter'],['../shell/notification_center'],'overlay','overlay','complementary','application','new',5,None,'Notification Center','desktop'),
+ ('preferences-window','Preferences Window',['PreferencesWindow','PreferencesGroup','PreferencesRow'],['../shell/preferences'],'group','collection','navigation','application','new',5,None,'Preferences Window','desktop'),
+ ('floating-panel','Floating Panel',['FloatingPanel','FloatingPanelFrame'],['../shell/floating_panel'],'overlay','overlay','dialog','application','new',3,None,'Floating Panel','desktop'),
 ]
 
 def camel(s):

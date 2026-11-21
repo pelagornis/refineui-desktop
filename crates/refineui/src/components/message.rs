@@ -12,7 +12,7 @@ use gpui::{
     AnyElement, App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
     prelude::*, px,
 };
-use refineui_tokens::{spacing, typography::role};
+use refineui_foundation::{spacing, typography::role};
 
 use crate::{ActiveTheme, Avatar, BubbleAlign, StyledExt};
 

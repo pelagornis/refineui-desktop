@@ -45,7 +45,7 @@ use gpui::{
     MouseButton, ParentElement, RenderOnce, ResizeEdge, SharedString, StatefulInteractiveElement,
     Styled, Window, WindowControlArea, div, prelude::*, px, rgb,
 };
-use refineui_tokens::{spacing, stroke, typography::role, window as wm};
+use refineui_foundation::{spacing, stroke, typography::role, window as wm};
 
 use crate::motion::{TrackInteraction, child_id, use_interaction};
 use crate::platform::{self, Os};
@@ -454,30 +454,33 @@ impl RenderOnce for Titlebar {
         let mv = should_move.clone();
         let dbl = self.on_double_click.clone();
 
+        // RefineUI title: one calm line — `title › subtitle` — instead of a
+        // stacked caption: title `bodySm` medium in `foregroundPrimary`, a
+        // 12px chevron in `foregroundTertiary`, the subtitle in
+        // `foregroundSecondary`.
         let title = (self.content.is_none())
             .then(|| {
                 self.title.clone().map(|t| {
                     div()
                         .flex()
-                        .flex_col()
                         .items_center()
+                        .gap(px(spacing::XX_SMALL))
                         .min_w_0()
+                        .text_style_token(role::BODY_SM)
                         .child(
                             div()
                                 .truncate()
-                                .text_style_token(role::BODY_SM)
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .font_weight(gpui::FontWeight::MEDIUM)
                                 .text_color(c.foreground_primary)
                                 .child(t),
                         )
                         .when_some(self.subtitle.clone(), |d, s| {
                             d.child(
-                                div()
-                                    .truncate()
-                                    .text_style_token(role::CAPTION_MD)
-                                    .text_color(c.foreground_tertiary)
-                                    .child(s),
+                                crate::Icon::new(crate::IconName::ChevronRight)
+                                    .size(crate::IconSize::XXSmall)
+                                    .color(c.foreground_tertiary),
                             )
+                            .child(div().truncate().text_color(c.foreground_secondary).child(s))
                         })
                 })
             })
@@ -489,6 +492,9 @@ impl RenderOnce for Titlebar {
             .os(os)
             .interactive(interactive);
 
+        // Chrome material (when active) tinted like the content surface.
+        let (chrome_fill, chrome_layer) =
+            crate::material::chrome(crate::SurfaceKind::Titlebar, c.background_primary, cx);
         div()
             .id(self.id.clone())
             .relative()
@@ -497,7 +503,10 @@ impl RenderOnce for Titlebar {
             .items_center()
             .w_full()
             .h(px(h))
-            .bg(c.surface_sunken)
+            // Same surface as the content: the bar reads as part of the
+            // window, separated by a hairline, not as a grey OS strip.
+            .bg(chrome_fill)
+            .children(chrome_layer)
             .border_b(px(stroke::HAIRLINE))
             .border_color(c.border_subtle)
             .font_family(theme.font_family.clone())

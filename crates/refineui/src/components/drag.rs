@@ -22,7 +22,7 @@ use gpui::{
     App, Context, ElementId, IntoElement, ParentElement, Render, RenderOnce, SharedString, Styled,
     Window, div, prelude::*, px, relative,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::foundation::CursorRole;
 use crate::interaction::dnd::{DockZone, dock_zone_fraction};
@@ -127,18 +127,30 @@ impl DragPreview {
     fn chip(&self, cx: &App) -> gpui::Div {
         let theme = cx.theme();
         let c = theme.colors;
+        // A frosted chip: the Menu material when materials are active.
+        let plate = crate::material::backing(
+            crate::SurfaceKind::Menu,
+            px(radius::LARGE),
+            stroke::HAIRLINE,
+            theme.floating_fill(),
+            Some(c.border_default),
+            theme.shadow(Elevation::FLOATING),
+            cx,
+        );
         div()
+            .relative()
             .flex()
             .items_center()
             .gap(px(spacing::X_SMALL))
             .px(px(spacing::MEDIUM))
             .py(px(spacing::X_SMALL))
             .max_w(px(280.))
-            .bg(theme.floating_fill())
+            .bg(plate.fill)
             .border(px(stroke::HAIRLINE))
-            .border_color(c.border_default)
+            .border_color(plate.border)
             .rounded(px(radius::LARGE))
-            .shadow(theme.shadow(Elevation::FLOATING))
+            .shadow(plate.shadows)
+            .children(plate.layer)
             .opacity(0.96)
             .text_style_token(role::BODY_SM)
             .text_color(c.foreground_primary)

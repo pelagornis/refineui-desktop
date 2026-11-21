@@ -3,7 +3,7 @@
 use gpui::{
     App, Hsla, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px,
 };
-use refineui_tokens::typography::{self, TextStyle};
+use refineui_foundation::typography::{self, TextStyle};
 
 use crate::{ActiveTheme, ControlSize, StyledExt};
 
@@ -232,6 +232,7 @@ pub struct Text {
     style: TextStyle,
     color: TextColor,
     truncate: bool,
+    surface: Option<crate::SurfaceKind>,
 }
 
 impl Text {
@@ -242,7 +243,16 @@ impl Text {
             style: TextRole::BodyMd.token(),
             color: TextColor::Primary,
             truncate: false,
+            surface: None,
         }
+    }
+
+    /// Read on a [`crate::Surface`] of `kind`: primary / secondary /
+    /// tertiary colors follow the surface (e.g. light text on the HUD);
+    /// intent colors are unchanged.
+    pub fn on_surface(mut self, kind: crate::SurfaceKind) -> Self {
+        self.surface = Some(kind);
+        self
     }
 
     /// Typography role.
@@ -272,9 +282,14 @@ impl Text {
 
 impl RenderOnce for Text {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let el = div()
-            .text_style_token(self.style)
-            .text_color(self.color.resolve(cx));
+        let color = match (self.surface, self.color) {
+            (Some(kind), TextColor::Primary) => kind.foreground(cx),
+            (Some(kind), TextColor::Secondary | TextColor::Tertiary) => {
+                kind.foreground_secondary(cx)
+            }
+            (_, color) => color.resolve(cx),
+        };
+        let el = div().text_style_token(self.style).text_color(color);
         let el = if self.truncate { el.truncate() } else { el };
         el.child(self.text)
     }
@@ -347,13 +362,13 @@ impl RenderOnce for Label {
         };
         // `labelSizeTypo`: sm labelSm, md labelMd, lg labelLg; required `*` with xxx-small gap.
         let style = match self.size {
-            ControlSize::Small => refineui_tokens::typography::role::LABEL_SM,
-            ControlSize::Medium => refineui_tokens::typography::role::LABEL_MD,
-            ControlSize::Large => refineui_tokens::typography::role::LABEL_LG,
+            ControlSize::Small => refineui_foundation::typography::role::LABEL_SM,
+            ControlSize::Medium => refineui_foundation::typography::role::LABEL_MD,
+            ControlSize::Large => refineui_foundation::typography::role::LABEL_LG,
         };
         div()
             .flex()
-            .gap(px(refineui_tokens::spacing::XXX_SMALL))
+            .gap(px(refineui_foundation::spacing::XXX_SMALL))
             .text_style_token(style)
             .text_color(fg)
             .child(self.text)

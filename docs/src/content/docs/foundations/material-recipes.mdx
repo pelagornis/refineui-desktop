@@ -1,0 +1,61 @@
+---
+title: Material Recipes
+description: "Preset materials for desktop surfaces: sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim and glass."
+sidebar:
+  order: 6
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Preset materials for desktop surfaces: sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim and glass.
+
+<Screenshot id="material-recipes" alt="Material Recipes variants and states" />
+
+## Usage
+
+- Each recipe is a plain function returning a `Material` (`recipes::sidebar(mode)`, `recipes::popover(mode)`, `recipes::hud()`, …), so it can be tweaked with the usual builders.
+- `Recipe::foreground(mode)` gives a text color that reads on the recipe (the HUD is always dark).
+- Radii and elevation follow the foundation tokens: popovers use `X_LARGE` + overlay elevation, menus `LARGE` + floating, sheets `XX_LARGE` + modal with a glass rim, tooltips `MEDIUM` without lighting.
+
+```rust
+use refineui::prelude::*;
+
+use refineui_material::prelude::*;
+
+material_surface(recipes::sidebar(mode)).w(px(220.)).h_full().child(nav);
+material_surface(recipes::popover(mode)).p(px(12.)).child(content);
+material_surface(recipes::hud()).p(px(16.)).child("Volume 60%");
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story material-recipes
+```
+
+## API
+
+Source: [`crates/refineui-material/src/recipes.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui-material/src/recipes.rs)
+
+### Recipe
+
+A named recipe (for galleries and settings UIs).
+
+| Variant | Description |
+| --- | --- |
+| `Sidebar` | Source list / navigation column over the window content. |
+| `Titlebar` | Window titlebar / unified toolbar over scrolling content. |
+| `Popover` | Popover and dropdown panels. |
+| `Menu` | Context and dropdown menus. |
+| `Tooltip` | Tooltips. |
+| `Hud` | Heads-up display: dark smoked glass for transient status (volume, progress, capture). |
+| `Sheet` | Sheets and dialogs. |
+| `Toast` | Toast notifications. |
+| `Scrim` | Modal backdrop. |
+| `Glass` | Expressive glass card. |
+
+| Method | Description |
+| --- | --- |
+| `fn material(self, mode: Mode) -> Material` | The material for `mode`. |
+| `fn foreground(self, mode: Mode) -> Hsla` | Text color that reads on this recipe in `mode`. |
+

@@ -3,7 +3,7 @@
 use gpui::{
     App, BoxShadow, Global, Hsla, Pixels, SharedString, Window, WindowAppearance, point, px,
 };
-use refineui_tokens::{
+use refineui_foundation::{
     Color, Mode,
     shadow::Elevation,
     size::{ControlMetrics, ControlSize, Density},
@@ -45,8 +45,8 @@ impl Theme {
             follow_system: false,
             density: Density::default(),
             colors: ThemeColors::from_tokens(appearance.colors()),
-            font_family: refineui_tokens::typography::FONT_FAMILY.into(),
-            mono_font_family: refineui_tokens::typography::MONO_FONT_FAMILY.into(),
+            font_family: refineui_foundation::typography::FONT_FAMILY.into(),
+            mono_font_family: refineui_foundation::typography::MONO_FONT_FAMILY.into(),
         }
     }
 
@@ -80,7 +80,7 @@ impl Theme {
     }
 
     /// Shell / workspace metrics for the current density.
-    pub fn desktop(&self) -> refineui_tokens::size::DesktopMetrics {
+    pub fn desktop(&self) -> refineui_foundation::size::DesktopMetrics {
         self.density.desktop()
     }
 
@@ -126,8 +126,8 @@ impl Theme {
     /// offset (`semantic/focus.ts`). GPUI has no outlines, so it is drawn as two
     /// zero-blur shadows: the ring, then a gap in the page background on top.
     pub fn focus_ring(&self) -> Vec<BoxShadow> {
-        let offset = refineui_tokens::spacing::XXX_SMALL;
-        let width = refineui_tokens::stroke::THICK;
+        let offset = refineui_foundation::spacing::XXX_SMALL;
+        let width = refineui_foundation::stroke::THICK;
         vec![
             BoxShadow {
                 color: self.focus_color(),
@@ -164,10 +164,12 @@ impl Theme {
     /// The one fill for every frosted floating surface (Menu and its
     /// submenus, ContextMenu, Dropdown, Select, Popover, Tooltip,
     /// SidebarPeek): web `surfaceFrosted` pre-composited over
-    /// `backgroundPrimary`. GPUI cannot blur what is behind a panel
+    /// `backgroundPrimary`. Stock GPUI cannot blur what is behind a panel
     /// (`backdrop-filter`), so a raw translucent fill would show the content
     /// behind sharply; this is the color the frost produces over a plain page,
-    /// and it is always fully opaque.
+    /// and it is always fully opaque. With the `material` feature these
+    /// panels draw a real blurred material instead (see [`crate::material`]),
+    /// and this stays their fallback.
     pub fn floating_fill(&self) -> Hsla {
         let mut frost = self.colors.surface_frosted;
         let alpha = frost.a;
@@ -190,7 +192,7 @@ impl Theme {
         if self.is_dark() {
             gpui::white()
         } else {
-            crate::theme::to_hsla(refineui_tokens::palette::PRIMARY_BLACK)
+            crate::theme::to_hsla(refineui_foundation::palette::PRIMARY_BLACK)
         }
     }
 

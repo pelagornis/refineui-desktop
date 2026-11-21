@@ -108,8 +108,8 @@ pub(super) fn stories() -> Vec<Story> {
             id: "tooltip",
             name: "Tooltip",
             group: StoryGroup::Display,
-            summary: "Hover hint with optional shortcut.",
-            shot: (520., 130.),
+            summary: "Hover hint with optional shortcut. Beak is one outline with the body.",
+            shot: (720., 180.),
             render: tooltip,
         },
         Story {
@@ -618,7 +618,27 @@ fn tooltip(_w: &mut Window, cx: &mut App) -> AnyElement {
             v_stack(4.)
                 .items_start()
                 .child(Button::new("tt-static", "Label").variant(ButtonVariant::Secondary))
-                .child(tooltip_with_beak("Tooltip", BeakSide::Top, cx)),
+                .child(tooltip_with_beak("Below", BeakSide::Top, cx)),
+        )
+        .child(
+            v_stack(4.)
+                .items_start()
+                .child(tooltip_with_beak("Above", BeakSide::Bottom, cx))
+                .child(Button::new("tt-above", "Label").variant(ButtonVariant::Secondary)),
+        )
+        .child(
+            row()
+                .items_center()
+                .gap(px(8.))
+                .child(Button::new("tt-right", "Label").variant(ButtonVariant::Secondary))
+                .child(tooltip_with_beak("Right", BeakSide::Left, cx)),
+        )
+        .child(
+            row()
+                .items_center()
+                .gap(px(8.))
+                .child(tooltip_with_beak("Left", BeakSide::Right, cx))
+                .child(Button::new("tt-left", "Label").variant(ButtonVariant::Secondary)),
         )
         .child(
             div()

@@ -8,7 +8,7 @@ use gpui::{
     App, Hsla, ImageSource, IntoElement, ObjectFit, ParentElement, PathBuilder, RenderOnce,
     SharedString, Styled, StyledImage, Window, canvas, div, img, point, prelude::*, px,
 };
-use refineui_tokens::{
+use refineui_foundation::{
     palette,
     size::component::AVATAR_SIZES,
     size::icon,

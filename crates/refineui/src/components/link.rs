@@ -6,7 +6,7 @@ use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, use_focus_handle, use_interaction,

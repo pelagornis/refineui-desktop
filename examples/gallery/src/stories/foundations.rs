@@ -38,6 +38,14 @@ pub(super) fn stories() -> Vec<Story> {
             shot: (760., 300.),
             render: icons,
         },
+        Story {
+            id: "materials",
+            name: "Materials",
+            group: StoryGroup::Foundations,
+            summary: "Material Engine: real backdrop blur, glass, lighting and grain over live content.",
+            shot: (760., 520.),
+            render: materials,
+        },
     ]
 }
 
@@ -234,5 +242,188 @@ fn icons(_w: &mut Window, cx: &mut App) -> AnyElement {
                 })),
             cx,
         ))
+        .into_any_element()
+}
+
+/// A busy backdrop so blur is easy to judge: color fields, stripes and text.
+pub(super) fn material_backdrop(cx: &App) -> gpui::Div {
+    use gpui::{linear_color_stop, linear_gradient, rgb};
+    let dark = cx.theme().is_dark();
+    let blob = |x: f32, y: f32, d: f32, color: u32| {
+        div()
+            .absolute()
+            .left(px(x))
+            .top(px(y))
+            .size(px(d))
+            .rounded_full()
+            .bg(rgb(color))
+    };
+    let mut stripes = div()
+        .absolute()
+        .left(px(0.))
+        .top(px(300.))
+        .flex()
+        .gap(px(10.));
+    for i in 0..36 {
+        let c = [0xF25022, 0x7FBA00, 0x00A4EF, 0xFFB900][i % 4];
+        stripes = stripes.child(div().w(px(10.)).h(px(170.)).bg(rgb(c)));
+    }
+    let mut lines = div()
+        .absolute()
+        .left(px(24.))
+        .top(px(16.))
+        .flex()
+        .flex_col()
+        .gap(px(2.));
+    for t in [
+        "RefineUI Material Engine",
+        "Real backdrop blur — sampled from the pixels behind",
+        "The quick brown fox jumps over the lazy dog 0123456789",
+    ] {
+        lines = lines.child(
+            div()
+                .text_size(px(22.))
+                .font_weight(gpui::FontWeight::BOLD)
+                .text_color(if dark { gpui::white() } else { gpui::black() })
+                .child(t),
+        );
+    }
+    div()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .overflow_hidden()
+        .bg(linear_gradient(
+            135.,
+            linear_color_stop(rgb(if dark { 0x1E2A4A } else { 0xDDE7FF }), 0.),
+            linear_color_stop(rgb(if dark { 0x3A1F3D } else { 0xFFE3EC }), 1.),
+        ))
+        .child(blob(40., 110., 170., 0x0F6CBD))
+        .child(blob(250., 70., 140., 0xE3008C))
+        .child(blob(430., 150., 190., 0xFFB900))
+        .child(blob(600., 60., 120., 0x13A10E))
+        .child(stripes)
+        .child(lines)
+}
+
+fn materials(_: &mut Window, cx: &mut App) -> AnyElement {
+    use refineui_material::prelude::*;
+    let mode = if cx.theme().is_dark() {
+        Mode::Dark
+    } else {
+        Mode::Light
+    };
+    let c = cx.theme().colors;
+    let label = |title: &str, note: &str| {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(2.))
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .text_color(c.foreground_primary)
+                    .child(title.to_string()),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(c.foreground_secondary)
+                    .child(note.to_string()),
+            )
+    };
+    let tile = |role: MaterialRole, note: &str| {
+        material_surface(Material::role(role, mode))
+            .w(px(160.))
+            .h(px(96.))
+            .p(px(12.))
+            .child(label(role.name(), note))
+    };
+    let support = match BlurSupport::current() {
+        BlurSupport::Real => "real backdrop blur",
+        BlurSupport::Fallback => "fallback fill (no blur in this renderer)",
+    };
+    let row1 = div()
+        .absolute()
+        .left(px(24.))
+        .top(px(118.))
+        .flex()
+        .gap(px(16.))
+        .child(tile(MaterialRole::Thin, "blur 12 · tint 45%"))
+        .child(tile(MaterialRole::Regular, "blur 16 · tint 62%"))
+        .child(tile(MaterialRole::Thick, "blur 28 · tint 78%"))
+        .child(tile(MaterialRole::Chrome, "titlebars, sidebars"));
+    let glass = material_surface(Material::glass(mode).radius(px(24.)))
+        .absolute()
+        .left(px(24.))
+        .top(px(250.))
+        .w(px(330.))
+        .h(px(200.))
+        .p(px(16.))
+        .flex()
+        .flex_col()
+        .gap(px(10.))
+        .child(label(
+            "glass",
+            "blur 18 · sat 1.9 · rim · reflection · specular · grain",
+        ))
+        .child(
+            material_surface(Material::role(MaterialRole::Regular, mode).radius(px(14.)))
+                .w(px(220.))
+                .h(px(84.))
+                .p(px(12.))
+                .child(label("nested regular", "blurs the glass behind it")),
+        );
+    let fallback = material_surface(Material::regular(mode).blur(px(0.)))
+        .absolute()
+        .left(px(378.))
+        .top(px(250.))
+        .w(px(160.))
+        .h(px(96.))
+        .p(px(12.))
+        .child(label("fallback", "no blur: opaque fill"));
+    let lit = material_surface(
+        Material::glass(mode)
+            .lighting(Lighting::edge(0.9).angle(90.).specular(0.25))
+            .shadows(ShadowPreset::Layered(mode).shadows(mode)),
+    )
+    .absolute()
+    .left(px(562.))
+    .top(px(250.))
+    .w(px(150.))
+    .h(px(200.))
+    .p(px(12.))
+    .child(label("side light", "light from the right · layered shadow"));
+    let scrim = material_surface(Material::role(MaterialRole::Scrim, mode).radius(px(12.)))
+        .absolute()
+        .left(px(378.))
+        .top(px(362.))
+        .w(px(160.))
+        .h(px(88.))
+        .p(px(12.))
+        .child(label("scrim", "modal backdrop"));
+    div()
+        .relative()
+        .w(px(712.))
+        .h(px(472.))
+        .rounded(px(16.))
+        .overflow_hidden()
+        .child(material_backdrop(cx))
+        .child(row1)
+        .child(glass)
+        .child(fallback)
+        .child(lit)
+        .child(scrim)
+        .child(
+            div()
+                .absolute()
+                .right(px(16.))
+                .top(px(16.))
+                .text_size(px(11.))
+                .text_color(c.foreground_secondary)
+                .child(format!("Renderer: {support}")),
+        )
         .into_any_element()
 }

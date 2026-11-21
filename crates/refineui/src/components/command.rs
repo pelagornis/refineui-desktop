@@ -14,13 +14,29 @@
 //! items fill `backgroundSurfaceActive` and scale to 0.96. Empty state:
 //! `bodyXs` tertiary, `py-xx-large`, fades in. ↑ / ↓ move the selection,
 //! Enter runs it, the pointer selects on hover.
+//!
+//! Web API parity (`Command`, `CommandDialog`, `CommandItem`): items carry a
+//! stable `value`, `keywords`, start/end icons, a `shortcut` and an
+//! `on_select`; the root takes `should_filter` / `filter` (web
+//! `(value, search, keywords) -> score`), emits the search query
+//! ([`CommandEvent::QueryChange`], web `onValueChange`) and the highlighted
+//! item ([`CommandEvent::Highlight`], web `onSelectedValueChange`).
+//! [`CommandDialog`] is the web `CommandDialog`: the same `Command` inside a
+//! [`crate::Dialog`] whose panel is transparent, so the field and the results
+//! panel float on the scrim.
+//!
+//! Matching is fuzzy (ordered subsequence, scored for word starts and runs);
+//! matched label characters are highlighted, items sort by score within
+//! their group and groups by their best item.
+
+use std::rc::Rc;
 
 use gpui::{
-    AnyElement, Context, ElementId, Entity, EventEmitter, InteractiveElement, IntoElement,
-    KeyDownEvent, ParentElement, Render, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, Window, div, prelude::*, px,
+    AnyElement, App, Context, ElementId, Entity, EventEmitter, FontWeight, HighlightStyle,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Render, RenderOnce, SharedString,
+    StatefulInteractiveElement, Styled, StyledText, Subscription, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::components::sliding_highlight::sliding_plate;
 use crate::motion::{
@@ -28,8 +44,8 @@ use crate::motion::{
     use_interaction, use_layout_probe,
 };
 use crate::{
-    ActiveTheme, ControlSize, Elevation, Icon, IconName, IconSize, InputEvent, ScrollArea,
-    SearchField, StyledExt, TextInput, scroll_edge_item,
+    ActiveTheme, ControlSize, Elevation, Icon, IconName, IconSize, InputEvent, ResultVariant,
+    ResultView, ScrollArea, SearchField, StyledExt, TextInput, scroll_edge_item,
 };
 
 /// Results cap (`min(60vh, foundationSize3200)`).
@@ -40,11 +56,94 @@ pub const COMMAND_LIST_MAX_HEIGHT: f32 = 320.;
 pub struct CommandItem {
     value: SharedString,
     label: SharedString,
+    subtitle: Option<SharedString>,
     icon: Option<IconName>,
+    end_icon: Option<IconName>,
     shortcut: Option<SharedString>,
     keywords: Vec<SharedString>,
     disabled: bool,
+    /// Catalog group heading when this item is fed to [`CommandPalette`].
+    group: Option<SharedString>,
+    /// Nested [`CommandPage`] id this item opens (desktop palette).
+    page: Option<SharedString>,
+    on_select: Option<Rc<dyn Fn(&SharedString, &mut Window, &mut App)>>,
 }
+
+/// A scored match: higher is better; `positions` are matched label char indices.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CommandMatch {
+    /// Match quality (0 = hidden).
+    pub score: f32,
+    /// Char indices of the label that matched (for highlighting).
+    pub positions: Vec<usize>,
+}
+
+/// Fuzzy subsequence match of `query` in `text` (case-insensitive).
+///
+/// Every query char must appear in order. Scores reward word-start hits,
+/// consecutive runs and an early first hit; returns `None` on no match.
+pub fn fuzzy_match(query: &str, text: &str) -> Option<CommandMatch> {
+    let q: Vec<char> = query
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect();
+    if q.is_empty() {
+        return Some(CommandMatch {
+            score: 1.,
+            positions: Vec::new(),
+        });
+    }
+    let t: Vec<char> = text.chars().collect();
+    let lower: Vec<char> = t
+        .iter()
+        .map(|c| c.to_lowercase().next().unwrap_or(*c))
+        .collect();
+    let word_start = |i: usize| {
+        i == 0 || !t[i - 1].is_alphanumeric() || (t[i].is_uppercase() && t[i - 1].is_lowercase())
+    };
+    // Greedy forward pass that prefers word starts: for each query char take
+    // the next word-start occurrence if one exists before the next plain one
+    // would force a miss, else the next occurrence.
+    let mut positions = Vec::with_capacity(q.len());
+    let mut from = 0;
+    for (k, qc) in q.iter().enumerate() {
+        let plain = (from..t.len()).find(|i| lower[*i] == *qc)?;
+        let prefer = (plain..t.len()).find(|i| lower[*i] == *qc && word_start(*i));
+        let pick = match prefer {
+            // Only jump ahead if the rest of the query still fits after it.
+            Some(ws) if ws != plain && subsequence(&q[k + 1..], &lower[ws + 1..]) => ws,
+            _ => plain,
+        };
+        positions.push(pick);
+        from = pick + 1;
+    }
+    let mut score = 0.;
+    for (n, &i) in positions.iter().enumerate() {
+        score += 1.;
+        if word_start(i) {
+            score += 2.;
+        }
+        if n > 0 && positions[n - 1] + 1 == i {
+            score += 1.5;
+        }
+    }
+    score += 2. / (1. + positions[0] as f32);
+    // Shorter labels win ties.
+    score -= t.len() as f32 * 0.01;
+    Some(CommandMatch {
+        score: score.max(0.01),
+        positions,
+    })
+}
+
+fn subsequence(q: &[char], t: &[char]) -> bool {
+    let mut it = t.iter();
+    q.iter().all(|c| it.any(|x| x == c))
+}
+
+/// Web `CommandFilter`: `(value, search, keywords) -> score` (0 hides).
+pub type CommandFilter = Rc<dyn Fn(&str, &str, &[SharedString]) -> f32>;
 
 impl CommandItem {
     /// Item whose value is its label.
@@ -53,11 +152,71 @@ impl CommandItem {
         Self {
             value: label.clone(),
             label,
+            subtitle: None,
             icon: None,
+            end_icon: None,
             shortcut: None,
             keywords: Vec::new(),
             disabled: false,
+            group: None,
+            page: None,
+            on_select: None,
         }
+    }
+
+    /// Secondary line under the label (palette results).
+    pub fn subtitle(mut self, s: impl Into<SharedString>) -> Self {
+        self.subtitle = Some(s.into());
+        self
+    }
+
+    /// Trailing icon (web `endIcon`), e.g. a chevron for an item that opens a page.
+    pub fn end_icon(mut self, icon: IconName) -> Self {
+        self.end_icon = Some(icon);
+        self
+    }
+
+    /// Runs when the item is chosen (web `onSelect`), in addition to
+    /// [`CommandEvent::Select`].
+    pub fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self {
+        self.on_select = Some(Rc::new(f));
+        self
+    }
+
+    /// The item's value.
+    pub fn value_str(&self) -> &SharedString {
+        &self.value
+    }
+
+    /// The item's label.
+    pub fn label(&self) -> &SharedString {
+        &self.label
+    }
+
+    /// Scores this item: the label fuzzily (with highlight positions), else
+    /// keywords (substring of every query word, no highlight).
+    pub fn score(&self, query: &str) -> Option<CommandMatch> {
+        let q = query.trim();
+        if q.is_empty() {
+            return Some(CommandMatch {
+                score: 1.,
+                positions: Vec::new(),
+            });
+        }
+        if let Some(m) = fuzzy_match(q, &self.label) {
+            return Some(m);
+        }
+        let hay = std::iter::once(&self.label)
+            .chain(self.keywords.iter())
+            .map(|k| k.to_lowercase())
+            .collect::<Vec<_>>()
+            .join(" ");
+        q.split_whitespace()
+            .all(|w| hay.contains(&w.to_lowercase()))
+            .then(|| CommandMatch {
+                score: 0.5,
+                positions: Vec::new(),
+            })
     }
 
     /// Stable value reported on select (defaults to the label).
@@ -90,15 +249,36 @@ impl CommandItem {
         self
     }
 
-    /// cmdk-style match: every query word appears in the label or a keyword.
+    /// Dispatch the GPUI action named `name` when this item is run (also used as `value`).
+    /// Desktop addition used by [`CommandPalette`].
+    pub fn action(mut self, name: impl Into<SharedString>) -> Self {
+        self.value = name.into();
+        self
+    }
+
+    /// Catalog group heading when building a [`CommandPalette`] from a flat list.
+    pub fn group(mut self, group: impl Into<SharedString>) -> Self {
+        self.group = Some(group.into());
+        self
+    }
+
+    /// Opens the nested [`CommandPage`] with this id (chevron, `page:{id}` value).
+    pub fn opens_page(mut self, page: impl Into<SharedString>) -> Self {
+        let page = page.into();
+        self.page = Some(page.clone());
+        self.value = SharedString::from(format!("page:{page}"));
+        self.end_icon = Some(IconName::ChevronRight);
+        self
+    }
+
+    /// Item that opens nested page `page` (web has no pages; desktop palette).
+    pub fn page(label: impl Into<SharedString>, page: impl Into<SharedString>) -> Self {
+        Self::new(label).opens_page(page)
+    }
+
+    /// Does the item match `query` (fuzzy label or keywords)?
     pub fn matches(&self, query: &str) -> bool {
-        let hay = std::iter::once(self.label.to_lowercase())
-            .chain(self.keywords.iter().map(|k| k.to_lowercase()))
-            .collect::<Vec<_>>()
-            .join(" ");
-        query
-            .split_whitespace()
-            .all(|w| hay.contains(&w.to_lowercase()))
+        self.score(query).is_some()
     }
 }
 
@@ -138,6 +318,12 @@ impl CommandGroup {
 pub enum CommandEvent {
     /// An item was run (Enter or click); carries its value.
     Select(SharedString),
+    /// The search query changed (web `onValueChange`).
+    QueryChange(SharedString),
+    /// The highlighted item changed (web `onSelectedValueChange`).
+    Highlight(SharedString),
+    /// Backspace on an empty query (the palette pops a nested page).
+    Back,
 }
 
 /// The command palette (an entity: create with `cx.new(|cx| Command::new(window, cx))`).
@@ -148,6 +334,13 @@ pub struct Command {
     selected: Option<SharedString>,
     size: ControlSize,
     empty: SharedString,
+    should_filter: bool,
+    filter: Option<CommandFilter>,
+    breadcrumb: Vec<SharedString>,
+    hints: bool,
+    /// Enter pressed in the field: run on the next render (needs `Window`).
+    pending_select: Option<SharedString>,
+    material: bool,
     _sub: Subscription,
 }
 
@@ -160,12 +353,16 @@ impl Command {
         let sub = cx.subscribe(&search, |this: &mut Self, _, e: &InputEvent, cx| match e {
             InputEvent::Change(q) => {
                 this.query = q.clone();
+                // Typing re-ranks; keep the best match highlighted like cmdk.
+                this.selected = None;
                 this.ensure_selection();
+                cx.emit(CommandEvent::QueryChange(q.clone()));
                 cx.notify();
             }
             InputEvent::Submit(_) => {
                 if let Some(v) = this.selected.clone() {
-                    cx.emit(CommandEvent::Select(v));
+                    this.pending_select = Some(v);
+                    cx.notify();
                 }
             }
         });
@@ -176,6 +373,12 @@ impl Command {
             selected: None,
             size: ControlSize::Medium,
             empty: "No results found.".into(),
+            should_filter: true,
+            filter: None,
+            breadcrumb: Vec::new(),
+            hints: false,
+            pending_select: None,
+            material: false,
             _sub: sub,
         }
     }
@@ -210,6 +413,54 @@ impl Command {
         self
     }
 
+    /// Filter items by the query (web `shouldFilter`, default `true`).
+    pub fn should_filter(mut self, on: bool) -> Self {
+        self.should_filter = on;
+        self
+    }
+
+    /// Custom scorer (web `filter`): `(value, search, keywords) -> score`,
+    /// 0 hides the item. Disables label highlighting.
+    pub fn filter(mut self, f: impl Fn(&str, &str, &[SharedString]) -> f32 + 'static) -> Self {
+        self.filter = Some(Rc::new(f));
+        self
+    }
+
+    /// Search placeholder.
+    pub fn placeholder(self, p: impl Into<SharedString>, cx: &mut Context<Self>) -> Self {
+        let p = p.into();
+        self.search.update(cx, |s, cx| {
+            s.set_placeholder(p, cx);
+        });
+        self
+    }
+
+    /// Breadcrumb chips shown above the results (nested palette pages).
+    pub fn set_breadcrumb(&mut self, crumbs: Vec<SharedString>, cx: &mut Context<Self>) {
+        self.breadcrumb = crumbs;
+        cx.notify();
+    }
+
+    /// Draw the results panel as the Popover material and the search field
+    /// as glass when [`crate::materials_active`] (the Command Palette turns
+    /// this on). Default `false`: the opaque web-parity panel.
+    pub fn set_material(&mut self, on: bool, cx: &mut Context<Self>) {
+        self.material = on;
+        self.search.update(cx, |s, cx| s.set_glass(on, cx));
+        cx.notify();
+    }
+
+    /// Show the keyboard hint row under the results.
+    pub fn hints(mut self, on: bool) -> Self {
+        self.hints = on;
+        self
+    }
+
+    /// The current query.
+    pub fn query(&self) -> &SharedString {
+        &self.query
+    }
+
     /// Empty-state text.
     pub fn empty_text(mut self, t: impl Into<SharedString>) -> Self {
         self.empty = t.into();
@@ -226,30 +477,56 @@ impl Command {
         self.selected.as_ref()
     }
 
-    fn visible(&self) -> Vec<(Option<SharedString>, Vec<CommandItem>)> {
+    /// Visible groups with each item's match, sorted by score while searching.
+    fn visible(&self) -> Vec<(Option<SharedString>, Vec<(CommandItem, CommandMatch)>)> {
         let q = self.query.trim().to_string();
-        self.groups
+        let mut groups: Vec<_> = self
+            .groups
             .iter()
             .map(|g| {
-                (
-                    g.heading.clone(),
-                    g.items
-                        .iter()
-                        .filter(|i| q.is_empty() || i.matches(&q))
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                )
+                let mut items: Vec<(CommandItem, CommandMatch)> = g
+                    .items
+                    .iter()
+                    .filter_map(|i| {
+                        let m = if !self.should_filter || q.is_empty() {
+                            Some(CommandMatch {
+                                score: 1.,
+                                positions: Vec::new(),
+                            })
+                        } else if let Some(f) = &self.filter {
+                            let s = f(&i.value, &q, &i.keywords);
+                            (s > 0.).then(|| CommandMatch {
+                                score: s,
+                                positions: Vec::new(),
+                            })
+                        } else {
+                            i.score(&q)
+                        };
+                        m.map(|m| (i.clone(), m))
+                    })
+                    .collect();
+                if self.should_filter && !q.is_empty() {
+                    items.sort_by(|a, b| b.1.score.total_cmp(&a.1.score));
+                }
+                (g.heading.clone(), items)
             })
             .filter(|(_, items)| !items.is_empty())
-            .collect()
+            .collect();
+        if self.should_filter && !q.is_empty() {
+            let best = |items: &Vec<(CommandItem, CommandMatch)>| {
+                items.first().map(|i| i.1.score).unwrap_or(0.)
+            };
+            groups.sort_by(|a, b| best(&b.1).total_cmp(&best(&a.1)));
+        }
+        groups
     }
 
     fn enabled_values(&self) -> Vec<SharedString> {
         self.visible()
             .into_iter()
             .flat_map(|(_, items)| items)
-            .filter(|i| !i.disabled)
-            .map(|i| i.value)
+            .filter(|(i, _)| !i.disabled)
+            .map(|(i, _)| i.value)
             .collect()
     }
 
@@ -274,10 +551,51 @@ impl Command {
             .rem_euclid(values.len() as isize);
         self.selected = Some(values[ix as usize].clone());
     }
+
+    fn item(&self, value: &SharedString) -> Option<&CommandItem> {
+        self.groups
+            .iter()
+            .flat_map(|g| g.items.iter())
+            .find(|i| &i.value == value)
+    }
+
+    /// Runs an item: its `on_select`, then [`CommandEvent::Select`].
+    pub fn select(&mut self, value: SharedString, window: &mut Window, cx: &mut Context<Self>) {
+        self.selected = Some(value.clone());
+        if let Some(h) = self.item(&value).and_then(|i| i.on_select.clone()) {
+            h(&value, window, cx);
+        }
+        cx.emit(CommandEvent::Select(value));
+        cx.notify();
+    }
+}
+
+/// Highlighted label: matched chars semibold in `foregroundBrand`.
+fn highlighted(label: &SharedString, positions: &[usize], brand: gpui::Hsla) -> StyledText {
+    if positions.is_empty() {
+        return StyledText::new(label.clone());
+    }
+    let mut ranges = Vec::new();
+    for (ci, (bi, ch)) in label.char_indices().enumerate() {
+        if positions.contains(&ci) {
+            ranges.push((
+                bi..bi + ch.len_utf8(),
+                HighlightStyle {
+                    color: Some(brand),
+                    font_weight: Some(FontWeight::SEMIBOLD),
+                    ..Default::default()
+                },
+            ));
+        }
+    }
+    StyledText::new(label.clone()).with_highlights(ranges)
 }
 
 impl Render for Command {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(v) = self.pending_select.take() {
+            self.select(v, window, cx);
+        }
         let theme = cx.theme().clone();
         let c = theme.colors;
         let id: ElementId = ("refineui-command", cx.entity_id()).into();
@@ -309,7 +627,7 @@ impl Render for Command {
                         .child(h),
                 );
             }
-            for item in items {
+            for (item, matched) in items {
                 let item_id: ElementId =
                     ElementId::NamedChild(Box::new(id.clone()), item.value.clone());
                 let (state, i) = use_interaction(&item_id, window, cx);
@@ -377,7 +695,22 @@ impl Render for Command {
                             .relative()
                             .flex_1()
                             .min_w_0()
-                            .child(item.label.clone()),
+                            .flex()
+                            .flex_col()
+                            .child(highlighted(
+                                &item.label,
+                                &matched.positions,
+                                c.foreground_brand,
+                            ))
+                            .when_some(item.subtitle.clone(), |d, s| {
+                                d.child(
+                                    div()
+                                        .text_style_token(role::BODY_XS)
+                                        .text_color(c.foreground_tertiary)
+                                        .truncate()
+                                        .child(s),
+                                )
+                            }),
                     )
                     .when_some(item.shortcut.clone(), |d, s| {
                         d.child(
@@ -388,6 +721,13 @@ impl Render for Command {
                                 .text_style_token(role::BODY_XS)
                                 .text_color(c.foreground_tertiary)
                                 .child(s),
+                        )
+                    })
+                    .when_some(item.end_icon, |d, ic| {
+                        d.child(
+                            Icon::new(ic)
+                                .size(IconSize::Custom(px(icon * 0.8)))
+                                .color(c.foreground_tertiary),
                         )
                     })
                     .when(!disabled, |d| {
@@ -402,20 +742,16 @@ impl Render for Command {
                                 this_hover
                                     .update(cx, |t, cx| {
                                         if t.selected.as_ref() != Some(&v) {
-                                            t.selected = Some(v);
+                                            t.selected = Some(v.clone());
+                                            cx.emit(CommandEvent::Highlight(v));
                                             cx.notify();
                                         }
                                     })
                                     .ok();
                             })
-                            .on_click(move |_, _, cx| {
+                            .on_click(move |_, window, cx| {
                                 let v = value.clone();
-                                this.update(cx, |t, cx| {
-                                    t.selected = Some(v.clone());
-                                    cx.emit(CommandEvent::Select(v));
-                                    cx.notify();
-                                })
-                                .ok();
+                                this.update(cx, |t, cx| t.select(v, window, cx)).ok();
                             })
                     })
                     .when(disabled, |d| d.cursor_not_allowed());
@@ -464,6 +800,25 @@ impl Render for Command {
             .child(plate)
             .children(rows);
         let this = cx.entity().downgrade();
+        let panel_shadow = theme.shadow(Elevation::SURFACE);
+        let plate = if self.material {
+            crate::material::backing(
+                crate::SurfaceKind::Popover,
+                px(list_radius),
+                stroke::HAIRLINE,
+                c.background_primary,
+                Some(c.border_default),
+                panel_shadow,
+                cx,
+            )
+        } else {
+            crate::material::Backing {
+                fill: c.background_primary,
+                border: c.border_default,
+                shadows: panel_shadow,
+                layer: None,
+            }
+        };
         div()
             .id(id.clone())
             .flex()
@@ -472,6 +827,16 @@ impl Render for Command {
             .gap(px(spacing::SMALL))
             .font_family(theme.font_family.clone())
             .text_color(c.foreground_primary)
+            .capture_key_down({
+                let this = this.clone();
+                move |e: &KeyDownEvent, _, cx| {
+                    if e.keystroke.key == "backspace"
+                        && this.update(cx, |t, _| t.query.is_empty()).unwrap_or(false)
+                    {
+                        this.update(cx, |_, cx| cx.emit(CommandEvent::Back)).ok();
+                    }
+                }
+            })
             .on_key_down(move |e: &KeyDownEvent, _, cx| {
                 let d = match e.keystroke.key.as_str() {
                     "down" => 1,
@@ -480,6 +845,9 @@ impl Render for Command {
                 };
                 this.update(cx, |t, cx| {
                     t.step(d);
+                    if let Some(v) = t.selected.clone() {
+                        cx.emit(CommandEvent::Highlight(v));
+                    }
                     cx.notify();
                 })
                 .ok();
@@ -492,20 +860,50 @@ impl Render for Command {
                     .overflow_hidden()
                     .rounded(px(list_radius))
                     .border(px(stroke::HAIRLINE))
-                    .border_color(c.border_default)
-                    .bg(c.background_primary)
-                    .shadow(theme.shadow(Elevation::SURFACE))
+                    .border_color(plate.border)
+                    .bg(plate.fill)
+                    .shadow(plate.shadows)
+                    .relative()
+                    .children(plate.layer)
+                    .when(!self.breadcrumb.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(spacing::XX_SMALL))
+                                .px(px(spacing::MEDIUM))
+                                .pt(px(spacing::SMALL))
+                                .children(self.breadcrumb.iter().enumerate().flat_map(|(i, b)| {
+                                    let chip = div()
+                                        .px(px(spacing::X_SMALL))
+                                        .py(px(spacing::XXX_SMALL))
+                                        .rounded(px(radius::MEDIUM))
+                                        .bg(c.background_surface_hover)
+                                        .text_style_token(role::CAPTION_LG)
+                                        .text_color(c.foreground_secondary)
+                                        .child(b.clone())
+                                        .into_any_element();
+                                    let sep = (i > 0).then(|| {
+                                        Icon::new(IconName::ChevronRight)
+                                            .size(IconSize::XXSmall)
+                                            .color(c.foreground_tertiary)
+                                            .into_any_element()
+                                    });
+                                    sep.into_iter().chain([chip])
+                                })),
+                        )
+                    })
                     .map(|d| {
                         if empty {
+                            // Web `CommandEmpty`: the empty state lives inside
+                            // the list plate. The search field stays a sibling
+                            // above this plate (already pinned / not scrolling).
                             d.child(
-                                div()
-                                    .opacity(empty_fade)
-                                    .px(px(spacing::MEDIUM))
-                                    .py(px(spacing::XX_LARGE))
-                                    .text_center()
-                                    .text_style_token(role::BODY_XS)
-                                    .text_color(c.foreground_tertiary)
-                                    .child(self.empty.clone()),
+                                div().opacity(empty_fade).w_full().child(
+                                    ResultView::new(ResultVariant::Empty)
+                                        .compact(true)
+                                        .title(self.empty.clone()),
+                                ),
                             )
                         } else {
                             d.child(
@@ -514,8 +912,120 @@ impl Render for Command {
                                     .child(list_inner),
                             )
                         }
+                    })
+                    .when(self.hints, |d| {
+                        let hint = |k: &'static str, label: &'static str| {
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(spacing::XX_SMALL))
+                                .child(crate::Kbd::new(k))
+                                .child(label)
+                        };
+                        let back = if self.breadcrumb.is_empty() {
+                            "Close"
+                        } else {
+                            "Back"
+                        };
+                        d.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(spacing::MEDIUM))
+                                .px(px(spacing::MEDIUM))
+                                .py(px(spacing::X_SMALL))
+                                .border_t(px(stroke::THIN))
+                                .border_color(c.border_subtle)
+                                .bg(c.background_surface)
+                                .text_style_token(role::CAPTION_LG)
+                                .text_color(c.foreground_tertiary)
+                                .child(hint("↑↓", "Navigate"))
+                                .child(hint("↵", "Run"))
+                                .child(hint("esc", back)),
+                        )
                     }),
             )
+    }
+}
+
+/// Web `CommandDialog`: a [`Command`] inside a [`crate::Dialog`] whose panel
+/// is transparent (the search field and results panel float on the scrim).
+///
+/// Controlled like `Dialog`: keep rendering it and pass `open`; close it in
+/// `on_close` (scrim click or Escape). Focus the command's search field when
+/// you open it (`window.focus(&cmd.read(cx).search().focus_handle(cx))`).
+#[derive(IntoElement)]
+pub struct CommandDialog {
+    id: ElementId,
+    command: Entity<Command>,
+    open: bool,
+    size: crate::DialogSize,
+    on_close: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    inline: bool,
+    content: Option<AnyElement>,
+}
+
+impl CommandDialog {
+    /// Dialog around `command`.
+    pub fn new(id: impl Into<ElementId>, command: Entity<Command>) -> Self {
+        Self {
+            id: id.into(),
+            command,
+            open: true,
+            size: crate::DialogSize::Large,
+            on_close: None,
+            inline: false,
+            content: None,
+        }
+    }
+
+    /// Wraps the command in custom content (it must contain the command
+    /// entity); used by [`crate::CommandPalette`] for its page transition.
+    pub fn content(mut self, content: impl IntoElement) -> Self {
+        self.content = Some(content.into_any_element());
+        self
+    }
+
+    /// Open state (web `open`).
+    pub fn open(mut self, open: bool) -> Self {
+        self.open = open;
+        self
+    }
+
+    /// Dialog width (web `size`).
+    pub fn size(mut self, size: crate::DialogSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Close request (web `onOpenChange(false)`).
+    pub fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_close = Some(Rc::new(f));
+        self
+    }
+
+    /// Render in flow (docs / previews).
+    pub fn inline(mut self, inline: bool) -> Self {
+        self.inline = inline;
+        self
+    }
+}
+
+impl RenderOnce for CommandDialog {
+    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+        let mut d = crate::Dialog::new(self.id, "Command")
+            .bare(true)
+            .size(self.size)
+            .open(self.open)
+            .inline(self.inline)
+            .child(match self.content {
+                Some(c) => c,
+                None => self.command.into_any_element(),
+            });
+        if let Some(h) = self.on_close {
+            d = d.on_close(move |w, cx| h(w, cx));
+        }
+        d
     }
 }
 
@@ -531,4 +1041,22 @@ mod tests {
         assert!(i.matches("pref"));
         assert!(!i.matches("close"));
     }
+
+    #[test]
+    fn fuzzy_prefers_word_starts_and_reports_positions() {
+        let m = fuzzy_match("tsb", "Toggle Side Bar").unwrap();
+        assert_eq!(m.positions, vec![0, 7, 12]);
+        let a = fuzzy_match("set", "Settings").unwrap();
+        let b = fuzzy_match("set", "Reset view").unwrap();
+        assert!(a.score > b.score);
+        assert!(fuzzy_match("xyz", "Settings").is_none());
+        assert!(fuzzy_match("ofi", "Open File").is_some());
+    }
 }
+
+#[path = "command_palette.rs"]
+mod palette;
+pub use palette::{
+    COMMAND_PALETTE_WIDTH, CommandPage, CommandPalette, PalettePage, RECENT_LIMIT,
+    ToggleCommandPalette,
+};

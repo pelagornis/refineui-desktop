@@ -1,0 +1,72 @@
+---
+title: Shortcut Recorder
+description: "A field that records a keyboard shortcut: click, press a combination, see it as platform keycaps; warns when the keymap already uses it."
+sidebar:
+  order: 69
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+A field that records a keyboard shortcut: click, press a combination, see it as platform keycaps; warns when the keymap already uses it.
+
+<Screenshot id="shortcut-recorder" alt="Shortcut Recorder variants and states" />
+
+## Usage
+
+- Click (or focus and press Enter / Space) to record. Held modifiers show live; the first non-modifier key completes the shortcut. Escape cancels, Backspace / Delete clears, the × button clears.
+- The value is GPUI key syntax with the platform primary modifier written as `secondary` (`secondary-shift-p`), so it can go straight into `KeybindingManager::bind`.
+- Labels follow the chrome OS: one `⇧⌘P` keycap on macOS, `Ctrl` `Shift` `P` keycaps on Windows / Linux.
+- With a `Keymap` installed, a binding of another action on the same keys turns the border `borderError` and shows *Already used by …*; `action(..)` names the binding being edited so it is not reported against itself.
+- `chords(true)` records two-keystroke chords (`secondary-k secondary-s`): after the first stroke the field waits `CHORD_TIMEOUT` (1s) for a second one, showing `…`; if none comes, the single stroke is kept.
+- Subscribe to `ShortcutChanged` to persist the new binding.
+
+```rust
+use refineui::prelude::*;
+
+let recorder = cx.new(|cx| {
+    ShortcutRecorder::new(cx)
+        .with_keys("secondary-shift-p")
+        .action("workspace::ToggleCommandPalette")
+});
+cx.subscribe(&recorder, |this, _, ShortcutChanged(keys), cx| {
+    this.save_binding("workspace::ToggleCommandPalette", keys.clone(), cx);
+}).detach();
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story shortcut-recorder
+```
+
+## Motion
+
+Border and plate switch to the recording state immediately; keycaps appear as keys are held.
+
+## API
+
+Source: [`crates/refineui/src/components/shortcut_recorder.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/shortcut_recorder.rs)
+
+### ShortcutRecorder
+
+Shortcut recorder field (entity).
+
+| Method | Description |
+| --- | --- |
+| `fn new(cx: &mut Context<Self>) -> Self` | Empty recorder. |
+| `fn chords(mut self, on: bool) -> Self` | Accept two-keystroke chords (`ctrl-k ctrl-s`); default off. |
+| `fn with_keys(mut self, keys: impl Into<String>) -> Self` | Initial shortcut (GPUI key syntax). |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Text when no shortcut is set. |
+| `fn action(mut self, action: impl Into<String>) -> Self` | The action this shortcut is for; its own binding is not a conflict. |
+| `fn conflict_check(mut self, on: bool) -> Self` | Show conflicts with the installed keymap (default on). |
+| `fn disabled(mut self, d: bool) -> Self` | Disable. |
+| `fn keys(&self) -> Option<&str>` | Current shortcut (GPUI key syntax). |
+| `fn is_recording(&self) -> bool` | Whether the field is waiting for a keystroke. |
+| `fn set_keys(&mut self, keys: Option<String>, cx: &mut Context<Self>)` | Set the shortcut (emits `ShortcutChanged` when it changes). |
+| `fn set_recording(&mut self, on: bool, window: &mut Window, cx: &mut Context<Self>)` | Start (or stop) recording. |
+| `fn conflict(&self, cx: &App) -> Option<String>` | Action already bound to the current shortcut in the installed keymap (other than `Self::action`). |
+
+### ShortcutChanged
+
+Emitted when the recorded shortcut changes (`None` = cleared).
+

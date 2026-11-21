@@ -33,6 +33,7 @@ Components that exist today but are not named in the brief stay in Desktop Core:
 | Progress | Components | exists | 4 | `Progress` |
 | Spinner | Components | exists | 4 | `Spinner` |
 | Skeleton | Components | exists | 4 | `Skeleton` |
+| Surface | Components | exists | 4 | `Surface`, `SurfaceKind`; material plate (feature `material`), opaque fallback otherwise |
 | Toast | Components | adapt | 4 | `Toast`, `Toaster`; feeds the Notification Center (P5) |
 | Alert | Components | exists | 4 | `Alert` |
 | Dialog | Components | adapt | 4 | `Dialog`; add window-modal sheet (macOS) and focus trap / restore |
@@ -52,10 +53,8 @@ Components that exist today but are not named in the brief stay in Desktop Core:
 | Component | Layer | Status | Phase | Source / notes |
 | --- | --- | --- | --- | --- |
 | Web Container | Components | optional | — | `container()`, `container_with()` behind `web-extras` |
-| Footer | Components | optional | — | `Footer` behind `web-extras` |
-| Carousel | Components | optional | — | `Carousel` behind `web-extras` |
-| Responsive Navigation | Components | optional | — | `NavigationMenu` behind `web-extras` |
-| URL-centric Link | Components | optional | — | `Link` behind `web-extras`; desktop uses Button `link` style for in-app actions |
+| Footer | Components | removed | — | Deleted (web page chrome; no desktop use) |
+| Responsive Navigation | Components | removed | — | `NavigationMenu` deleted; desktop apps use `MenuBar`, `Sidebar`, `ActivityBar` |
 | Mobile Drawer patterns | Components | adapt | 4 | `Drawer` stays as an edge **Sheet**; mobile-style footer stacks to be removed |
 
 ## Application
@@ -68,8 +67,8 @@ Components that exist today but are not named in the brief stay in Desktop Core:
 | Menu Bar | Application | exists | 2 | `AppMenu` model → `MenuBar` (in-window) or `set_system_menus` (macOS) |
 | Toolbar | Application | exists | 2 | `Toolbar` with `spacer()` / `fill(true)` for the unified titlebar; overflow menu in Phase 3 |
 | Status Bar | Application | exists | 2 | `StatusBar`, `StatusItem` (text / button / progress / custom) |
-| Activity Bar | Application | exists | 2 | `ActivityBar` (replaces `SideDock`; `ActivityBar::rail` keeps its look) |
-| Navigation Rail | Application | exists | 2 | `ActivityBar::navigation_rail`, `LabelMode::{Below, Beside}` |
+| Activity Bar | Application | exists | 2 | `ActivityBar` — one unified RefineUI rail (replaces `SideDock`, the rail and navigation-rail presets); folds open with labels |
+| Sortable List | Interaction | exists | 2 | `SortableList`: reorder, transfer between lists, indicators, auto-scroll, keyboard, Esc cancel |
 | Application Shell | Application | exists | 2 | `ApplicationShell`: regions, F6 cycling, per-OS chrome |
 
 ## Workspace
@@ -109,12 +108,11 @@ Components that exist today but are not named in the brief stay in Desktop Core:
 
 | Component | Layer | Status | Phase | Source / notes |
 | --- | --- | --- | --- | --- |
-| Notification Center | Application | adapt | 5 | From `Toaster` |
-| Preferences | Application | new | 5 | Settings window with sections |
+| Notification Center | Application | exists | 5 | `NotificationCenter`, `Notification`, `NotificationTone`; Sheet material, spring slide-in |
+| Preferences | Application | exists | 5 | `PreferencesWindow`, `PreferencesSection`, `PreferencesGroup`, `PreferencesRow` |
 | File Picker Integration | Platform | new | 5 | GPUI `prompt_for_paths` / `prompt_for_new_path` |
 | Color Picker | Components | new | 5 |  |
 | Font Picker | Components | new | 5 |  |
-| Shortcut Recorder | Interaction | new | 5 | Writes to the keymap; shows conflicts |
+| Shortcut Recorder | Interaction | exists | 5 | `ShortcutRecorder` (entity, `ShortcutChanged`); keymap conflict warning |
 | Progress Dialog | Components | new | 5 | From `Dialog` + `Progress` |
-| Empty State | Components | adapt | 4 | From `ResultView` |
-| Error State | Components | adapt | 4 | From `ResultView` |
+| Result | Components | exists | 4 | `ResultView`, `ResultVariant` (`Empty`, `compact`, `details`; replaces Empty / Error State) |

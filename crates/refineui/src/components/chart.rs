@@ -18,7 +18,7 @@ use gpui::{
     Point, RenderOnce, SharedString, Styled, Window, canvas, div, linear_color_stop,
     linear_gradient, point, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::motion::{Motion, animate, animate_from, child_id, probe, use_layout_probe};
 use crate::{ActiveTheme, Elevation, StyledExt};

@@ -1,0 +1,149 @@
+---
+title: Final deliverables
+description: The 13 deliverables of the Material brief, each with where it lives and how to check it.
+sidebar:
+  order: 1
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+RefineUI GPUI is a desktop design system for GPUI in three layers: a
+GPUI-free **Foundation**, the **RefineUI Desktop** component library and a
+**Material Engine** with real backdrop blur, rendered by a minimally patched
+gpui 0.2.2. This page lists the 13 deliverables of the brief. Each one says
+where it lives and how to check it.
+
+| # | Deliverable | Where |
+| --- | --- | --- |
+| 1 | Architecture overview | [Overview](/architecture/overview/) |
+| 2 | Crate and module structure | [Overview → Crates](/architecture/overview/#crates-and-modules), [API reference](/reference/refineui/) |
+| 3 | Foundation tokens | [Foundation](/architecture/foundation/), [Colors](/foundations/colors/), [Typography](/foundations/typography/) |
+| 4 | Desktop component library | [Inventory](/architecture/inventory/), Components, Desktop shell |
+| 5 | Material Engine | [Material Engine](/architecture/material/), [Materials](/foundations/materials/) |
+| 6 | Rendering integration | [Material Engine §2–3](/architecture/material/#2-gpui-rendering-capabilities-verified-in-source), `vendor/gpui/REFINEUI_PATCH.md` |
+| 7 | Backdrop blur demo | [Material Effects](/foundations/material-effects/) |
+| 8 | Glass material demo | [Material Recipes](/foundations/material-recipes/), [Material Components](/foundations/material-components/) |
+| 9 | Light and dark themes | Every page shows both appearances |
+| 10 | Showcase application | [Desktop Showcase](/shell/desktop-showcase/), `cargo run -p refineui-gallery` |
+| 11 | Benchmarks | [Benchmarks](/report/benchmarks/) |
+| 12 | Automated tests | [Test results](/report/testing/) |
+| 13 | Limitations and roadmap | [Limitations and roadmap](/report/roadmap/), [Cross-platform validation](/report/cross-platform/) |
+
+## 1. Architecture overview
+
+The stack has six layers: Foundation, Interaction, Components, Composition,
+Application and Platform. A layer may use only the layers below it.
+Platform specifics live behind the `PlatformAdapter` trait. Materials are a
+separate layer. Components reach them only through `refineui::material`,
+behind the opt-in `material` feature, so the library also builds on stock
+gpui. See [Overview](/architecture/overview/).
+
+## 2. Crate and module structure
+
+| Crate | Depends on | Role |
+| --- | --- | --- |
+| `refineui-foundation` | nothing | Tokens, semantic colors, typography, density, motion, blur and material roles, window metrics, component contracts (JSON and schema) |
+| `refineui-tokens` | foundation | Compatibility re-export |
+| `refineui-material` | gpui, foundation | `Material`, backdrop blur, lighting, grain, shadows, compositing, recipes, `MaterialSurface` |
+| `refineui` | gpui, foundation, material (optional) | Theme, components, interaction, shell, workspace, platform, motion |
+| `vendor/gpui` | — | gpui 0.2.2 plus the `BackdropBlur` primitive, applied with `[patch.crates-io]`, so there is one gpui in the graph |
+| `examples/gallery` | all | Gallery app, screenshot generator, visual regression |
+
+The [API reference](/reference/refineui/) lists every public item of every
+crate (generated from the source). All four crates build with
+`#![warn(missing_docs)]`, and CI runs clippy with `-D warnings`.
+
+## 3. Foundation tokens
+
+These are ported from the web `@refineui/tokens`: the palette, 69 semantic
+aliases (light and dark), 16 type styles and 21 roles, spacing, radius,
+stroke, opacity, elevation, motion and blur. Desktop adds density
+(Compact / Comfortable / Spacious), `DesktopMetrics`, window metrics, layer
+order, cursor roles, interaction states and the material roles Thin,
+Regular, Thick, Chrome, Glass and Scrim. Colors stay in sync through
+`scripts/sync_tokens.py`.
+
+## 4. Desktop component library
+
+There are 86 gallery stories. Each public component has a machine-checked
+contract (85 contracts covering states, keys, focus, density sizes and
+tokens), and a test fails if a public component has none. The library
+covers:
+
+- Web parity components.
+- Desktop shell: Window, Titlebar, Window Controls, Menu Bar, Toolbar,
+  Activity Bar, Status Bar, Application Shell.
+- Workspace: Split View, Panel / Panel Group, Dock / Dock Area, Tab Group,
+  Inspector, Floating Panel.
+- Interaction: keymap, Shortcut Hint, Command Palette, drag and drop,
+  selection box.
+- Phase 5 additions: Notification Center, Preferences Window, Shortcut
+  Recorder, Empty / Error State.
+
+## 5. Material Engine
+
+One `Material` value describes a surface. Its parts are composited in a
+fixed order:
+
+1. Drop shadows.
+2. Real backdrop blur with saturation and tint.
+3. Fill (tint), with optional blend modes and masks.
+4. Lighting: directional, ambient, edge / rim, specular and reflection.
+5. Grain.
+6. Inner shadows.
+7. Border.
+
+Recipes cover the titlebar, sidebar, popover, menu, tooltip, HUD, sheet,
+toast, scrim and glass. In the component library, `SurfaceKind` maps each
+use to a recipe and an opaque fallback.
+
+## 6. Rendering integration
+
+The patch adds one scene primitive, `BackdropBlur`. It is ordered by the
+region it samples. The renderer closes the main pass, copies that region,
+downsamples it, runs a separable Gaussian, composites with an SDF, and
+resumes the pass. This is implemented on Blade (Vulkan, Linux) and Metal
+(macOS). DirectX (Windows) reports `backdrop_blur_supported() == false`,
+and materials paint their documented fallback instead. A blurred-backdrop
+cache skips the re-blur when nothing under a surface changed. The patch has
+6 tests of its own (`scripts/test_gpui_patch.sh`).
+
+## 7–8. Blur and glass demonstrations
+
+<Screenshot id="material-effects" alt="Lighting, blend modes, masks and shadows over a real blur" />
+
+<Screenshot id="material-recipes" alt="Material recipes over live content" />
+
+## 9. Light and dark
+
+Every story is captured in both appearances: 172 images, regenerated by
+`scripts/screenshots.sh`. Materials have separate light and dark tokens.
+Dark mode replaces saturated "subtle" fills with ink washes where needed
+(Error State and Notification Center plates).
+
+## 10. Showcase application
+
+<Screenshot id="desktop-showcase" alt="Desktop showcase: vibrant shell chrome, sidebar, document workspace, status bar, notification center" />
+
+`cargo run --release -p refineui-gallery -- --story desktop-showcase`
+
+## 11. Benchmarks
+
+`scripts/bench.sh` runs the blur benchmark at 1, 8 and 16 panels, with the
+cache on and off, and records the results in `bench/results/`. On the Linux
+software renderer (lavapipe), 16 moving panels cost one extra refresh
+interval (32 ms per frame). With the cache on, static panels stay at the
+60 Hz cap. See [Benchmarks](/report/benchmarks/).
+
+## 12. Automated tests
+
+The suite has 130 tests (unit, contract, render and visual regression) and
+6 gpui patch tests. It also runs fmt, clippy with `-D warnings` (with and
+without features), a no-default-features build, a docs build, a check that
+only one gpui is in the graph, and a macOS cross type-check. See
+[Test results](/report/testing/).
+
+## 13. Limitations and roadmap
+
+See [Limitations and roadmap](/report/roadmap/) and
+[Cross-platform validation](/report/cross-platform/).

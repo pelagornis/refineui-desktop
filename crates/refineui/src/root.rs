@@ -37,8 +37,8 @@ pub fn root(cx: &App) -> Div {
         .bg(theme.colors.background_primary)
         .text_color(theme.colors.foreground_primary)
         .font_family(theme.font_family.clone())
-        .text_size(gpui::px(refineui_tokens::typography::role::BODY_MD.size))
-        .line_height(gpui::px(refineui_tokens::typography::role::BODY_MD.line_height))
+        .text_size(gpui::px(refineui_foundation::typography::role::BODY_MD.size))
+        .line_height(gpui::px(refineui_foundation::typography::role::BODY_MD.line_height))
         .on_action(|_: &FocusNext, window, _| window.focus_next())
         .on_action(|_: &FocusPrevious, window, _| window.focus_prev())
         // `:focus-visible` — rings follow keyboard navigation, not clicks.

@@ -1,19 +1,20 @@
 ---
 title: Time Input
-description: "Field that opens hour / minute wheels (web `TimeInput`)."
+description: "Native segmented time entry with an optional hour / minute wheel popover (web `TimeInput`)."
 sidebar:
-  order: 63
+  order: 74
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-Field that opens hour / minute wheels (web `TimeInput`).
+Native segmented time entry with an optional hour / minute wheel popover (web `TimeInput`).
 
 <Screenshot id="time-input" alt="Time Input variants and states" />
 
 ## Usage
 
-- Wheels are 140px tall with 32px rows; rows fade toward the edges and the wheel snaps to a row 120ms after scrolling stops.
+- Type straight into the field: hour, minute and (12-hour) AM/PM are separate segments. Digits fill the focused segment and auto-advance (e.g. `9` → hour 09 → minute); ↑ / ↓ step the segment (minutes by `minute_step`), ← / → / Tab move between segments, Backspace clears, `a` / `p` set the period.
+- The clock button opens the wheels: 140px tall with 32px rows; rows fade toward the edges and the wheel snaps to a row 120ms after scrolling stops.
 - `minute_step(15)` and `twelve_hour(true)` match the web props.
 
 ```rust
@@ -43,7 +44,7 @@ Source: [`crates/refineui/src/components/time_input.rs`](https://github.com/pela
 
 ### TimeInput
 
-A time field with a wheel picker.
+A time field with native segment entry and a wheel picker.
 
 | Method | Description |
 | --- | --- |

@@ -1,27 +1,32 @@
 ---
 title: Tabs
-description: "Switch between views in the same context."
+description: "Switch between views in the same context (web `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`)."
 sidebar:
-  order: 34
+  order: 39
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-Switch between views in the same context.
+Switch between views in the same context (web `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`).
 
 <Screenshot id="tabs" alt="Tabs variants and states" />
 
 ## Usage
 
+- Same model as the web: tabs are identified by a string `value`; `default_value` makes it uncontrolled, `value` + `on_value_change` controlled.
+- Each `TabsContent` renders only while its value is selected, `gap-medium` below the list.
+- Keyboard: the list is one tab stop; ← / → move and select (roving focus), Home / End jump to the ends; disabled triggers are skipped.
 
 ```rust
 use refineui::prelude::*;
 
-Tabs::new("tabs", [Tab::new("Overview"), Tab::new("Issues").count(12)], self.tab)
-    .on_change(cx.listener(|this, ix: &usize, _, cx| {
-        this.tab = *ix;
-        cx.notify();
-    }));
+Tabs::new("project")
+    .default_value("overview")
+    .trigger(TabsTrigger::new("overview", "Overview"))
+    .trigger(TabsTrigger::new("issues", "Issues").count(12))
+    .trigger(TabsTrigger::new("settings", "Settings").disabled(true))
+    .content(TabsContent::new("overview", overview))
+    .content(TabsContent::new("issues", issues));
 ```
 
 Open the live, interactive version in the gallery:
@@ -40,21 +45,34 @@ Source: [`crates/refineui/src/components/tabs.rs`](https://github.com/pelagornis
 
 ### Tabs
 
-Horizontal tab list (web `Tabs`). Render the selected panel yourself below it.  `captionLg` triggers over a 1px `borderDefault` rule; a 2px brand underline slides to the selected tab (transform + width over `duration-medium`, emphasized). Unselected tabs are `foregroundTertiary`, hover `foregroundPrimaryHover`; hovering the selected tab tints the line `brandHover`.
+Web `Tabs` root: a `TabsList` of triggers plus optional content panels.  `captionLg` triggers over a 1px `borderDefault` rule; a 2px brand underline slides to the selected tab (transform + width over `duration-medium`, emphasized). Unselected tabs are `foregroundTertiary`, hover `foregroundPrimaryHover`; hovering the selected tab tints the line `brandHover`.
 
 | Method | Description |
 | --- | --- |
-| `fn new(id: impl Into<ElementId>, tabs: impl IntoIterator<Item = impl Into<Tab>>, selected: usize) -> Self` | New tab list. |
-| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the chosen index. |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty tab root. |
+| `fn trigger(mut self, trigger: TabsTrigger) -> Self` | Adds a trigger to the list. |
+| `fn triggers(mut self, triggers: impl IntoIterator<Item = TabsTrigger>) -> Self` | Adds several triggers. |
+| `fn content(mut self, content: TabsContent) -> Self` | Adds a content panel. |
+| `fn value(mut self, value: impl Into<SharedString>) -> Self` | Controlled selected value. |
+| `fn default_value(mut self, value: impl Into<SharedString>) -> Self` | Initial value when uncontrolled (defaults to the first enabled trigger). |
+| `fn on_value_change(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Called with the newly selected value. |
 
-### Tab
+### TabsTrigger
 
-One tab.
+One trigger in the list (web `TabsTrigger`).
 
 | Method | Description |
 | --- | --- |
-| `fn new(label: impl Into<SharedString>) -> Self` | New tab. |
+| `fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | Trigger for `value` showing `label`. |
 | `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
 | `fn count(mut self, count: usize) -> Self` | Trailing counter badge. |
-| `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled (skipped by keyboard navigation). |
+
+### TabsContent
+
+A panel shown while its `value` is selected (web `TabsContent`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(value: impl Into<SharedString>, child: impl IntoElement) -> Self` | Panel for `value`. |
 

@@ -1,0 +1,77 @@
+---
+title: Cross-platform validation
+description: What was validated on macOS, Linux and Windows, how, and what still needs a machine.
+sidebar:
+  order: 4
+---
+
+| | macOS | Linux | Windows |
+| --- | --- | --- | --- |
+| Renderer | Metal | Blade (Vulkan) | DirectX 11 |
+| Backdrop blur | yes (MSL kernels) | yes (WGSL kernels) | no: documented fallback fill |
+| Blur cache | yes | yes | — |
+| Native frost pop-ups | NSVisualEffectView (`vibrancy`), turns in-app blur off | — | — |
+| Window chrome | traffic-light inset, global menu bar | client-side decorations, in-window menu bar | caption buttons, in-window menu bar |
+| Shortcut labels | `⇧⌘P`, one keycap per stroke | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
+| Scrollbars | overlay | overlay | persistent |
+| Visual baselines | create with `--update` | committed | create with `--update` |
+
+## macOS
+
+How it was validated:
+
+- Every phase was type-checked from Linux with
+  `scripts/macos-check/check.sh` (`cargo check --target aarch64-apple-darwin`
+  with stubbed system tools, plus a syntax check of the MSL shim).
+- On the Mac itself, each phase was delivered, and the full suite and docs
+  build passed there (Phase 5: 128 tests, 103 pages).
+- The gallery ran on Metal with no shader compile error or panic:
+  material stories, `desktop-showcase`, `notification-center`, `select`.
+
+Still to confirm on the Mac:
+
+- The look of materials in both appearances, compared with the Linux
+  screenshots.
+- Frame rates: run `scripts/bench.sh`.
+- Create and commit the macOS visual baselines
+  (`scripts/visual-regression.sh --update`). The terminal needs the Screen
+  Recording permission.
+- Native frost on: chrome and popovers fall back to opaque with no
+  double tint.
+- Reduced motion (`ReducedMotion`) and reduced transparency.
+
+## Linux
+
+Every check runs here (the development box): X11 through Xvfb, Vulkan on
+lavapipe (software). This covers:
+
+- The full suite.
+- All 172 screenshots.
+- Visual regression against committed baselines.
+- Benchmarks.
+
+Not validated:
+
+- Wayland sessions. They use the same Blade renderer; window decorations
+  follow GPUI's Wayland client.
+- Hardware GPUs (Mesa radv / anv, NVIDIA).
+
+## Windows
+
+Not run on a Windows machine. What is covered:
+
+- Shared code builds on all targets.
+- `WindowsAdapter` (caption buttons, labels, persistent scrollbars) is
+  unit-tested and previewed in the gallery via the OS picker
+  (`chrome_os`).
+- DirectX returns `backdrop_blur_supported() == false`, so every material
+  paints its opaque fallback (fill, grain, quad lighting, border). The
+  `material` feature therefore works, without blur.
+
+To validate on Windows:
+
+```sh
+cargo test --workspace --all-features
+cargo run --release -p refineui-gallery
+scripts/visual-regression.sh --update   # Git Bash; then compare on later runs
+```

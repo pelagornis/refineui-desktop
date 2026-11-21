@@ -24,7 +24,7 @@ use gpui::{
     AnyElement, App, ElementId, IntoElement, KeyDownEvent, ParentElement, RenderOnce, Styled,
     Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke};
+use refineui_foundation::{radius, spacing, stroke};
 
 use crate::motion::{Motion, animate, child_id, probe, use_layout_probe};
 use crate::{ActiveTheme, Button, ButtonVariant, ControlSize, Elevation, IconName};

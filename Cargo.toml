@@ -1,25 +1,43 @@
 [workspace]
 resolver = "3"
-members = ["crates/refineui-tokens", "crates/refineui", "examples/gallery"]
-default-members = ["crates/refineui-tokens", "crates/refineui", "examples/gallery"]
+members = [
+    "crates/refineui-foundation",
+    "crates/refineui-tokens",
+    "crates/refineui-material",
+    "crates/refineui",
+    "examples/gallery",
+]
+default-members = [
+    "crates/refineui-foundation",
+    "crates/refineui-tokens",
+    "crates/refineui-material",
+    "crates/refineui",
+    "examples/gallery",
+]
+# The vendored, minimally patched gpui is a path dependency, not a member
+# (keeps `--workspace` lints and tests on our code only).
+exclude = ["vendor/gpui"]
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.88"
+rust-version = "1.98" # refineui-system-icons requires 1.98
 license = "MIT"
 repository = "https://github.com/pelagornis/refineui-gpui"
-homepage = "https://github.com/pelagornis/refineui-gpui"
 authors = ["Pelagornis"]
 
 [workspace.dependencies]
 refineui = { path = "crates/refineui", version = "0.1.0" }
-refineui-tokens = { path = "crates/refineui-tokens", version = "0.1.0" }
+refineui-foundation = { path = "crates/refineui-foundation", version = "0.1.0" }
+refineui-material = { path = "crates/refineui-material", version = "0.1.0" }
 gpui = { version = "0.2.2", features = ["runtime_shaders"] } # compile Metal shaders at runtime; no Xcode Metal Toolchain needed
 smallvec = "1"
 unicode-segmentation = "1.12"
 anyhow = "1"
 png = "0.17"
+# Icons: the user's icon repo, pinned. default-features = false drops its optional
+# zed-git `gpui` dependency so only crates.io gpui 0.2.2 is in the graph.
+refineui-system-icons = { git = "https://github.com/pelagornis/refineui-system-icons", rev = "92f5616b1dda54ea426e25db97e4a472214c920c", default-features = false }
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -47,3 +65,9 @@ opt-level = 1
 [profile.release]
 lto = "thin"
 codegen-units = 16
+
+# gpui 0.2.2 with one addition: the BackdropBlur primitive (real backdrop
+# sampling, see vendor/gpui/REFINEUI_PATCH.md). Same version as crates.io, so
+# there is still exactly one gpui in the graph.
+[patch.crates-io]
+gpui = { path = "vendor/gpui" }

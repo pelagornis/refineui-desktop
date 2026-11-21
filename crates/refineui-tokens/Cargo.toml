@@ -1,15 +1,15 @@
 [package]
 name = "refineui-tokens"
-description = "RefineUI design tokens (palette, semantic colors, typography, spacing, radius, elevation, motion) as plain Rust data."
+description = "Compatibility name for refineui-foundation (RefineUI design tokens). New code should depend on refineui-foundation."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-homepage.workspace = true
 authors.workspace = true
 
 [dependencies]
+refineui-foundation.workspace = true
 
 [lints]
 workspace = true

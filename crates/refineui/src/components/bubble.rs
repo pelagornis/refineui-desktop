@@ -19,7 +19,7 @@ use gpui::{
     AnyElement, App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
     prelude::*, px, relative,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::{ActiveTheme, Elevation, StyledExt};
 

@@ -16,7 +16,7 @@ use gpui::{
     Pixels, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, anchored, div,
     point, prelude::*, px,
 };
-use refineui_tokens::{radius, size::component, spacing, typography::role};
+use refineui_foundation::{radius, size::component, spacing, typography::role};
 use smallvec::SmallVec;
 
 use crate::motion::{Motion, Presence, child_id, presence};
@@ -62,6 +62,8 @@ pub struct Dialog {
     on_close: Option<CloseHandler>,
     inline: bool,
     open: bool,
+    bare: bool,
+    material: bool,
 }
 
 impl Dialog {
@@ -77,7 +79,25 @@ impl Dialog {
             on_close: None,
             inline: false,
             open: true,
+            bare: false,
+            material: false,
         }
+    }
+
+    /// Draw the panel as the Sheet material (thick blur, glass rim, modal
+    /// shadow) when [`crate::materials_active`]; otherwise unchanged.
+    /// Default `false` (web parity: an opaque `backgroundPrimary` panel).
+    pub fn material(mut self, material: bool) -> Self {
+        self.material = material;
+        self
+    }
+
+    /// Transparent panel without title, padding or chrome: children float on
+    /// the scrim (web `DialogContent` with `commandStyles.dialogContentPanel`,
+    /// used by [`crate::CommandDialog`]).
+    pub fn bare(mut self, bare: bool) -> Self {
+        self.bare = bare;
+        self
     }
 
     /// Supporting text under the title.
@@ -182,8 +202,54 @@ impl RenderOnce for Dialog {
                 cx,
             )
         };
-        let focus = focus_on_mount(&self.id, window, cx);
         let max_h = window.viewport_size().height * 0.9;
+        if self.bare {
+            // Bare panels don't take focus: their content (e.g. a search
+            // field) is focused by the owner; Escape still bubbles to the layer.
+            let panel = div()
+                .id("panel")
+                .occlude()
+                .w(self.size.px())
+                .max_w_full()
+                .max_h(max_h)
+                .flex()
+                .flex_col()
+                .font_family(theme.font_family.clone())
+                .text_color(c.foreground_primary)
+                .opacity(p.progress)
+                .mt(px((1. - p.progress) * spacing::SMALL * 2.))
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .children(self.children);
+            if self.inline {
+                return panel.into_any_element();
+            }
+            return modal_layer(
+                self.id,
+                panel.into_any_element(),
+                if p.open { self.on_close } else { None },
+                false,
+                scrim_p,
+                window,
+                cx,
+            );
+        }
+        let focus = focus_on_mount(&self.id, window, cx);
+        let plate = if self.material {
+            crate::material::backing(
+                crate::SurfaceKind::Sheet,
+                px(radius::XX_LARGE),
+                0.,
+                c.background_primary,
+                None,
+                theme.shadow(Elevation::FLOATING),
+                cx,
+            )
+        } else {
+            crate::material::Backing::opaque(
+                c.background_primary,
+                theme.shadow(Elevation::FLOATING),
+            )
+        };
         let panel = div()
             .id("panel")
             .track_focus(&focus)
@@ -193,11 +259,10 @@ impl RenderOnce for Dialog {
             .max_h(max_h)
             .flex()
             .flex_col()
-            .gap(px(spacing::LARGE))
-            .p(px(spacing::XX_LARGE))
             .rounded(px(radius::XX_LARGE))
-            .bg(c.background_primary)
-            .shadow(theme.shadow(Elevation::FLOATING))
+            .bg(plate.fill)
+            .shadow(plate.shadows)
+            .children(plate.layer)
             .font_family(theme.font_family.clone())
             .text_color(c.foreground_primary)
             .text_style_token(role::BODY_MD)
@@ -207,51 +272,58 @@ impl RenderOnce for Dialog {
             .on_click(|_, _, cx| cx.stop_propagation())
             .child(
                 div()
+                    .p(px(spacing::XX_LARGE))
                     .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap(px(spacing::X_SMALL))
+                    .flex_col()
+                    .gap(px(spacing::LARGE))
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
                             .flex()
-                            .flex_col()
+                            .items_start()
+                            .justify_between()
                             .gap(px(spacing::X_SMALL))
                             .child(
                                 div()
-                                    .text_style_token(role::SUBTITLE_LG)
-                                    .child(self.title),
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(spacing::X_SMALL))
+                                    .child(
+                                        div()
+                                            .text_style_token(role::SUBTITLE_LG)
+                                            .child(self.title),
+                                    )
+                                    .when_some(self.description, |d, t| {
+                                        d.child(
+                                            div()
+                                                .text_style_token(role::BODY_XS)
+                                                .text_color(c.foreground_secondary)
+                                                .child(t),
+                                        )
+                                    }),
                             )
-                            .when_some(self.description, |d, t| {
-                                d.child(
-                                    div()
-                                        .text_style_token(role::BODY_XS)
-                                        .text_color(c.foreground_secondary)
-                                        .child(t),
-                                )
-                            }),
+                            .child(close_button(child_id(&self.id, "close"), self.on_close.clone())),
                     )
-                    .child(close_button(child_id(&self.id, "close"), self.on_close.clone())),
-            )
-            .when(!self.children.is_empty(), |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(spacing::LARGE))
-                        .children(self.children),
-                )
-            })
-            .when_some(self.footer, |d, f| {
-                d.child(
-                    div()
-                        .flex()
-                        .justify_end()
-                        .gap(px(spacing::X_SMALL))
-                        .child(f),
-                )
-            });
+                    .when(!self.children.is_empty(), |d| {
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(spacing::LARGE))
+                                .children(self.children),
+                        )
+                    })
+                    .when_some(self.footer, |d, f| {
+                        d.child(
+                            div()
+                                .flex()
+                                .justify_end()
+                                .gap(px(spacing::X_SMALL))
+                                .child(f),
+                        )
+                    }),
+            );
 
         if self.inline {
             return panel.into_any_element();
@@ -277,9 +349,28 @@ pub(crate) fn modal_layer(
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
-    // `surfaceOverlay` scrim (web adds a 2px backdrop blur GPUI cannot draw).
-    let mut scrim = cx.theme().colors.surface_overlay;
+    // `surfaceOverlay` scrim. With materials active it is the Scrim material
+    // (the web's 2px backdrop blur + dim), faded with the scrim progress.
+    let backdrop = crate::material::backing(
+        crate::SurfaceKind::Scrim,
+        px(0.),
+        0.,
+        cx.theme().colors.surface_overlay,
+        None,
+        Vec::new(),
+        cx,
+    );
+    let mut scrim = backdrop.fill;
     scrim.a *= scrim_progress;
+    let scrim_layer = backdrop.layer.map(|layer| {
+        div()
+            .absolute()
+            .top_0()
+            .left_0()
+            .size_full()
+            .opacity(scrim_progress)
+            .child(layer)
+    });
     let viewport = window.viewport_size();
     let close_click = on_close.clone();
     let close_key = on_close;
@@ -309,6 +400,7 @@ pub(crate) fn modal_layer(
                         h(w, cx)
                     }
                 })
+                .children(scrim_layer)
                 .child(panel),
         ),
     )

@@ -13,7 +13,7 @@ use gpui::{
     App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, Styled, Window, div, prelude::*, px, relative,
 };
-use refineui_tokens::{
+use refineui_foundation::{
     motion::{duration, easing},
     radius,
     size::component,

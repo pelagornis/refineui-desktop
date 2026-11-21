@@ -1,0 +1,92 @@
+---
+title: Preferences Window
+description: "The layout of a preferences / settings window: a sidebar of sections and a content pane of titled groups with label + control rows."
+sidebar:
+  order: 68
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The layout of a preferences / settings window: a sidebar of sections and a content pane of titled groups with label + control rows.
+
+<Screenshot id="preferences-window" alt="Preferences Window variants and states" />
+
+## Usage
+
+- The sidebar is window chrome: a `Sidebar` material with the `material` feature (vibrant over a transparent window), `surfaceSunken` otherwise; the selected section gets `backgroundSurfaceSelected` and a brand glyph.
+- The content pane shows the section title (`titleSm`) and description, then your `PreferencesGroup`s, capped at 640px for readable line lengths.
+- A group is a `backgroundSurface` card (12px radius) with hairline separators between `PreferencesRow`s; the row puts the label and description left and any control (Switch, Select, ShortcutRecorder…) right.
+- Open it in its own window (`WindowPreset` dialog size) or as a page of the main window.
+
+```rust
+use refineui::prelude::*;
+
+PreferencesWindow::new("prefs")
+    .section(PreferencesSection::new("General", IconName::Settings)
+        .description("How the app starts, saves and updates."))
+    .section(PreferencesSection::new("Shortcuts", IconName::Keyboard))
+    .selected(self.section)
+    .on_select(cx.listener(|this, ix: &usize, _, cx| { this.section = *ix; cx.notify(); }))
+    .child(
+        PreferencesGroup::new()
+            .title("Startup")
+            .row(PreferencesRow::new("Open at login")
+                .description("Start in the menu bar when you sign in.")
+                .control(Switch::new("login", self.open_at_login))),
+    )
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story preferences-window
+```
+
+## API
+
+Source: [`crates/refineui/src/shell/preferences.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/preferences.rs)
+
+### PreferencesWindow
+
+Sidebar + content preferences layout.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty layout. |
+| `fn section(mut self, s: PreferencesSection) -> Self` | Add a sidebar section. |
+| `fn selected(mut self, ix: usize) -> Self` | Selected section index. |
+| `fn on_select(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Section click. |
+| `fn child(mut self, el: impl IntoElement) -> Self` | Content of the selected section (usually `PreferencesGroup`s). |
+| `fn sidebar_width(mut self, w: impl Into<Pixels>) -> Self` | Sidebar width (default 208px). |
+| `fn footer(mut self, el: impl IntoElement) -> Self` | Element pinned at the bottom of the sidebar (account, version). |
+
+### PreferencesSection
+
+One entry in the `PreferencesWindow` sidebar.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>, icon: IconName) -> Self` | Section with a label and glyph. |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Line under the section title in the content pane. |
+
+### PreferencesGroup
+
+A titled card of `PreferencesRow`s.
+
+| Method | Description |
+| --- | --- |
+| `fn new() -> Self` | Untitled group. |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Group heading. |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Text under the card. |
+| `fn row(mut self, r: impl IntoElement) -> Self` | Add a row (usually a `PreferencesRow`). |
+
+### PreferencesRow
+
+Label (+ description) on the left, control on the right.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Row with a label. |
+| `fn description(mut self, d: impl Into<SharedString>) -> Self` | Secondary line under the label. |
+| `fn control(mut self, el: impl IntoElement) -> Self` | Trailing control (Switch, Select, ShortcutRecorder, …). |
+

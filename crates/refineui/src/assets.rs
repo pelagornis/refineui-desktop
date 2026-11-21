@@ -2,9 +2,7 @@ use std::borrow::Cow;
 
 use gpui::{App, AssetSource, Result, SharedString};
 
-use crate::icon_names;
-
-/// GPUI [`AssetSource`] serving RefineUI's embedded icons (`icons/*.svg`).
+/// GPUI [`AssetSource`] serving RefineUI System Icons (`icons/<slug>-<size>-<style>.svg`).
 ///
 /// Pass it to `Application::new().with_assets(refineui::Assets)`. If your app
 /// already has an asset source, fall back to this one for `icons/` paths.
@@ -20,14 +18,22 @@ impl AssetSource for Assets {
         if path == SPINNER_PATH {
             return Ok(Some(Cow::Borrowed(SPINNER_SVG)));
         }
-        Ok(icon_names::embedded(path).map(Cow::Borrowed))
+        Ok(crate::icon::svg_for_path(path).map(|svg| Cow::Borrowed(svg.as_bytes())))
     }
 
     fn list(&self, path: &str) -> Result<Vec<SharedString>> {
-        Ok(icon_names::EMBEDDED_PATHS
+        if !"icons/".starts_with(path) && !path.starts_with("icons/") {
+            return Ok(Vec::new());
+        }
+        // Every curated icon at 20px (the full set is 890 glyphs x 7 sizes x 2 styles;
+        // listing all of it is never useful).
+        Ok(crate::IconName::ALL
             .iter()
+            .flat_map(|n| {
+                [crate::IconStyle::Regular, crate::IconStyle::Filled]
+                    .map(|st| crate::icon::asset_path(n.glyph(), 20, st))
+            })
             .filter(|p| p.starts_with(path))
-            .map(|p| SharedString::from(*p))
             .collect())
     }
 }

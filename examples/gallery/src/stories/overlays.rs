@@ -30,6 +30,14 @@ pub(super) fn stories() -> Vec<Story> {
             render: popover,
         },
         Story {
+            id: "popover-sides",
+            name: "Popover Sides",
+            group: StoryGroup::Overlays,
+            summary: "Popover beak on each side, continuous with the panel.",
+            shot: (1100., 500.),
+            render: popover_sides,
+        },
+        Story {
             id: "dialog",
             name: "Dialog",
             group: StoryGroup::Overlays,
@@ -159,6 +167,42 @@ fn popover(w: &mut Window, cx: &mut App) -> AnyElement {
         .flex()
         .justify_center()
         .child(if *shot.read(cx) { p.force_open() } else { p })
+        .into_any_element()
+}
+
+fn popover_sides(_w: &mut Window, cx: &mut App) -> AnyElement {
+    let cell = |side: AnchorSide, label: &'static str, cx: &App| {
+        let body = Text::new(label).role(TextRole::BodyMd).into_any_element();
+        div()
+            .p(px(16.))
+            .child(popover_panel_at(
+                None,
+                body,
+                None,
+                PopoverAlign::Center,
+                side,
+                None,
+                cx,
+            ))
+            .into_any_element()
+    };
+    div()
+        .w(px(1040.))
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .child(cell(AnchorSide::Top, "Top", cx))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(cell(AnchorSide::Left, "Left", cx))
+                .child(Button::new("pop-sides-target", "Trigger").variant(ButtonVariant::Secondary))
+                .child(cell(AnchorSide::Right, "Right", cx)),
+        )
+        .child(cell(AnchorSide::Bottom, "Bottom", cx))
         .into_any_element()
 }
 

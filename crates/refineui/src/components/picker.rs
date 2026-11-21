@@ -6,7 +6,7 @@ use gpui::{
     AnyElement, App, ElementId, Entity, MouseButton, ParentElement, Styled, Window, anchored, div,
     prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke};
+use refineui_foundation::{radius, spacing, stroke};
 
 use crate::components::floating::{Beak, BeakAlign, BeakSide, floating_gap, floating_surface};
 use crate::motion::{Motion, animate, child_id, presence, probe, use_layout_probe};
@@ -31,6 +31,8 @@ pub(crate) struct PickerField {
     pub disabled: bool,
     pub open: bool,
     pub full_width: bool,
+    /// Replaces the value/placeholder text (TimeInput's editable segments).
+    pub content: Option<AnyElement>,
 }
 
 /// The trigger button: Input shell (border default → hover → focus halo while
@@ -101,8 +103,9 @@ pub(crate) fn picker_field(
                 cx.notify();
             })
         })
-        .child(
-            div()
+        .child(match f.content {
+            Some(content) => div().flex_1().min_w_0().child(content),
+            None => div()
                 .flex_1()
                 .min_w_0()
                 .overflow_hidden()
@@ -110,7 +113,7 @@ pub(crate) fn picker_field(
                 .text_ellipsis()
                 .when(f.text.is_none(), |d| d.text_color(c.foreground_placeholder))
                 .child(f.text.unwrap_or(f.placeholder)),
-        )
+        })
         .child(
             Icon::new(f.icon)
                 .size(IconSize::Small)
@@ -152,7 +155,7 @@ pub(crate) fn picker_popup(
     };
     let toggle = open.clone();
     let close_out = open.clone();
-    let gap = floating_gap(refineui_tokens::size::component::POPOVER_BEAK_HEIGHT);
+    let gap = floating_gap(refineui_foundation::size::component::POPOVER_BEAK_HEIGHT);
     // Slide from the trigger side: -6px → 0 while entering.
     let slide = px(-spacing::X_SMALL * (1. - p.progress));
     div()

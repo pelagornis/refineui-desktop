@@ -23,7 +23,7 @@ use gpui::{
     AnyElement, App, ElementId, Entity, InteractiveElement, IntoElement, ParentElement, Pixels,
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{
+use refineui_foundation::{
     motion::duration, radius, shadow::Elevation, spacing, stroke, typography::role,
 };
 
@@ -113,7 +113,7 @@ impl Sidebar {
             footer_items: Vec::new(),
             groups: Vec::new(),
             selected: None,
-            width: Some(px(refineui_tokens::size::component::SIDEBAR_WIDTH)),
+            width: Some(px(refineui_foundation::size::component::SIDEBAR_WIDTH)),
             collapsed: false,
             embedded: false,
             on_select: None,
@@ -363,7 +363,11 @@ impl RenderOnce for Sidebar {
             .when_some(self.width, |d, w| d.w(w).flex_none())
             .when(self.width.is_none(), |d| d.w_full().flex_1())
             .when(!self.embedded, |d| {
-                d.bg(c.background_primary)
+                let (fill, layer) =
+                    crate::material::chrome(crate::SurfaceKind::Sidebar, c.background_primary, cx);
+                d.relative()
+                    .bg(fill)
+                    .children(layer)
                     .border_r(hairline)
                     .border_color(c.border_default)
             })
@@ -565,7 +569,10 @@ impl RenderOnce for SidebarPeek {
         let open = state.read(cx).open;
         let gap = px(12.); // --refineui-sidebar-peek-float-gap
         let hidden_x = -(self.width + gap);
-        let slide = Motion::new(duration::OVERLAY, refineui_tokens::motion::easing::STANDARD);
+        let slide = Motion::new(
+            duration::OVERLAY,
+            refineui_foundation::motion::easing::STANDARD,
+        );
         let x = animate(
             child_id(&self.id, "x"),
             if open { px(0.) } else { hidden_x },
@@ -594,6 +601,15 @@ impl RenderOnce for SidebarPeek {
             s.color.a *= lift;
             s
         }));
+        let peek = crate::material::backing(
+            crate::SurfaceKind::Popover,
+            px(radius::XX_LARGE),
+            1.,
+            theme.floating_fill(),
+            Some(c.border_default),
+            shadow,
+            cx,
+        );
         let visible = x > hidden_x + px(0.5);
         let pin = self.on_pin.clone();
         let close_state = state.clone();
@@ -627,13 +643,14 @@ impl RenderOnce for SidebarPeek {
                         .flex_col()
                         .rounded(px(radius::XX_LARGE))
                         .border_1()
-                        .border_color(c.border_default)
+                        .border_color(peek.border)
                         // Web: `surfaceFrosted` (55%) + `backdrop-filter:
-                        // blur(surfaceFrost)`. GPUI cannot blur what is behind,
-                        // and the bare 55% fill would show the page sharply, so
-                        // use the frost-over-page color like Menu / Select.
-                        .bg(theme.floating_fill())
-                        .shadow(shadow)
+                        // blur(surfaceFrost)`: the Popover material when
+                        // materials are active, else the frost-over-page color
+                        // (stock GPUI cannot blur what is behind).
+                        .bg(peek.fill)
+                        .shadow(peek.shadows)
+                        .children(peek.layer)
                         .overflow_hidden()
                         .track_interaction(&surface_state)
                         .on_mouse_down_out(move |_, w, cx| {

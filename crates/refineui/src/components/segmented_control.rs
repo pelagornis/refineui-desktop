@@ -8,7 +8,7 @@ use gpui::{
 };
 
 use gpui::CursorStyle;
-use refineui_tokens::{spacing, typography::role};
+use refineui_foundation::{spacing, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, probe, use_interaction,

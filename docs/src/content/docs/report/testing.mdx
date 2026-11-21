@@ -1,0 +1,93 @@
+---
+title: Test results
+description: What the automated suite covers, how to run it, the visual regression tests and the latest results.
+sidebar:
+  order: 3
+---
+
+## Suite
+
+| Check | Command |
+| --- | --- |
+| Format | `cargo fmt --all --check` |
+| Build, all features | `cargo build --workspace --all-features` |
+| Lint, default and all features | `cargo clippy --workspace --all-targets [--all-features] -- -D warnings` |
+| refineui without `material` | `cargo clippy -p refineui --all-targets -- -D warnings` |
+| Tests | `cargo test --workspace --all-features` |
+| No default features | `cargo build -p refineui --no-default-features` |
+| Docs site | `cd docs && bun run build` |
+| One gpui | `cargo tree -i gpui` lists a single version |
+| gpui patch | `scripts/test_gpui_patch.sh` |
+| macOS type-check from Linux | `scripts/macos-check/check.sh` (Rust and the MSL shim) |
+| Visual regression | `scripts/visual-regression.sh` |
+
+## Latest results (2026-11-20, Linux)
+
+| Target | Tests |
+| --- | --- |
+| `refineui` unit tests (motion, springs, keymap, selection, dnd, layout, platform, materials glue, shortcut keys…) | 99 |
+| `refineui` contracts (schema, density sizes, every public component has a contract) | 3 |
+| `refineui` nested layers (deferred / layer nesting draws without panicking) | 2 |
+| `refineui-foundation` | 9 |
+| `refineui-material` | 11 |
+| `refineui-tokens` | 1 |
+| Gallery: every story renders in a debug build, light and dark; story ids unique | 1 + 1 |
+| Gallery: visual regression (compare and pixel diff) | 2 |
+| Doc tests | 1 |
+| **Total** | **130 passed, 0 failed** |
+| gpui patch tests (`BackdropBlur` ordering, cache, …) | 6 passed |
+
+Every other check in the table above passes as well: fmt, clippy (both
+feature sets), the build without default features, the docs site
+(102 pages plus the API reference), one gpui, and the macOS type-check.
+On the Mac (Phase 5 build), the suite passes with 128 tests and 103 docs
+pages, and the gallery runs on Metal.
+
+## Visual regression
+
+`examples/gallery/tests/visual_regression.rs` renders a set of stories in
+light and dark with the `refineui-screenshots` binary:
+
+- button
+- select
+- material-recipes
+- material-components
+- application-shell
+- notification-center
+- result
+- desktop-showcase
+
+It compares each PNG with `tests/visual/baselines/<os>/`:
+
+- A pixel differs when any RGBA channel differs by more than
+  `REFINEUI_VISUAL_THRESHOLD` (default 24/255). This absorbs GPU and font
+  anti-aliasing noise.
+- A story fails when more than `REFINEUI_VISUAL_TOLERANCE` (default 0.5%)
+  of its pixels differ, or when its size changed.
+- Failures write the actual image and a red-on-grey diff to
+  `target/visual-regression/`.
+
+```sh
+./scripts/visual-regression.sh            # compare
+./scripts/visual-regression.sh --update   # write this OS's baselines
+./scripts/visual-regression.sh --strict   # fail instead of skipping
+./scripts/visual-regression.sh --only select,result
+```
+
+Baselines are per OS because font rasterization and GPU differ between
+platforms. Linux baselines are committed (rendered at 2× on Xvfb and
+lavapipe). Create the macOS ones on the Mac with `--update`.
+
+The test **skips** with a note on stderr, and passes, when it cannot render:
+
+- `REFINEUI_VISUAL=0` is set.
+- Linux with no `$DISPLAY`.
+- No baselines exist for this OS.
+- The renderer fails: no GPU, no display, or no Screen Recording permission
+  on macOS.
+- The renderer times out.
+
+With `--strict` (`REFINEUI_VISUAL_STRICT=1`), these skips fail instead; use
+this on CI machines that have a display. The latest Linux run: all 16
+images within 0.005% (the button's focus-ring edge); every other image was
+identical.

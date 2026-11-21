@@ -13,8 +13,11 @@ mod display;
 mod extra;
 mod forms;
 mod foundations;
+mod materials;
 mod navigation;
 mod overlays;
+
+pub(crate) use desktop::DESKTOP_SHOWCASE_SIZE;
 
 /// Sidebar group.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -35,14 +38,11 @@ pub enum StoryGroup {
     Data,
     /// Desktop shell chrome and interaction (Phase 2).
     Desktop,
-    /// Web-oriented components behind the `web-extras` feature (not in
-    /// Desktop Core).
-    Optional,
 }
 
 impl StoryGroup {
     /// All groups in sidebar order.
-    pub const ALL: [StoryGroup; 9] = [
+    pub const ALL: [StoryGroup; 8] = [
         Self::Foundations,
         Self::Actions,
         Self::Forms,
@@ -51,7 +51,6 @@ impl StoryGroup {
         Self::Overlays,
         Self::Data,
         Self::Desktop,
-        Self::Optional,
     ];
 
     /// Label.
@@ -65,7 +64,6 @@ impl StoryGroup {
             Self::Overlays => "Overlays",
             Self::Data => "Data",
             Self::Desktop => "Desktop shell",
-            Self::Optional => "Optional (web-extras)",
         }
     }
 }
@@ -87,10 +85,61 @@ pub struct Story {
     pub render: fn(&mut Window, &mut App) -> AnyElement,
 }
 
+/// Stories whose fixed showcase is wider than the gallery Preview card in
+/// the default 1200×820 window (sidebar 260, body padding 48, preview
+/// padding 40: ~764px inner). The gallery shows a launch button that
+/// opens the story in a separate window; `refineui-screenshots` and the
+/// visual-regression tests still call [`Story::render`] directly.
+///
+/// Measured content widths (not screenshot canvas):
+/// `desktop-showcase` / `application-shell` 1280, `preferences-window` 720,
+/// `titlebar` 840, `status-bar` 820, `notification-center` 772.
+/// Not included: `activity-bar` (three rails, comfortably under 764),
+/// `menu-bar` (660), `drag-and-drop` (340+24+400 = 764, flush with the
+/// preview), `result` (696).
+impl Story {
+    /// Whether the gallery should open this story in an external window.
+    pub fn opens_in_window(&self) -> bool {
+        Self::EXTERNAL_WINDOW_IDS.contains(&self.id)
+    }
+
+    /// These stories are real app windows: they fill the OS window
+    /// edge-to-edge (no padded host chrome, no fake frame). Screenshots
+    /// use [`Story::render`] at the story's content size without the
+    /// usual 24px shot padding.
+    pub fn fills_external_window(&self) -> bool {
+        matches!(
+            self.id,
+            "desktop-showcase" | "preferences-window" | "application-shell"
+        )
+    }
+
+    /// Render this story as the root of an external window.
+    pub fn render_in_window(&self, window: &mut Window, cx: &mut App) -> AnyElement {
+        match self.id {
+            "desktop-showcase" => desktop::desktop_showcase_app(window, cx),
+            "preferences-window" => desktop::preferences_window_app(window, cx),
+            "application-shell" => desktop::application_shell_app(window, cx),
+            _ => (self.render)(window, cx),
+        }
+    }
+
+    /// Story ids that use the external-window Preview button.
+    pub const EXTERNAL_WINDOW_IDS: &'static [&'static str] = &[
+        "application-shell",
+        "titlebar",
+        "status-bar",
+        "notification-center",
+        "preferences-window",
+        "desktop-showcase",
+    ];
+}
+
 /// Every story, in sidebar order.
 pub fn all_stories() -> Vec<Story> {
     let mut v = Vec::new();
     v.extend(foundations::stories());
+    v.extend(materials::stories());
     v.extend(actions::stories());
     v.extend(forms::stories());
     v.extend(display::stories());
@@ -168,5 +217,13 @@ mod tests {
             assert!(s.shot.0 > 0. && s.shot.1 > 0.);
         }
         assert!(stories.len() >= 60);
+        let ids: Vec<_> = stories.iter().map(|s| s.id).collect();
+        for id in Story::EXTERNAL_WINDOW_IDS {
+            assert!(ids.contains(id), "external-window story id {id} is missing");
+        }
+        assert_eq!(
+            stories.iter().filter(|s| s.opens_in_window()).count(),
+            Story::EXTERNAL_WINDOW_IDS.len()
+        );
     }
 }

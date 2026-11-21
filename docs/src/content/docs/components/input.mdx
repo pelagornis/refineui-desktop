@@ -2,7 +2,7 @@
 title: Input
 description: "Single-line text input with selection, clipboard, IME, placeholder, search and password modes."
 sidebar:
-  order: 8
+  order: 12
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -53,9 +53,12 @@ Editable text field: single line (web `Input` / `SearchField`) or multi-line wit
 | Method | Description |
 | --- | --- |
 | `fn new(cx: &mut Context<Self>) -> Self` | Empty input. |
+| `fn glass(mut self, glass: bool) -> Self` | Glass field: the field plate is a material (real blur behind the text) for inputs floating over content, e.g. a search field in a HUD or over media. Only when `crate::materials_active`; otherwise the field paints as usual. Default `false`. |
+| `fn set_glass(&mut self, glass: bool, cx: &mut Context<Self>)` | Runtime form of `Self::glass`. |
 | `fn multiline(cx: &mut Context<Self>) -> Self` | Multi-line field with soft wrap (web `Textarea`): `bodyMd`, `roundedLarge`, 80px minimum height, Enter inserts a newline. |
 | `fn search(cx: &mut Context<Self>) -> Self` | Search field preset (web `SearchField`): search icon, clear button, Esc clears. |
 | `fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self` | Placeholder text. |
+| `fn set_placeholder(&mut self, placeholder: impl Into<SharedString>, cx: &mut Context<Self>)` | Replace the placeholder after creation. |
 | `fn default_value(mut self, value: impl Into<SharedString>) -> Self` | Initial value. |
 | `fn size(mut self, size: ControlSize) -> Self` | Control size. |
 | `fn leading_icon(mut self, icon: IconName) -> Self` | Leading icon. |

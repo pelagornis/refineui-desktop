@@ -1,0 +1,135 @@
+{
+  "$schema": "../schema.json",
+  "id": "sortable-list",
+  "name": "Sortable List",
+  "layer": "interaction",
+  "status": "new",
+  "phase": 2,
+  "feature": null,
+  "desktop_target": "Drag and Drop (lists)",
+  "rust_types": [
+    "SortableList",
+    "SortableDrag"
+  ],
+  "a11y_role": "listbox",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "row plate backgroundPrimaryHover (pointer)"
+    },
+    "pressed": {
+      "status": "planned",
+      "visual": "row plate backgroundPrimaryActive"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "keyboard cursor row plate + focusRing on the container"
+    },
+    "disabled": {
+      "status": "planned",
+      "visual": "row foregroundDisabled, skipped by arrows"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "skeleton rows / trailing spinner"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+    },
+    "dragging": {
+      "status": "implemented",
+      "visual": "row lifts (dragPreview layer); drop indicator between rows"
+    }
+  },
+  "sizes": {
+    "metric": "row",
+    "compact": {
+      "row_height": 26
+    },
+    "comfortable": {
+      "row_height": 32
+    },
+    "spacious": {
+      "row_height": 40
+    }
+  },
+  "tokens": {
+    "color": [
+      "backgroundBrandSubtle",
+      "backgroundPrimary",
+      "backgroundPrimaryHover",
+      "backgroundSurface",
+      "borderFocus",
+      "borderSubtle",
+      "foregroundPrimary",
+      "foregroundSecondary",
+      "foregroundTertiary"
+    ],
+    "radius": [
+      "roundedLarge",
+      "roundedXLarge"
+    ],
+    "spacing": [
+      "sizeSmall",
+      "sizeXSmall",
+      "sizeXxSmall",
+      "sizeXxxSmall"
+    ],
+    "typography": [
+      "bodyMd",
+      "captionLg"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "down",
+      "action": "next item"
+    },
+    {
+      "keys": "up",
+      "action": "previous item"
+    },
+    {
+      "keys": "space",
+      "action": "lift / drop"
+    },
+    {
+      "keys": "enter",
+      "action": "drop"
+    },
+    {
+      "keys": "escape",
+      "action": "cancel drag"
+    },
+    {
+      "keys": "left",
+      "action": "move to previous list"
+    },
+    {
+      "keys": "right",
+      "action": "move to next list"
+    },
+    {
+      "keys": "alt-up",
+      "action": "move item up"
+    },
+    {
+      "keys": "alt-down",
+      "action": "move item down"
+    }
+  ],
+  "focus": {
+    "tab_stop": "roving",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "default",
+    "hover_only": false
+  }
+}

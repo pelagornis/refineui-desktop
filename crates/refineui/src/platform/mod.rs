@@ -6,15 +6,17 @@
 //! heights, where the menu bar lives, the primary shortcut modifier, how
 //! shortcuts are written, whether the compositor can blur). AppKit / Win32
 //! glue lives in `platform::macos` (native frost for [`crate::vibrancy`])
-//! behind these adapters and `cfg` gates.
+//! and [`windows`] (Mica / Acrylic system backdrops) behind these adapters
+//! and `cfg` gates.
 
 #[cfg(any(target_os = "macos", feature = "typecheck-macos-vibrancy"))]
 // `objc`'s `sel_impl!` checks `feature = "cargo-clippy"`, hence the cfg allow.
 #[allow(unsafe_code, unexpected_cfgs)]
 pub(crate) mod macos;
+pub mod windows;
 
-use refineui_tokens::size::Density;
-use refineui_tokens::window::{self as metrics, TitlebarMetrics, WindowControlsMetrics};
+use refineui_foundation::size::Density;
+use refineui_foundation::window::{self as metrics, TitlebarMetrics, WindowControlsMetrics};
 
 /// Operating system family.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

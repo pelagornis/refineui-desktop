@@ -8,15 +8,25 @@
 //! Groups use the [`crate::ButtonGroup`] tube; dividers are 1×16px
 //! `borderDefault`. Arrow keys (Left / Right, or Up / Down when vertical)
 //! move focus between items.
+//!
+//! **Overflow** (desktop, `.overflow(true)`, horizontal): items are
+//! measured; those that no longer fit move, in order from the end, into a
+//! trailing "More" (`…`) dropdown — Buttons become menu items, Toggle
+//! Buttons checked items, groups their buttons, dividers separators.
+//! Custom children (`.child`) and spacers always stay visible.
 
 use gpui::{
     AnyElement, App, ElementId, IntoElement, KeyDownEvent, ParentElement, RenderOnce, SharedString,
     Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{spacing, stroke};
+use refineui_foundation::{spacing, stroke};
 
 use crate::components::button_group::group_tube;
-use crate::{ActiveTheme, Axis, Button, ControlSize, Elevation, ToggleButton};
+use crate::motion::{child_id, probe, use_layout_probe};
+use crate::{
+    ActiveTheme, Axis, Button, ControlSize, DropdownMenu, Elevation, IconName, Menu, MenuItem,
+    ToggleButton,
+};
 
 /// Outer radius of an attached toolbar (`attachedRadius`): Button radius + 4px.
 pub fn toolbar_radius(size: ControlSize) -> f32 {
@@ -79,6 +89,8 @@ enum Item {
     Divider,
     Spacer,
     Any(AnyElement),
+    /// Moved to the overflow menu (keeps indices stable).
+    Hidden,
 }
 
 /// An action bar.
@@ -91,6 +103,7 @@ pub struct Toolbar {
     size: ControlSize,
     items: Vec<Item>,
     fill: bool,
+    overflow: bool,
 }
 
 impl Toolbar {
@@ -104,6 +117,7 @@ impl Toolbar {
             size: ControlSize::Small,
             items: Vec::new(),
             fill: false,
+            overflow: false,
         }
     }
 
@@ -169,6 +183,14 @@ impl Toolbar {
         self
     }
 
+    /// Move items that don't fit into a trailing "More" menu (horizontal
+    /// toolbars; see the module docs). The toolbar then takes the free
+    /// width, like [`Self::fill`].
+    pub fn overflow(mut self, overflow: bool) -> Self {
+        self.overflow = overflow;
+        self
+    }
+
     /// Add any element (Input, Select, …).
     pub fn child(mut self, e: impl IntoElement) -> Self {
         self.items.push(Item::Any(e.into_any_element()));
@@ -189,8 +211,163 @@ fn group_item(i: GroupItem, size: ControlSize, vertical: bool) -> AnyElement {
     }
 }
 
+/// How many hideable items fit, in order. `widths[i]` is item `i`'s
+/// width (`None` = never hidden, its width still counts), `available` the
+/// toolbar width, `more` the "More" button width, `gap` the item gap.
+/// Returns the count of hideable items to keep (all of them when
+/// everything fits without the More button).
+pub fn overflow_fit(widths: &[(f32, bool)], available: f32, more: f32, gap: f32) -> usize {
+    let hideable = widths.iter().filter(|(_, h)| *h).count();
+    let n = widths.len();
+    let total: f32 = widths.iter().map(|(w, _)| w).sum::<f32>() + gap * n.saturating_sub(1) as f32;
+    if total <= available + 0.5 {
+        return hideable;
+    }
+    // Fixed items + the More button are always there.
+    let fixed: Vec<f32> = widths
+        .iter()
+        .filter(|(_, h)| !*h)
+        .map(|(w, _)| *w)
+        .collect();
+    let mut used = fixed.iter().sum::<f32>() + more + gap * fixed.len() as f32;
+    let mut keep = 0;
+    for (w, _) in widths.iter().filter(|(_, h)| *h) {
+        if used + w + gap > available + 0.5 {
+            break;
+        }
+        used += w + gap;
+        keep += 1;
+    }
+    keep
+}
+
+fn overflow_menu(id: &ElementId, hidden: Vec<Item>) -> Menu {
+    let mut menu = Menu::new(child_id(id, "more-menu"));
+    let button = |menu: Menu, b: &Button| {
+        let (label, icon, disabled, click) = b.menu_parts();
+        let mut item = MenuItem::new(label)
+            .disabled(disabled)
+            .on_click(move |w, cx| {
+                if let Some(f) = &click {
+                    f(&gpui::ClickEvent::default(), w, cx);
+                }
+            });
+        if let Some(i) = icon {
+            item = item.icon(i);
+        }
+        menu.item(item)
+    };
+    let toggle = |menu: Menu, t: &ToggleButton| {
+        let (label, icon, pressed, disabled, change) = t.menu_parts();
+        let mut item = MenuItem::new(label)
+            .checked(pressed)
+            .disabled(disabled)
+            .on_click(move |w, cx| {
+                if let Some(f) = &change {
+                    f(&!pressed, w, cx);
+                }
+            });
+        if let Some(i) = icon {
+            item = item.icon(i);
+        }
+        menu.item(item)
+    };
+    let mut last_divider = true;
+    for it in hidden {
+        match it {
+            Item::Button(b) => {
+                menu = button(menu, &b);
+                last_divider = false;
+            }
+            Item::Toggle(t) => {
+                menu = toggle(menu, &t);
+                last_divider = false;
+            }
+            Item::Group(g) => {
+                for gi in &g.items {
+                    menu = match gi {
+                        GroupItem::Button(b) => button(menu, b),
+                        GroupItem::Toggle(t) => toggle(menu, t),
+                    };
+                }
+                last_divider = false;
+            }
+            Item::Divider if !last_divider => {
+                menu = menu.divider();
+                last_divider = true;
+            }
+            _ => {}
+        }
+    }
+    menu
+}
+
 impl RenderOnce for Toolbar {
-    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        // Overflow: decide which items stay from last frame's widths.
+        let mut more: Option<AnyElement> = None;
+        let mut measure = None;
+        if self.overflow && self.orientation == Axis::Horizontal {
+            let p = use_layout_probe(&self.id, window, cx);
+            let more_w = cx.theme().density.button(self.size).height;
+            let probe_state = p.read(cx).clone();
+            let widths: Option<Vec<(f32, bool)>> = probe_state.container.and_then(|_| {
+                self.items
+                    .iter()
+                    .enumerate()
+                    .map(|(i, it)| {
+                        let hideable = !matches!(it, Item::Any(_) | Item::Spacer);
+                        let w = match it {
+                            Item::Spacer => Some(0.),
+                            _ => probe_state
+                                .items
+                                .get(i)
+                                .copied()
+                                .flatten()
+                                .map(|b| f32::from(b.size.width)),
+                        };
+                        w.map(|w| (w, hideable))
+                    })
+                    .collect()
+            });
+            if let (Some(widths), Some(c)) = (widths, probe_state.container) {
+                let keep = overflow_fit(&widths, f32::from(c.size.width), more_w, spacing::SMALL);
+                let hideable = widths.iter().filter(|(_, h)| *h).count();
+                if keep < hideable {
+                    let mut seen = 0;
+                    let mut shown = Vec::new();
+                    let mut hidden = Vec::new();
+                    for (i, it) in std::mem::take(&mut self.items).into_iter().enumerate() {
+                        if widths[i].1 {
+                            seen += 1;
+                            if seen > keep {
+                                hidden.push(it);
+                                // Keep the slot so indices stay stable.
+                                shown.push(Item::Hidden);
+                                continue;
+                            }
+                        }
+                        shown.push(it);
+                    }
+                    self.items = shown;
+                    let trigger =
+                        Button::icon_only(child_id(&self.id, "more"), IconName::MoreHorizontal)
+                            .inherit(Some(self.size), Some(crate::ButtonVariant::Ghost))
+                            .tooltip("More");
+                    more = Some(
+                        DropdownMenu::new(
+                            child_id(&self.id, "more-dropdown"),
+                            trigger,
+                            overflow_menu(&self.id, hidden),
+                        )
+                        .align_end()
+                        .into_any_element(),
+                    );
+                }
+            }
+            measure = Some(p);
+        }
+
         let theme = cx.theme().clone();
         let c = theme.colors;
         let vertical = self.orientation == Axis::Vertical;
@@ -201,9 +378,13 @@ impl RenderOnce for Toolbar {
         let items: Vec<AnyElement> = self
             .items
             .into_iter()
-            .map(|item| {
+            .enumerate()
+            .filter(|(_, item)| !matches!(item, Item::Hidden))
+            .map(|(ix, item)| {
                 let interactive = !matches!(item, Item::Spacer | Item::Divider);
+                let spacer = matches!(item, Item::Spacer);
                 let el = match item {
+                    Item::Hidden => div().into_any_element(),
                     Item::Spacer => div().flex_1().into_any_element(),
                     Item::Button(b) => b
                         .inherit(Some(size), Some(crate::ButtonVariant::Ghost))
@@ -229,6 +410,17 @@ impl RenderOnce for Toolbar {
                     }
                     Item::Any(e) => e,
                 };
+                // Measured (overflow): wrap each item with a probe.
+                let el = match &measure {
+                    Some(p) if !spacer => div()
+                        .relative()
+                        .flex_none()
+                        .flex()
+                        .child(probe(p, Some(ix)))
+                        .child(el)
+                        .into_any_element(),
+                    _ => el,
+                };
                 // Chrome toolbar (titlebar / toolbar row): each item
                 // occludes the window drag area; spacers and gaps still drag.
                 if fill && interactive {
@@ -248,15 +440,19 @@ impl RenderOnce for Toolbar {
         } else {
             ("right", "left")
         };
+        let overflowing = measure.is_some();
         div()
             .id(self.id)
             .flex()
             .map(|d| {
-                if self.fill {
+                if self.fill || overflowing {
                     d.flex_1().min_w_0()
                 } else {
                     d.flex_none()
                 }
+            })
+            .when_some(measure, |d, p| {
+                d.relative().overflow_hidden().child(probe(&p, None))
             })
             .items_center()
             .when(vertical, |d| d.flex_col())
@@ -282,6 +478,7 @@ impl RenderOnce for Toolbar {
                 }
             })
             .children(items)
+            .children(more)
     }
 }
 
@@ -290,8 +487,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn overflow_keeps_what_fits() {
+        let items = [(40., true), (40., true), (100., false), (40., true)];
+        // Everything fits: 40+40+100+40 + 3 gaps of 8 = 244.
+        assert_eq!(overflow_fit(&items, 244., 28., 8.), 3);
+        // 200px: fixed 100 + More 28 + gap 8 = 136; +48 → 184 (1); +48 → 232 ✗.
+        assert_eq!(overflow_fit(&items, 200., 28., 8.), 1);
+        // Too small even for the fixed item: hide every hideable one.
+        assert_eq!(overflow_fit(&items, 50., 28., 8.), 0);
+        assert_eq!(overflow_fit(&[], 10., 28., 8.), 0);
+    }
+
+    #[test]
     fn attached_radius_stays_concentric() {
-        let d = refineui_tokens::size::Density::Comfortable;
+        let d = refineui_foundation::size::Density::Comfortable;
         for s in ControlSize::ALL {
             assert_eq!(toolbar_radius(s), d.button(s).radius + spacing::XX_SMALL);
         }

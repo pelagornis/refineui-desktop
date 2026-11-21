@@ -2,7 +2,7 @@
 title: Toolbar
 description: "A row of ghost buttons and toggles with groups and dividers (web `Toolbar`)."
 sidebar:
-  order: 61
+  order: 72
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -59,6 +59,7 @@ An action bar.
 | `fn divider(mut self) -> Self` | Add a divider (web `ToolbarDivider`). |
 | `fn spacer(mut self) -> Self` | Flexible space: pushes the following items to the trailing edge (use with `Self::fill`). |
 | `fn fill(mut self, fill: bool) -> Self` | Take the parent's free width (desktop chrome rows: titlebar, toolbar row) instead of hugging the items. |
+| `fn overflow(mut self, overflow: bool) -> Self` | Move items that don't fit into a trailing "More" menu (horizontal toolbars; see the module docs). The toolbar then takes the free width, like `Self::fill`. |
 | `fn child(mut self, e: impl IntoElement) -> Self` | Add any element (Input, Select, …). |
 
 ### ToolbarGroup

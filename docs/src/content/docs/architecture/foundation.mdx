@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-## Preserved from web (`refineui-tokens`)
+## Preserved from web (`refineui-foundation`)
 
 Color (palette + 69 semantic aliases, light/dark), typography (16 styles,
 21 roles), spacing, sizing (`componentSizes`, icon sizes), radius, border
@@ -35,3 +35,23 @@ values are checked against the web package by the token audit.
 | Selection | `interaction::selection` | See [Interaction model](/architecture/interaction/). |
 | Drag and drop | `interaction::dnd` | Drop edges, dock zones, reorder. |
 | Accessibility | contracts `a11y_role`, focus rules | Roles map to AccessKit when GPUI exposes it. Until then, keyboard and focus contracts are enforced. |
+
+## Material tokens
+
+`refineui_foundation::material` defines the material roles used by the
+Material Engine (`refineui-material`). Each `MaterialTokens` value carries
+blur radius, saturation, tint, edge highlight, border, grain (noise),
+reflection and specular strength (glass only), elevation and an opaque **fallback** fill for renderers without blur or
+with reduced transparency.
+
+| Role | Blur | Use |
+| --- | --- | --- |
+| `Thin` | 12 px | Tooltips, light overlays |
+| `Regular` | 16 px | Menus, popovers, dropdowns |
+| `Thick` | 28 px | Sheets, large floating panels |
+| `Chrome` | 24 px | Titlebars, sidebars over content |
+| `Glass` | 18 px | Expressive glass: low tint, saturation 1.9, lit edges, reflection band, specular spot, grain |
+| `Scrim` | 2 px | Modal backdrops (matches the web dialog blur) |
+
+`MaterialRole::tokens(mode)` returns the light or dark variant. See
+[Material Engine](/architecture/material/) for the renderer.

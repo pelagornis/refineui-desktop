@@ -2,40 +2,35 @@
 //! destinations at the window edge (brief §5 Application). Rebuilt from the
 //! old Side Dock with RefineUI's own look and free customization.
 //!
-//! **Default look ([`ActivityBarStyle::refine`])** — a quiet desktop
-//! column: density width (40 / 48 / 56) on `surfaceSunken` with a hairline
-//! `borderSubtle` inner edge; square items with `roundedLarge` corners;
-//! icons `foregroundSecondary`, `foregroundPrimary` on hover over a
-//! `backgroundPrimaryHover` plate; the selected item sits on a
-//! `backgroundSurfaceSelected` plate with a `foregroundBrand` icon. Badges
-//! are small brand pills. No circles, no pills on the edge.
+//! **One component, no variants.** The look is the former Rail preset,
+//! rebuilt on RefineUI tokens: a `surfaceSunken` column (density width) with
+//! a hairline `borderSubtle` inner edge; tiles are circles at rest that
+//! morph to `roundedXLarge` squares on hover / selection; the selected tile
+//! sits on `backgroundBrandSubtle` with a `foregroundBrand` icon and a
+//! `backgroundBrand` edge bar (8 unread / ~40% hover / ~80% selected of the
+//! tile); hover is `backgroundPrimaryHover`; badges are brand pills.
 //!
-//! **Everything is configurable** through [`ActivityBarStyle`] or the
-//! shorthand builders:
+//! Items can show an external [`ActivityItem::image`] (URL or asset) and a
+//! count or dot [`ActivityItem::badge`]. [`ActivityItem::folder`] groups
+//! items in a Toolbar-style tube: a closed folder shows a 2×2 stacked
+//! preview of its members (and a count badge when there are more than four
+//! and the item has no badge of its own); an open folder shows the
+//! FolderOpen icon, and the members sit inside the same rounded plate,
+//! which grows and shrinks with accordion height motion (`ACCORDION_PANEL`
+//! / `ACCORDION_CONTENT`).
 //!
-//! | Knob | Options |
-//! | --- | --- |
-//! | Item shape ([`ItemShape`]) | `Rounded(r)` · `Square` · `Circle` · `Morph` (circle → rounded on hover / select) |
-//! | Item size | any px (default density `activity_item`) |
-//! | Indicator ([`IndicatorStyle`]) | `None` · `Bar` (edge bar) · `Dot` (under the icon) · `Plate` (filled item) |
-//! | Labels ([`LabelMode`]) | `Tooltip` · `Below` (rail captions) · `Beside` (expanded rows) |
-//! | Colours | bar, item, hover, selected, selected ink, indicator, badge |
-//! | Slots | `header` / `footer` elements, pinned `footer_item`s |
-//! | Custom item | [`ActivityBar::render_item`] draws the face of every item |
-//! | Reorder | [`ActivityBar::on_reorder`] enables drag-to-reorder |
+//! Slots: `header` / `footer` elements, pinned `footer_item`s, a custom
+//! face per item ([`ActivityBar::render_item`]) and drag-to-reorder
+//! ([`ActivityBar::on_reorder`]).
 //!
-//! [`ActivityBarStyle::rail`] keeps the old Side Dock look as a preset:
-//! 72px column, 48px tiles that morph from circles to rounded squares, an
-//! edge pill (8 unread / 20 hover / 40 selected), brand fill when selected
-//! and red count badges. [`ActivityBar::navigation_rail`] is the labelled
-//! (`Below`) variant.
-//!
-//! **Keyboard** — when the bar has focus: ↑ / ↓ move a focus ring, Home /
-//! End jump, Enter / Space activate; ⌥↑ / ⌥↓ move the focused item when
-//! reordering is on. **Pointer** — click activates; items never act on
-//! hover alone; tooltips (with the item's action shortcut) appear when
-//! labels are hidden.
+//! **Keyboard** — when the bar has focus: ↑ / ↓ move a focus ring (open
+//! folder children are in the order), Home / End jump, Enter / Space
+//! activate and also toggle a focused folder; ⌥↑ / ⌥↓ move the focused
+//! main item when reordering is on (folder children are skipped).
+//! **Pointer** — click activates; items never act on hover alone; tooltips
+//! (with the item's action shortcut) appear when labels are hidden.
 
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use gpui::{
@@ -43,7 +38,7 @@ use gpui::{
     KeyDownEvent, ParentElement, Render, RenderOnce, SharedString, StatefulInteractiveElement,
     Styled, Window, anchored, div, img, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::components::floating::{BeakAlign, BeakSide};
 use crate::interaction::dnd::{DropEdge, drop_edge, insertion_index};
@@ -52,13 +47,13 @@ use crate::motion::{
     use_layout_probe,
 };
 use crate::{
-    ActiveTheme, AvatarColor, DragPreview, DropIndicator, Icon, IconName, IconSize, ScrollArea,
-    StyledExt,
+    ActiveTheme, DragPreview, DropIndicator, Icon, IconName, IconSize, ScrollArea, StyledExt,
 };
 
 /// Item corner shape.
+#[allow(dead_code)] // internal render knobs; the public bar has one look
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum ItemShape {
+pub(crate) enum ItemShape {
     /// Rounded square with this radius.
     Rounded(f32),
     /// Sharp square.
@@ -71,8 +66,9 @@ pub enum ItemShape {
 }
 
 /// Selection indicator.
+#[allow(dead_code)] // internal render knobs; the public bar has one look
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IndicatorStyle {
+pub(crate) enum IndicatorStyle {
     /// No indicator (pair with a selected colour).
     None,
     /// Bar on the docked edge (grows on hover / select; a short mark for
@@ -85,8 +81,9 @@ pub enum IndicatorStyle {
 }
 
 /// How item names show.
+#[allow(dead_code)] // internal render knobs; the public bar has one look
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum LabelMode {
+pub(crate) enum LabelMode {
     /// Tooltip beside the item (icon-only bar).
     Tooltip,
     /// Caption under each icon (navigation rail).
@@ -108,7 +105,7 @@ pub enum BarSide {
 /// The complete look of an [`ActivityBar`]; `None` colours resolve from the
 /// theme.
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct ActivityBarStyle {
+pub(crate) struct ActivityBarStyle {
     /// Bar width (`None` = density `activity_bar_width`).
     pub width: Option<f32>,
     /// Width in [`LabelMode::Beside`].
@@ -150,23 +147,17 @@ pub struct ActivityBarStyle {
     pub badge_ink: Option<Hsla>,
 }
 
-impl Default for ActivityBarStyle {
-    fn default() -> Self {
-        Self::refine()
-    }
-}
-
 impl ActivityBarStyle {
-    /// RefineUI's desktop look (default). See the module docs.
-    pub const fn refine() -> Self {
+    /// The one Activity Bar look (an improved Rail). See the module docs.
+    pub(crate) const fn unified() -> Self {
         Self {
             width: None,
             expanded_width: 220.,
             item_size: None,
             gap: spacing::XX_SMALL,
-            shape: ItemShape::Rounded(radius::LARGE),
-            indicator: IndicatorStyle::Plate,
-            fill_selected: false,
+            shape: ItemShape::Morph,
+            indicator: IndicatorStyle::Bar,
+            fill_selected: true,
             labels: LabelMode::Tooltip,
             icon: IconSize::Small,
             border: true,
@@ -181,74 +172,14 @@ impl ActivityBarStyle {
             badge_ink: None,
         }
     }
-
-    /// The former Side Dock look (circle → squircle tiles, edge pill,
-    /// brand fill, red badges).
-    pub const fn rail() -> Self {
-        Self {
-            width: Some(72.),
-            expanded_width: 240.,
-            item_size: Some(48.),
-            gap: spacing::X_SMALL,
-            shape: ItemShape::Morph,
-            indicator: IndicatorStyle::Bar,
-            fill_selected: true,
-            labels: LabelMode::Tooltip,
-            icon: IconSize::Medium,
-            border: false,
-            background: None,
-            item: None,
-            ink: None,
-            hover: None,
-            selected: None,
-            selected_ink: None,
-            indicator_color: None,
-            badge: None,
-            badge_ink: None,
-        }
-    }
-
-    /// Labelled navigation rail (captions under icons).
-    pub const fn navigation_rail() -> Self {
-        let mut s = Self::refine();
-        s.width = Some(80.);
-        s.item_size = Some(40.);
-        s.labels = LabelMode::Below;
-        s.indicator = IndicatorStyle::Plate;
-        s.gap = spacing::X_SMALL;
-        s
-    }
-}
-
-/// Preset shorthands.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ActivityBarPreset {
-    /// [`ActivityBarStyle::refine`].
-    #[default]
-    Refine,
-    /// [`ActivityBarStyle::rail`].
-    Rail,
-    /// [`ActivityBarStyle::navigation_rail`].
-    NavigationRail,
-}
-
-impl ActivityBarPreset {
-    /// The style.
-    pub const fn style(self) -> ActivityBarStyle {
-        match self {
-            Self::Refine => ActivityBarStyle::refine(),
-            Self::Rail => ActivityBarStyle::rail(),
-            Self::NavigationRail => ActivityBarStyle::navigation_rail(),
-        }
-    }
 }
 
 #[derive(Clone)]
 enum Face {
     Icon(IconName),
     Image(ImageSource),
-    Initials(Option<AvatarColor>),
-    Folder(Vec<ActivityItem>),
+    /// Members and whether the folder starts open.
+    Folder(Vec<ActivityItem>, bool),
 }
 
 /// Badge on an item.
@@ -294,7 +225,7 @@ impl ActivityItem {
         Self::new(id, label, Face::Icon(icon))
     }
 
-    /// Picture item (avatar / workspace logo).
+    /// Picture item from an external image source (URL, asset, or bytes).
     pub fn image(
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -303,26 +234,27 @@ impl ActivityItem {
         Self::new(id, label, Face::Image(src.into()))
     }
 
-    /// Initials item (up to three letters of the label).
-    pub fn initials(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
-        Self::new(id, label, Face::Initials(None))
-    }
-
-    /// Tint an initials item.
-    pub fn tint(mut self, color: AvatarColor) -> Self {
-        if let Face::Initials(c) = &mut self.face {
-            *c = Some(color);
-        }
-        self
-    }
-
-    /// Group of items shown as a two-item cluster.
+    /// Folder of items. Clicking the tile expands or collapses the members
+    /// inside a shared Toolbar-style tube. Closed, the tile shows a 2×2
+    /// stacked preview of the members; open, it shows the FolderOpen icon.
     pub fn folder(
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
         members: impl IntoIterator<Item = ActivityItem>,
     ) -> Self {
-        Self::new(id, label, Face::Folder(members.into_iter().collect()))
+        Self::new(
+            id,
+            label,
+            Face::Folder(members.into_iter().collect(), false),
+        )
+    }
+
+    /// Open this folder on first show (folders only).
+    pub fn default_open(mut self, open: bool) -> Self {
+        if let Face::Folder(_, default_open) = &mut self.face {
+            *default_open = open;
+        }
+        self
     }
 
     /// Count badge (`0` hides it).
@@ -418,12 +350,12 @@ pub struct ActivityBar {
 }
 
 impl ActivityBar {
-    /// Bar with the default (Refine) look.
+    /// New bar (collapsed).
     pub fn new(id: impl Into<ElementId>) -> Self {
         Self {
             id: id.into(),
             side: BarSide::Leading,
-            style: ActivityBarStyle::refine(),
+            style: ActivityBarStyle::unified(),
             header: None,
             footer: None,
             entries: Vec::new(),
@@ -434,67 +366,6 @@ impl ActivityBar {
             render_item: None,
             fill: true,
         }
-    }
-
-    /// Bar with the former Side Dock look.
-    pub fn rail(id: impl Into<ElementId>) -> Self {
-        Self::new(id).style(ActivityBarStyle::rail())
-    }
-
-    /// Labelled navigation rail.
-    pub fn navigation_rail(id: impl Into<ElementId>) -> Self {
-        Self::new(id).style(ActivityBarStyle::navigation_rail())
-    }
-
-    /// Whole style.
-    pub fn style(mut self, style: ActivityBarStyle) -> Self {
-        self.style = style;
-        self
-    }
-
-    /// Preset.
-    pub fn preset(self, preset: ActivityBarPreset) -> Self {
-        self.style(preset.style())
-    }
-
-    /// Edit the style in place: `.restyle(|s| s.badge = Some(red))`.
-    pub fn restyle(mut self, f: impl FnOnce(&mut ActivityBarStyle)) -> Self {
-        f(&mut self.style);
-        self
-    }
-
-    /// Item shape.
-    pub fn shape(mut self, shape: ItemShape) -> Self {
-        self.style.shape = shape;
-        self
-    }
-
-    /// Indicator.
-    pub fn indicator(mut self, indicator: IndicatorStyle) -> Self {
-        self.style.indicator = indicator;
-        self
-    }
-
-    /// Item size.
-    pub fn item_size(mut self, size: f32) -> Self {
-        self.style.item_size = Some(size);
-        self
-    }
-
-    /// Label mode.
-    pub fn labels(mut self, mode: LabelMode) -> Self {
-        self.style.labels = mode;
-        self
-    }
-
-    /// Expanded (labels beside icons) or collapsed (tooltips).
-    pub fn expanded(mut self, expanded: bool) -> Self {
-        self.style.labels = if expanded {
-            LabelMode::Beside
-        } else {
-            LabelMode::Tooltip
-        };
-        self
     }
 
     /// Docked edge.
@@ -576,21 +447,6 @@ impl ActivityBar {
     }
 }
 
-/// Up to three initials of `name` (two letters for a single word).
-pub fn activity_initials(name: &str) -> SharedString {
-    let words: Vec<&str> = name.split_whitespace().collect();
-    let s: String = if words.len() > 1 {
-        words
-            .iter()
-            .take(3)
-            .filter_map(|w| w.chars().next())
-            .collect()
-    } else {
-        name.chars().take(2).collect()
-    };
-    s.into()
-}
-
 fn badge_text(n: u32) -> SharedString {
     if n > 99 {
         "99+".into()
@@ -623,7 +479,6 @@ fn resolve(s: &ActivityBarStyle, cx: &App) -> Resolved {
     let t = cx.theme();
     let c = t.colors;
     let d = t.density.desktop();
-    let rail = s.shape == ItemShape::Morph;
     let size = s.item_size.unwrap_or(d.activity_item);
     let width = match s.labels {
         LabelMode::Beside => s.expanded_width,
@@ -631,46 +486,14 @@ fn resolve(s: &ActivityBarStyle, cx: &App) -> Resolved {
     };
     Resolved {
         bar: s.background.unwrap_or(c.surface_sunken),
-        item: s.item.unwrap_or(if rail {
-            c.background_primary
-        } else {
-            gpui::transparent_black()
-        }),
-        ink: s.ink.unwrap_or(if rail {
-            c.foreground_primary
-        } else {
-            c.foreground_secondary
-        }),
-        hover: s.hover.unwrap_or(if rail {
-            c.background_brand
-        } else {
-            c.background_primary_hover
-        }),
-        selected: s.selected.unwrap_or(if rail {
-            c.background_brand
-        } else {
-            c.background_surface_selected
-        }),
-        selected_ink: s.selected_ink.unwrap_or(if rail {
-            c.foreground_on_brand
-        } else {
-            c.foreground_brand
-        }),
-        indicator: s.indicator_color.unwrap_or(if rail {
-            c.foreground_primary
-        } else {
-            c.foreground_brand
-        }),
-        badge: s.badge.unwrap_or(if rail {
-            c.background_error
-        } else {
-            c.background_brand
-        }),
-        badge_ink: s.badge_ink.unwrap_or(if rail {
-            c.foreground_on_error
-        } else {
-            c.foreground_on_brand
-        }),
+        item: s.item.unwrap_or(gpui::transparent_black()),
+        ink: s.ink.unwrap_or(c.foreground_secondary),
+        hover: s.hover.unwrap_or(c.background_primary_hover),
+        selected: s.selected.unwrap_or(c.background_brand_subtle),
+        selected_ink: s.selected_ink.unwrap_or(c.foreground_brand),
+        indicator: s.indicator_color.unwrap_or(c.background_brand),
+        badge: s.badge.unwrap_or(c.background_brand),
+        badge_ink: s.badge_ink.unwrap_or(c.foreground_on_brand),
         size,
         width,
     }
@@ -704,10 +527,12 @@ struct Ctx<'a> {
     on_select: Option<SelectHandler>,
     on_reorder: Option<ReorderHandler>,
     render_item: Option<ItemRenderer>,
-    cursor: Option<usize>,
+    cursor: Option<SharedString>,
     focused: bool,
-    cursor_state: gpui::Entity<Option<usize>>,
+    cursor_state: gpui::Entity<Option<SharedString>>,
     drop: gpui::Entity<Option<(usize, DropEdge)>>,
+    folder_open: HashSet<SharedString>,
+    on_folder_toggle: Rc<dyn Fn(&SharedString, &mut App)>,
 }
 
 fn face(
@@ -716,63 +541,29 @@ fn face(
     ink: Hsla,
     radius_px: f32,
     icon: IconSize,
-    cx: &App,
+    folder_open_t: f32,
+    _cx: &App,
 ) -> AnyElement {
-    let c = cx.theme().colors;
     match &item.face {
         Face::Icon(i) => Icon::new(*i).size(icon).color(ink).into_any_element(),
         Face::Image(src) => img(src.clone())
             .size(px(size))
             .rounded(px(radius_px))
             .into_any_element(),
-        Face::Initials(_) => div()
-            .text_style_token(role::CAPTION_LG)
-            .font_weight(gpui::FontWeight::SEMIBOLD)
-            .text_color(ink)
-            .child(activity_initials(&item.label))
-            .into_any_element(),
-        Face::Folder(members) => {
-            let mini = |m: &ActivityItem| {
-                let (bg, fg) = match &m.face {
-                    Face::Initials(Some(t)) => t.colors(),
-                    _ => (c.background_primary, c.foreground_primary),
+        Face::Folder(members, _) => {
+            // Open: FolderOpen glyph. Closed: 2×2 stacked preview of up to
+            // four members (empty slots keep the grid stable). An empty
+            // folder falls back to the closed Folder glyph.
+            if folder_open_t > 0.5 || members.is_empty() {
+                let glyph = if folder_open_t > 0.5 {
+                    IconName::FolderOpen
+                } else {
+                    IconName::Folder
                 };
-                let s = (size * 0.54).round();
-                div()
-                    .size(px(s))
-                    .rounded_full()
-                    .border(px(stroke::THICK))
-                    .border_color(c.surface_sunken)
-                    .overflow_hidden()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .bg(bg)
-                    .text_color(fg)
-                    .text_size(px(s * 0.38))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .map(|d| match &m.face {
-                        Face::Image(src) => d.child(img(src.clone()).size_full().rounded_full()),
-                        Face::Icon(i) => d.child(Icon::new(*i).size(IconSize::XSmall).color(fg)),
-                        _ => d.child(activity_initials(&m.label)),
-                    })
-            };
-            let off = (size * 0.08).round();
-            let off2 = (size * 0.375).round();
-            div()
-                .relative()
-                .size(px(size))
-                .children(
-                    members
-                        .first()
-                        .map(|m| div().absolute().left(px(off)).top(px(off)).child(mini(m))),
-                )
-                .children(
-                    members
-                        .get(1)
-                        .map(|m| div().absolute().left(px(off2)).top(px(off2)).child(mini(m))),
-                )
-                .into_any_element()
+                Icon::new(glyph).size(icon).color(ink).into_any_element()
+            } else {
+                folder_preview(members, size, ink)
+            }
         }
     }
 }
@@ -781,10 +572,158 @@ fn face(
 enum Role {
     Main(usize),
     Footer,
+    /// Member of an open folder; in ↑/↓ order, not in ⌥↑/⌥↓ reorder.
+    Child,
+}
+
+/// Badge shown on a tile: the item's own badge, or a folder member count
+/// when there are more than four members and no user badge.
+fn displayed_badge(item: &ActivityItem) -> Option<ItemBadge> {
+    if item.badge.is_some() {
+        return item.badge;
+    }
+    match &item.face {
+        Face::Folder(members, _) if members.len() > 4 => {
+            Some(ItemBadge::Count(members.len() as u32))
+        }
+        _ => None,
+    }
+}
+
+fn folder_preview_cell(member: &ActivityItem, cell: f32, ink: Hsla) -> AnyElement {
+    let inner = cell.max(1.);
+    let icon_sz = (inner * 0.78).max(8.);
+    let slot = div()
+        .size(px(inner))
+        .rounded(px((inner * 0.28).min(radius::SMALL)))
+        .overflow_hidden()
+        .flex()
+        .items_center()
+        .justify_center();
+    match &member.face {
+        Face::Icon(name) => slot
+            .child(
+                Icon::new(*name)
+                    .size(IconSize::Custom(px(icon_sz)))
+                    .color(ink),
+            )
+            .into_any_element(),
+        Face::Image(src) => slot
+            .child(img(src.clone()).size(px(inner)))
+            .into_any_element(),
+        Face::Folder(_, _) => slot
+            .child(
+                Icon::new(IconName::Folder)
+                    .size(IconSize::Custom(px(icon_sz)))
+                    .color(ink),
+            )
+            .into_any_element(),
+    }
+}
+
+fn folder_preview(members: &[ActivityItem], size: f32, ink: Hsla) -> AnyElement {
+    let pad = spacing::XXX_SMALL;
+    let gap = 2.0_f32;
+    let inner = (size - pad * 2. - gap).max(1.);
+    let cell = inner / 2.;
+    let slot = |i: usize| {
+        members
+            .get(i)
+            .map(|m| folder_preview_cell(m, cell, ink))
+            .unwrap_or_else(|| div().size(px(cell.max(1.))).into_any_element())
+    };
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(gap))
+        .p(px(pad))
+        .size(px(size))
+        .child(div().flex().gap(px(gap)).child(slot(0)).child(slot(1)))
+        .child(div().flex().gap(px(gap)).child(slot(2)).child(slot(3)))
+        .into_any_element()
+}
+
+/// ToolbarGroup-like tube around a folder tile and its accordion panel.
+fn folder_tube(
+    item_size: f32,
+    labels: LabelMode,
+    border: Hsla,
+    fill: Hsla,
+    tile: AnyElement,
+    panel: Option<AnyElement>,
+) -> AnyElement {
+    let pad = spacing::XXX_SMALL;
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .p(px(pad))
+        .rounded(px(radius::XX_LARGE + pad))
+        .border(px(stroke::THIN))
+        .border_color(border)
+        .bg(fill)
+        .when(labels == LabelMode::Beside, |d| d.w_full())
+        .when(labels != LabelMode::Beside, |d| {
+            d.w(px(item_size + pad * 2.))
+        })
+        .child(tile)
+        .children(panel)
+        .into_any_element()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct NavEntry {
+    id: SharedString,
+    disabled: bool,
+    /// Index in the main item row; `None` for folder children and footer items.
+    main_ix: Option<usize>,
+    is_folder: bool,
+}
+
+fn nav_order(
+    entries: &[Entry],
+    footer_items: &[ActivityItem],
+    open: &HashSet<SharedString>,
+) -> Vec<NavEntry> {
+    let mut order = Vec::new();
+    let mut main_ix = 0usize;
+    for e in entries {
+        let Entry::Item(i) = e else { continue };
+        let is_folder = matches!(i.face, Face::Folder(_, _));
+        order.push(NavEntry {
+            id: i.id.clone(),
+            disabled: i.disabled,
+            main_ix: Some(main_ix),
+            is_folder,
+        });
+        if is_folder
+            && open.contains(&i.id)
+            && let Face::Folder(members, _) = &i.face
+        {
+            for m in members {
+                order.push(NavEntry {
+                    id: m.id.clone(),
+                    disabled: m.disabled,
+                    main_ix: None,
+                    is_folder: matches!(m.face, Face::Folder(_, _)),
+                });
+            }
+        }
+        main_ix += 1;
+    }
+    for i in footer_items {
+        order.push(NavEntry {
+            id: i.id.clone(),
+            disabled: i.disabled,
+            main_ix: None,
+            is_folder: matches!(i.face, Face::Folder(_, _)),
+        });
+    }
+    order
 }
 
 fn tile(
-    ix: usize,
+    _ix: usize,
     item: ActivityItem,
     role: Role,
     t: &Ctx,
@@ -804,8 +743,7 @@ fn tile(
     let below = s.labels == LabelMode::Below;
     let fill_sel = active && (s.indicator == IndicatorStyle::Plate || s.fill_selected);
     let (bg, ink) = match (&item.face, fill_sel, hovered) {
-        (Face::Initials(Some(tint)), false, false) => tint.colors(),
-        (Face::Image(_), _, _) | (Face::Folder(_), _, _) => (
+        (Face::Image(_), _, _) | (Face::Folder(_, _), _, _) => (
             if hovered && !matches!(item.face, Face::Image(_)) {
                 c.background_primary_hover
             } else {
@@ -831,7 +769,7 @@ fn tile(
     };
     let bg = animate(child_id(&iid, "bg"), bg, Motion::FAST, window, cx);
     let ink = animate(child_id(&iid, "ink"), ink, Motion::FAST, window, cx);
-    let square = matches!(item.face, Face::Folder(_)) || active || hovered;
+    let square = matches!(item.face, Face::Folder(_, _)) || active || hovered;
     let radius_target = match s.shape {
         ItemShape::Rounded(rr) => rr,
         ItemShape::Square => 0.,
@@ -884,7 +822,7 @@ fn tile(
         window,
         cx,
     );
-    let focus_ring = t.focused && t.cursor == Some(ix) && focus_visible(cx);
+    let focus_ring = t.focused && t.cursor.as_ref() == Some(&item.id) && focus_visible(cx);
     let state = ActivityItemState {
         selected: active,
         hovered,
@@ -892,9 +830,22 @@ fn tile(
         size,
         ink,
     };
+    let is_folder = matches!(item.face, Face::Folder(_, _));
+    let folder_is_open = is_folder && t.folder_open.contains(&item.id);
+    let folder_open_t = if is_folder {
+        animate(
+            child_id(&iid, "folder-open"),
+            if folder_is_open { 1.0f32 } else { 0.0 },
+            Motion::CHEVRON,
+            window,
+            cx,
+        )
+    } else {
+        0.
+    };
     let face_el = match &t.render_item {
         Some(f) => f(&item, state, window, cx),
-        None => face(&item, size, ink, rad, s.icon, cx),
+        None => face(&item, size, ink, rad, s.icon, folder_open_t, cx),
     };
 
     let bar = div()
@@ -925,7 +876,7 @@ fn tile(
 
     // Over the icon's corner, or inline at the row end when labels sit
     // beside the icons.
-    let badge = item.badge.map(|b| {
+    let badge = displayed_badge(&item).map(|b| {
         let base = div()
             .rounded_full()
             .bg(r.badge)
@@ -1008,6 +959,7 @@ fn tile(
     });
 
     let on_select = t.on_select.clone();
+    let on_folder_toggle = t.on_folder_toggle.clone();
     let cursor = t.cursor_state.clone();
     let id = item.id.clone();
     let disabled = item.disabled;
@@ -1096,7 +1048,10 @@ fn tile(
             if disabled {
                 return;
             }
-            cursor.update(cx, |c, _| *c = Some(ix));
+            cursor.update(cx, |c, _| *c = Some(id.clone()));
+            if is_folder {
+                on_folder_toggle(&id, cx);
+            }
             if let Some(h) = &on_select {
                 h(&id, w, cx);
             }
@@ -1232,7 +1187,11 @@ impl RenderOnce for ActivityBar {
             .read(cx)
             .clone();
         let cursor_state =
-            window.use_keyed_state(child_id(&self.id, "cursor"), cx, |_, _| None::<usize>);
+            window.use_keyed_state(
+                child_id(&self.id, "cursor"),
+                cx,
+                |_, _| None::<SharedString>,
+            );
         let drop = window.use_keyed_state(child_id(&self.id, "drop"), cx, |_, _| {
             None::<(usize, DropEdge)>
         });
@@ -1242,18 +1201,34 @@ impl RenderOnce for ActivityBar {
             drop.update(cx, |d, _| *d = None);
         }
 
-        let mut order: Vec<(SharedString, bool)> = Vec::new();
-        for e in &self.entries {
-            if let Entry::Item(i) = e {
-                order.push((i.id.clone(), i.disabled));
-            }
-        }
-        order.extend(self.footer_items.iter().map(|i| (i.id.clone(), i.disabled)));
-        let selected_ix = self
-            .selected
-            .as_ref()
-            .and_then(|s| order.iter().position(|o| &o.0 == s));
-        let cursor = cursor_state.read(cx).or(selected_ix);
+        let defaults: HashSet<SharedString> = self
+            .entries
+            .iter()
+            .filter_map(|e| match e {
+                Entry::Item(i) => match &i.face {
+                    Face::Folder(_, true) => Some(i.id.clone()),
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect();
+        let folders =
+            window.use_keyed_state(child_id(&self.id, "folders"), cx, move |_, _| defaults);
+        let folder_entity = folders.clone();
+        let on_folder_toggle: Rc<dyn Fn(&SharedString, &mut App)> = Rc::new(move |id, cx| {
+            folder_entity.update(cx, |set, cx| {
+                if !set.remove(id) {
+                    set.insert(id.clone());
+                }
+                cx.notify();
+            });
+        });
+        let folder_open = folders.read(cx).clone();
+        let order = nav_order(&self.entries, &self.footer_items, &folder_open);
+        let cursor = cursor_state
+            .read(cx)
+            .clone()
+            .or_else(|| self.selected.clone());
 
         let t = Ctx {
             bar: &self.id,
@@ -1268,6 +1243,8 @@ impl RenderOnce for ActivityBar {
             focused,
             cursor_state: cursor_state.clone(),
             drop: drop.clone(),
+            folder_open,
+            on_folder_toggle,
         };
         let mut ix = 0usize;
         let mut main_ix = 0usize;
@@ -1275,9 +1252,51 @@ impl RenderOnce for ActivityBar {
         for e in self.entries {
             match e {
                 Entry::Item(item) => {
-                    list.push(tile(ix, item, Role::Main(main_ix), &t, window, cx));
+                    let members = match &item.face {
+                        Face::Folder(m, _) => Some((item.id.clone(), m.clone())),
+                        _ => None,
+                    };
+                    let open = members
+                        .as_ref()
+                        .is_some_and(|(id, _)| t.folder_open.contains(id));
+                    let tile_el = tile(ix, item, Role::Main(main_ix), &t, window, cx);
                     ix += 1;
                     main_ix += 1;
+                    if let Some((fid, members)) = members {
+                        let panel_id = ElementId::NamedChild(
+                            Box::new(self.id.clone()),
+                            format!("folder-{fid}").into(),
+                        );
+                        let panel = crate::components::disclosure::collapse_panel(
+                            &panel_id,
+                            open,
+                            window,
+                            cx,
+                            |w, cx| {
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .items_center()
+                                    .gap(px(t.style.gap))
+                                    .children(
+                                        members
+                                            .into_iter()
+                                            .map(|m| tile(0, m, Role::Child, &t, w, cx)),
+                                    )
+                                    .into_any_element()
+                            },
+                        );
+                        list.push(folder_tube(
+                            t.r.size,
+                            t.style.labels,
+                            c.border_default,
+                            c.background_brand_subtle,
+                            tile_el,
+                            panel,
+                        ));
+                    } else {
+                        list.push(tile_el);
+                    }
                 }
                 Entry::Divider => list.push(divider(width, cx)),
             }
@@ -1291,9 +1310,10 @@ impl RenderOnce for ActivityBar {
         let keys = cursor_state.clone();
         let on_select = self.on_select.clone();
         let on_reorder = self.on_reorder.clone();
+        let on_folder_toggle_kb = t.on_folder_toggle.clone();
         let n = order.len();
-        let main_n = main_ix;
         let order_kb = order.clone();
+        let selected_id = self.selected.clone();
         let edge_border = self.style.border;
         div()
             .id(self.id.clone())
@@ -1304,24 +1324,36 @@ impl RenderOnce for ActivityBar {
                 if n == 0 {
                     return;
                 }
-                let cur = keys.read(cx).or(selected_ix);
-                let enabled = |i: usize| !order_kb[i].1;
+                let cur_id = keys.read(cx).clone().or_else(|| selected_id.clone());
+                let cur = cur_id
+                    .as_ref()
+                    .and_then(|id| order_kb.iter().position(|o| &o.id == id));
+                let enabled = |i: usize| !order_kb[i].disabled;
                 let k = e.keystroke.key.as_str();
                 let alt = e.keystroke.modifiers.alt;
                 if alt && (k == "up" || k == "down") {
                     if let (Some(c), Some(h)) = (cur, &on_reorder)
-                        && c < main_n
+                        && let Some(from) = order_kb[c].main_ix
                     {
+                        // Walk neighboring main-row items only; folder children
+                        // and footer items are not part of the reorder list.
                         let to = if k == "up" {
-                            c.saturating_sub(1)
+                            order_kb[..c]
+                                .iter()
+                                .rev()
+                                .find_map(|o| o.main_ix)
+                                .unwrap_or(from)
                         } else {
-                            (c + 1).min(main_n - 1)
+                            order_kb[c + 1..]
+                                .iter()
+                                .find_map(|o| o.main_ix)
+                                .unwrap_or(from)
                         };
-                        if to != c {
+                        if to != from {
                             cx.stop_propagation();
-                            h(c, to, w, cx);
+                            h(from, to, w, cx);
                             keys.update(cx, |kk, cx| {
-                                *kk = Some(to);
+                                *kk = Some(order_kb[c].id.clone());
                                 cx.notify();
                             });
                         }
@@ -1340,11 +1372,16 @@ impl RenderOnce for ActivityBar {
                     "home" => (0..n).find(|&i| enabled(i)),
                     "end" => (0..n).rev().find(|&i| enabled(i)),
                     "enter" | "space" => {
-                        if let (Some(c), Some(h)) = (cur, &on_select)
+                        if let Some(c) = cur
                             && enabled(c)
                         {
                             cx.stop_propagation();
-                            h(&order_kb[c].0, w, cx);
+                            if order_kb[c].is_folder {
+                                on_folder_toggle_kb(&order_kb[c].id, cx);
+                            }
+                            if let Some(h) = &on_select {
+                                h(&order_kb[c].id, w, cx);
+                            }
                         }
                         return;
                     }
@@ -1352,7 +1389,7 @@ impl RenderOnce for ActivityBar {
                 };
                 cx.stop_propagation();
                 keys.update(cx, |kk, cx| {
-                    *kk = next;
+                    *kk = next.map(|i| order_kb[i].id.clone());
                     cx.notify();
                 });
             })
@@ -1361,7 +1398,10 @@ impl RenderOnce for ActivityBar {
             .flex_none()
             .w(px(width))
             .when(self.fill, |d| d.h_full())
-            .bg(r.bar)
+            .map(|d| {
+                let (fill, layer) = crate::material::chrome(crate::SurfaceKind::Sidebar, r.bar, cx);
+                d.relative().bg(fill).children(layer)
+            })
             .when(edge_border, |d| match self.side {
                 BarSide::Leading => d
                     .border_r(px(stroke::HAIRLINE))
@@ -1422,31 +1462,86 @@ impl RenderOnce for ActivityBar {
 
 #[cfg(test)]
 mod tests {
+    use super::Entry;
     use super::*;
 
     #[test]
-    fn initials_and_badges() {
-        assert_eq!(activity_initials("Rust Korea"), "RK");
-        assert_eq!(activity_initials("Pelagornis Design Lab Team"), "PDL");
-        assert_eq!(activity_initials("gpui"), "gp");
+    fn badges_and_folder_default_open() {
         assert_eq!(badge_text(7), "7");
         assert_eq!(badge_text(120), "99+");
+        let open = ActivityItem::folder(
+            "games",
+            "Games",
+            [ActivityItem::icon("a", "A", IconName::Bug)],
+        )
+        .default_open(true);
+        assert!(matches!(open.face, Face::Folder(_, true)));
+        assert!(open.badge.is_none());
+        assert!(displayed_badge(&open).is_none());
+
+        let many: Vec<_> = (0..5)
+            .map(|i| ActivityItem::icon(format!("m{i}"), format!("M{i}"), IconName::Bug))
+            .collect();
+        let stacked = ActivityItem::folder("apps", "Apps", many);
+        assert_eq!(displayed_badge(&stacked), Some(ItemBadge::Count(5)));
+        let labelled = stacked.clone().badge(2);
+        assert_eq!(displayed_badge(&labelled), Some(ItemBadge::Count(2)));
     }
 
     #[test]
-    fn rail_preset_keeps_the_side_dock_geometry() {
-        let r = ActivityBarStyle::rail();
-        assert_eq!((r.width, r.item_size), (Some(72.), Some(48.)));
+    fn nav_order_includes_open_folder_children_not_in_reorder() {
+        let entries = vec![
+            Entry::Item(ActivityItem::icon("a", "A", IconName::Document)),
+            Entry::Item(
+                ActivityItem::folder(
+                    "folder",
+                    "Folder",
+                    [
+                        ActivityItem::icon("c1", "C1", IconName::Search),
+                        ActivityItem::icon("c2", "C2", IconName::Bug),
+                    ],
+                )
+                .default_open(true),
+            ),
+            Entry::Item(ActivityItem::icon("b", "B", IconName::Cube)),
+        ];
+        let footer = vec![ActivityItem::icon(
+            "settings",
+            "Settings",
+            IconName::Settings,
+        )];
+        let closed = nav_order(&entries, &footer, &HashSet::new());
+        assert_eq!(
+            closed.iter().map(|e| e.id.as_ref()).collect::<Vec<_>>(),
+            ["a", "folder", "b", "settings"]
+        );
+        assert_eq!(
+            closed.iter().map(|e| e.main_ix).collect::<Vec<_>>(),
+            [Some(0), Some(1), Some(2), None]
+        );
+
+        let mut open = HashSet::new();
+        open.insert("folder".into());
+        let opened = nav_order(&entries, &footer, &open);
+        assert_eq!(
+            opened.iter().map(|e| e.id.as_ref()).collect::<Vec<_>>(),
+            ["a", "folder", "c1", "c2", "b", "settings"]
+        );
+        assert!(opened[0].main_ix == Some(0) && !opened[0].is_folder);
+        assert!(opened[1].is_folder && opened[1].main_ix == Some(1));
+        assert!(opened[2].main_ix.is_none() && !opened[2].is_folder);
+        assert!(opened[3].main_ix.is_none());
+        assert_eq!(opened[4].main_ix, Some(2));
+        assert!(opened[5].main_ix.is_none());
+    }
+
+    #[test]
+    fn unified_style_is_an_improved_rail() {
+        let r = ActivityBarStyle::unified();
         assert_eq!(r.shape, ItemShape::Morph);
         assert_eq!(r.indicator, IndicatorStyle::Bar);
-        // 8 / 20 / 40 pill heights for 48px tiles.
+        assert_eq!(r.labels, LabelMode::Tooltip);
+        assert_eq!(r.expanded_width, 220.);
         assert_eq!(bar_heights(48.), (8., 20., 40.));
-        let d = ActivityBarStyle::refine();
-        assert_eq!(d.indicator, IndicatorStyle::Plate);
-        assert_ne!(d.shape, ItemShape::Circle);
-        assert_eq!(
-            ActivityBarPreset::NavigationRail.style().labels,
-            LabelMode::Below
-        );
     }
 }

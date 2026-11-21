@@ -25,7 +25,7 @@ use gpui::{
     MouseButton, MouseDownEvent, MouseMoveEvent, ParentElement, Pixels, Point, RenderOnce,
     SharedString, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke};
+use refineui_foundation::{radius, spacing, stroke};
 
 use crate::ActiveTheme;
 use crate::interaction::selection::{

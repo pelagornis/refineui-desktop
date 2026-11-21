@@ -4,11 +4,11 @@ use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, MouseMoveEvent,
-    ParentElement, Pixels, RenderOnce, ScrollHandle, StatefulInteractiveElement, Styled, Window,
-    canvas, div, point, prelude::*, px,
+    AnyElement, App, Bounds, ElementId, InteractiveElement, IntoElement, MouseButton,
+    MouseMoveEvent, ParentElement, Pixels, RenderOnce, ScrollHandle, StatefulInteractiveElement,
+    Styled, Window, canvas, div, point, prelude::*, px,
 };
-use refineui_tokens::spacing;
+use refineui_foundation::spacing;
 use smallvec::SmallVec;
 
 use crate::ActiveTheme;
@@ -25,9 +25,11 @@ use crate::motion::{Motion, TrackInteraction, animate, child_id, use_interaction
 /// amount is per row (from the row's `view()` cover progress: 1 at 0% / 100%,
 /// 0 at 25% / 75%), scaled by that edge's factor, which ramps 0 → 1 over the
 /// first 25% of scroll distance, so a list parked at its top is untouched at
-/// the top and lists that do not scroll are never touched. Rows never shift
-/// or shrink. GPUI has no `filter: blur`, so the row's `blur(2px)` is
-/// approximated by fading the whole row (no colored overlay).
+/// the top and lists that do not scroll are never touched. Rows never shift,
+/// shrink, or lose opacity. With the `material` feature and backdrop blur
+/// enabled, a real `blur(scrollEdge * amount)` plate (max
+/// [`refineui_foundation::blur::role::SCROLL_EDGE`], 2px) is painted over
+/// the row. Otherwise the row fades (`1 - 0.5 * amount`) as a fallback.
 #[derive(IntoElement)]
 pub struct ScrollArea {
     id: ElementId,
@@ -68,6 +70,18 @@ impl ScrollArea {
         self.max_height = Some(h);
         self
     }
+
+    /// The [`ScrollHandle`] a [`ScrollArea`] with this `id` tracks. Same
+    /// key the area itself uses, so callers can `set_offset` / scroll an
+    /// item into view (e.g. a Select moving the highlighted row).
+    pub fn handle(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) -> ScrollHandle {
+        window
+            .use_keyed_state(child_id(&id.into(), "scroll"), cx, |_, _| {
+                ScrollHandle::new()
+            })
+            .read(cx)
+            .clone()
+    }
 }
 
 impl ParentElement for ScrollArea {
@@ -92,8 +106,8 @@ struct Scrolling {
 const SCROLLING_LINGER: Duration = Duration::from_millis(600);
 /// Web `SCROLL_EDGE_FALLOFF_RATIO`.
 const EDGE_FALLOFF: f32 = 0.25;
-/// Opacity lost at full edge amount — stands in for `blur(scrollEdge)` (2px),
-/// which costs a row roughly this much contrast.
+/// Opacity lost at full edge amount when backdrop blur is unavailable
+/// (fallback for `blur(scrollEdge)`).
 const EDGE_FADE: f32 = 0.5;
 
 /// What a [`ScrollEdgeItem`] needs from its enclosing [`ScrollArea`].
@@ -190,6 +204,57 @@ impl gpui::Element for EdgeScope {
     }
 }
 
+fn edge_blur_enabled(cx: &App) -> bool {
+    #[cfg(feature = "material")]
+    {
+        refineui_material::MaterialSettings::blur_enabled(cx)
+    }
+    #[cfg(not(feature = "material"))]
+    {
+        let _ = cx;
+        false
+    }
+}
+
+/// Paint a web-style `blur(scrollEdge * amount)` overlay, clipped to the
+/// scroll viewport (`window.content_mask()`). No-op without the `material`
+/// feature, when blur is disabled, or when the clipped bounds are empty.
+fn paint_scroll_edge_blur(bounds: Bounds<Pixels>, amount: f32, window: &mut Window, cx: &mut App) {
+    #[cfg(feature = "material")]
+    {
+        if amount <= 0.001 || !refineui_material::MaterialSettings::blur_enabled(cx) {
+            return;
+        }
+        let clipped = bounds.intersect(&window.content_mask().bounds);
+        if clipped.size.width > px(0.) && clipped.size.height > px(0.) {
+            let radius = px(refineui_foundation::blur::role::SCROLL_EDGE * amount);
+            if radius > px(0.) {
+                // Painted after the row (and after any ancestor material
+                // plate already composited into the framebuffer). The
+                // sample is the popup's own surface, not the desktop
+                // behind it, so this cannot punch a hole in the plate.
+                // Transparent tint: only the edge blur is added.
+                refineui_material::paint_backdrop(
+                    window,
+                    clipped,
+                    gpui::BackdropBlurStyle {
+                        radius,
+                        tint: gpui::transparent_black(),
+                        saturation: 1.,
+                        opacity: 1.,
+                        noise: 0.,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+    #[cfg(not(feature = "material"))]
+    {
+        let _ = (bounds, amount, window, cx);
+    }
+}
+
 /// A row that softens at a [`ScrollArea`] edge (web `data-scroll-edge-item`).
 /// Put it anywhere inside a scroll area's content; outside one it is a plain
 /// wrapper.
@@ -235,9 +300,14 @@ impl RenderOnce for ScrollEdgeItem {
             ),
             _ => 0.,
         };
+        let use_blur = edge_blur_enabled(cx);
         div()
             .relative()
-            .opacity(1. - EDGE_FADE * amount)
+            .opacity(if use_blur {
+                1.
+            } else {
+                1. - EDGE_FADE * amount
+            })
             .child(self.child)
             .when(ctx.is_some(), |d| {
                 d.child(
@@ -253,7 +323,9 @@ impl RenderOnce for ScrollEdgeItem {
                                 window.request_animation_frame();
                             }
                         },
-                        |_, _, _, _| {},
+                        move |bounds, _, window, cx| {
+                            paint_scroll_edge_blur(bounds, amount, window, cx);
+                        },
                     )
                     .absolute()
                     .top_0()

@@ -2,7 +2,7 @@
 title: Status Bar
 description: "The strip at the bottom of the window: leading and trailing groups of text, buttons, progress and custom items."
 sidebar:
-  order: 54
+  order: 60
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -13,9 +13,10 @@ The strip at the bottom of the window: leading and trailing groups of text, butt
 
 ## Usage
 
-- Height follows density (`status_bar_height`: 22 / 24 / 28); items use `captionMd` text and 12px icons.
-- Buttons are quiet (fill on hover only) and can carry a tooltip with a keymap shortcut: `.tooltip("Toggle Panel", Some("workspace::TogglePanel"))`.
-- `accent(true)` paints the bar `backgroundBrand` (e.g. while debugging or connected to a remote).
+- A quiet `backgroundPrimary` strip with a hairline top border — no solid colour band. Height is the density control height + 8; items are rounded chips (`captionLg`, `foregroundSecondary`).
+- Tones (`Warning`, `Danger`, `Success`, `Info`) tint only the icon, or show a 6px dot when the item has none, so the bar never turns into a row of coloured text.
+- Buttons fill on hover / press (animated) and can carry a tooltip with a keymap shortcut: `.tooltip("Toggle Panel", Some("workspace::TogglePanel"))`. Progress items show a 4px rounded track.
+- `accent(true)` (e.g. debugging, remote) adds a 2px brand rule along the top and turns the first leading item into a `backgroundBrandSubtle` pill.
 
 ```rust
 use refineui::prelude::*;
@@ -46,7 +47,7 @@ The status bar. See the module docs.
 | `fn new(id: impl Into<ElementId>) -> Self` | Empty bar. |
 | `fn leading(mut self, item: StatusItem) -> Self` | Add to the leading group. |
 | `fn trailing(mut self, item: StatusItem) -> Self` | Add to the trailing group. |
-| `fn accent(mut self, accent: bool) -> Self` | Brand-coloured bar. |
+| `fn accent(mut self, accent: bool) -> Self` | Session accent (brand top rule + brand first item). |
 
 ### StatusItem
 

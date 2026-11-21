@@ -2,7 +2,6 @@
 
 pub mod app;
 pub mod demo;
-pub mod shell_demo;
 pub mod stories;
 
 pub use stories::{Story, StoryGroup, all_stories};

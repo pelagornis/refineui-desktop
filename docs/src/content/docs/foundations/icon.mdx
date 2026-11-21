@@ -13,8 +13,10 @@ RefineUI System Icons in regular and filled styles.
 
 ## Usage
 
-- Icons are embedded SVGs served by `refineui::Assets`; register it with `Application::new().with_assets(refineui::Assets)`.
-- Add icons with `python3 scripts/gen_icons.py <name>…`.
+- Glyphs come from the `refineui-system-icons` crate (git dependency on pelagornis/refineui-system-icons, `default-features = false`) and are served by `refineui::Assets`; register it with `Application::new().with_assets(refineui::Assets)`.
+- `Icon::new(IconName::…)` uses the curated set components rely on; `Icon::named(refineui::system_icons::icons::AIRPLANE)` reaches any of the 890 glyphs.
+- The optical source size (16/20/24/28/32/48) is chosen from the rendered size, so a 24px icon uses the 24px drawing.
+- Add a curated icon: append it to `CURATED` in `scripts/gen_icons.py`, then `python3 scripts/gen_icons.py`.
 
 ```rust
 use refineui::prelude::*;
@@ -40,6 +42,8 @@ A monochrome SVG icon from the RefineUI System Icons set.
 | Method | Description |
 | --- | --- |
 | `fn new(name: IconName) -> Self` | New icon (regular style, 16px, current text color). |
+| `fn named(glyph: rsi::IconName) -> Self` | Any glyph of RefineUI System Icons (890 icons), e.g. `Icon::named(refineui::system_icons::icons::AIRPLANE)`. |
+| `fn on_surface(mut self, kind: crate::SurfaceKind) -> Self` | Default color for a `crate::Surface` of `kind` (e.g. white on the HUD). An explicit `Self::color` still wins. |
 | `fn style(mut self, style: IconStyle) -> Self` | Filled / regular. |
 | `fn size(mut self, size: IconSize) -> Self` | Size. |
 | `fn color(mut self, color: impl Into<Hsla>) -> Self` | Color (defaults to `foreground_primary`). |

@@ -23,7 +23,7 @@ use gpui::{
     AnyElement, App, Context, ElementId, InteractiveElement, IntoElement, ParentElement, Pixels,
     Render, RenderOnce, SharedString, Styled, Window, anchored, canvas, div, point, prelude::*, px,
 };
-use refineui_tokens::{
+use refineui_foundation::{
     motion::duration, radius, size::component, spacing, stroke, typography::role,
 };
 
@@ -114,6 +114,7 @@ pub struct Toast {
     id: ElementId,
     data: ToastData,
     on_close: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
+    material: bool,
 }
 
 impl Toast {
@@ -123,7 +124,16 @@ impl Toast {
             id: id.into(),
             data,
             on_close: None,
+            material: false,
         }
+    }
+
+    /// Draw the card as the Toast material (real blur, toast elevation)
+    /// when [`crate::materials_active`]; otherwise unchanged. Default `false`
+    /// (web parity: an opaque `backgroundPrimary` card).
+    pub fn material(mut self, material: bool) -> Self {
+        self.material = material;
+        self
     }
 
     /// Show a ghost dismiss button (desktop addition; the web swipes away).
@@ -145,81 +155,106 @@ impl RenderOnce for Toast {
         };
         let close = self.on_close.clone();
         let parent = self.id.clone();
+        let plate = if self.material {
+            crate::material::backing(
+                crate::SurfaceKind::Toast,
+                px(radius::X_LARGE),
+                stroke::HAIRLINE,
+                c.background_primary,
+                Some(c.border_default),
+                theme.shadow(Elevation::TOAST),
+                cx,
+            )
+        } else {
+            crate::material::Backing {
+                fill: c.background_primary,
+                border: c.border_default,
+                shadows: theme.shadow(Elevation::TOAST),
+                layer: None,
+            }
+        };
         div()
             .id(self.id)
             .occlude()
             .relative()
-            .flex()
-            .items_center()
             .max_w(px(component::TOAST_MAX_WIDTH))
-            .gap(px(spacing::SMALL))
-            .py(px(spacing::MEDIUM))
-            .pl(px(spacing::MEDIUM))
-            .pr(px(spacing::LARGE))
             .rounded(px(radius::X_LARGE))
-            .bg(c.background_primary)
+            .bg(plate.fill)
             .border(px(stroke::HAIRLINE))
-            .border_color(c.border_default)
-            .shadow(theme.shadow(Elevation::TOAST))
+            .border_color(plate.border)
+            .shadow(plate.shadows)
+            .children(plate.layer)
             .font_family(theme.font_family.clone())
             .child(
                 div()
                     .flex()
-                    .flex_none()
                     .items_center()
-                    .justify_center()
-                    .child(
-                        Icon::new(icon)
-                            .style(IconStyle::Filled)
-                            .size(IconSize::Medium)
-                            .color(accent),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
+                    .gap(px(spacing::SMALL))
+                    .py(px(spacing::MEDIUM))
+                    .pl(px(spacing::MEDIUM))
+                    .pr(px(spacing::LARGE))
                     .child(
                         div()
-                            .text_style_token(role::BODY_LG)
-                            .text_color(c.foreground_primary)
-                            .child(self.data.title),
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .child(
+                                Icon::new(icon)
+                                    .style(IconStyle::Filled)
+                                    .size(IconSize::Medium)
+                                    .color(accent),
+                            ),
                     )
-                    .when_some(self.data.description, |d, t| {
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_style_token(role::BODY_LG)
+                                    .text_color(c.foreground_primary)
+                                    .child(self.data.title),
+                            )
+                            .when_some(self.data.description, |d, t| {
+                                d.child(
+                                    div()
+                                        .text_style_token(role::BODY_XS)
+                                        .text_color(c.foreground_secondary)
+                                        .child(t),
+                                )
+                            }),
+                    )
+                    .when_some(self.data.action, |d, (label, f)| {
                         d.child(
-                            div()
-                                .text_style_token(role::BODY_XS)
-                                .text_color(c.foreground_secondary)
-                                .child(t),
+                            div().flex_none().child(
+                                Button::new(
+                                    ElementId::NamedChild(
+                                        Box::new(parent.clone()),
+                                        "action".into(),
+                                    ),
+                                    label,
+                                )
+                                .variant(ButtonVariant::Primary)
+                                .size(ControlSize::Small)
+                                .on_click(move |_, w, cx| f(w, cx)),
+                            ),
+                        )
+                    })
+                    .when_some(close, |d, f| {
+                        d.child(
+                            Button::icon_only(
+                                ElementId::NamedChild(Box::new(parent), "close".into()),
+                                IconName::Dismiss,
+                            )
+                            .variant(ButtonVariant::Ghost)
+                            .size(ControlSize::Small)
+                            .on_click(move |_, w, cx| f(w, cx)),
                         )
                     }),
             )
-            .when_some(self.data.action, |d, (label, f)| {
-                d.child(
-                    div().flex_none().child(
-                        Button::new(
-                            ElementId::NamedChild(Box::new(parent.clone()), "action".into()),
-                            label,
-                        )
-                        .variant(ButtonVariant::Primary)
-                        .size(ControlSize::Small)
-                        .on_click(move |_, w, cx| f(w, cx)),
-                    ),
-                )
-            })
-            .when_some(close, |d, f| {
-                d.child(
-                    Button::icon_only(
-                        ElementId::NamedChild(Box::new(parent), "close".into()),
-                        IconName::Dismiss,
-                    )
-                    .variant(ButtonVariant::Ghost)
-                    .size(ControlSize::Small)
-                    .on_click(move |_, w, cx| f(w, cx)),
-                )
-            })
     }
 }
 
@@ -236,6 +271,7 @@ pub struct Toaster {
     heights: HashMap<u64, Pixels>,
     next_id: u64,
     max_toasts: usize,
+    material: bool,
 }
 
 impl Toaster {
@@ -246,7 +282,14 @@ impl Toaster {
             heights: HashMap::new(),
             next_id: 0,
             max_toasts: 3,
+            material: false,
         }
+    }
+
+    /// Draw toasts as the Toast material (see [`Toast::material`]).
+    pub fn material(mut self, material: bool) -> Self {
+        self.material = material;
+        self
     }
 
     /// Maximum toasts kept in the stack (web default is 1).
@@ -323,6 +366,7 @@ const STACK_ID: &str = "refineui-toaster";
 
 impl Render for Toaster {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let material = self.material;
         let hover_state = window.use_keyed_state("refineui-toaster-hover", cx, |_, _| false);
         if self.toasts.is_empty() {
             hover_state.update(cx, |h, _| *h = false);
@@ -407,7 +451,10 @@ impl Render for Toaster {
                 } else {
                     1. - stack_ix as f32 * 0.12
                 },
-                Motion::new(duration::SLOW, refineui_tokens::motion::easing::EASE_IN_OUT),
+                Motion::new(
+                    duration::SLOW,
+                    refineui_foundation::motion::easing::EASE_IN_OUT,
+                ),
                 window,
                 cx,
             );
@@ -419,7 +466,7 @@ impl Render for Toaster {
             let slide = -(1. - presence) * own_h;
             let measure = this.clone();
             let close_target = this.clone();
-            let toast = Toast::new(("refineui-toast", id), e.data.clone());
+            let toast = Toast::new(("refineui-toast", id), e.data.clone()).material(material);
             let toast = if e.data.duration.is_none() {
                 toast.on_close(move |_, cx| close_target.update(cx, |t, cx| t.dismiss(id, cx)))
             } else {

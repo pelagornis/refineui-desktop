@@ -15,7 +15,7 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Transformation, Window, div,
     prelude::*, px, radians,
 };
-use refineui_tokens::{radius, size::icon, spacing, typography::role};
+use refineui_foundation::{radius, size::icon, spacing, typography::role};
 
 use crate::components::disclosure::collapse_panel;
 use crate::motion::{
@@ -241,7 +241,7 @@ fn disclosure_item(
                 .items_center()
                 .justify_between()
                 .gap(px(spacing::MEDIUM))
-                .min_h(px(refineui_tokens::size::component::TOUCH_MIN))
+                .min_h(px(refineui_foundation::size::component::TOUCH_MIN))
                 .px(px(spacing::MEDIUM))
                 .py(px(spacing::X_SMALL))
                 .rounded(px(radius::X_LARGE))

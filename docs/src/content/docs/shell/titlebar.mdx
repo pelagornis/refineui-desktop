@@ -2,7 +2,7 @@
 title: Titlebar
 description: "The window titlebar: draggable, double-click to zoom, with title / subtitle, leading and trailing slots or a unified toolbar."
 sidebar:
-  order: 51
+  order: 57
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -18,6 +18,7 @@ The window titlebar: draggable, double-click to zoom, with title / subtitle, lea
 - **Linux** — client-side decorations: round header-bar buttons, `start_window_move` on press, right-click opens the window menu, `WindowFrame` draws the rounded frame, shadow and resize edges.
 - Double-click follows the platform: `titlebar_double_click` on macOS (respects the user preference), maximize toggle elsewhere. Interactive children are occluded so they never start a window drag.
 - Window options come from `window_options(&WindowSpec, cx)`, which sets the transparent titlebar, traffic-light point, min size and decorations to match.
+- Look: `backgroundPrimary` with a hairline `borderSubtle` bottom edge; the title reads as one line — title (`bodySm` medium) › subtitle (secondary), separated by a small tertiary chevron.
 
 ```rust
 use refineui::prelude::*;

@@ -6,9 +6,9 @@ use gpui::{
 };
 
 use gpui::AnimationExt;
-use refineui_tokens::{radius, size::component, spacing, stroke, typography::role};
+use refineui_foundation::{radius, size::component, spacing, stroke, typography::role};
 
-use crate::components::floating::{Beak, BeakAlign, BeakSide, floating_surface};
+use crate::components::floating::{Beak, BeakAlign, BeakSide};
 use crate::motion::Motion;
 use crate::{ActiveTheme, Elevation, Kbd, StyledExt};
 
@@ -85,28 +85,39 @@ fn bubble(
     // Web `Tooltip`: transparent hairline-border panel (`roundedMedium`,
     // `bodyXs`, px `sizeMedium` / py `sizeSmall`) over a `FloatingSurface`
     // that fills + strokes the panel and its beak as one outline.
+    // With materials active the panel is the Tooltip material (thin, real
+    // blur) and the outline only strokes it and fills the beak.
+    let (chrome, shadows) = crate::components::floating::floating_chrome(
+        crate::SurfaceKind::Tooltip,
+        radius::MEDIUM,
+        beak,
+        theme.floating_fill(),
+        c.border_default,
+        theme.shadow(Elevation::FLOATING),
+        cx,
+    );
     div()
         .relative()
         .max_w(px(component::TOOLTIP_MAX_WIDTH))
         .flex()
-        .items_center()
-        .gap(px(spacing::X_SMALL))
-        .px(px(spacing::MEDIUM + stroke::HAIRLINE))
-        .py(px(spacing::SMALL + stroke::HAIRLINE))
+        .flex_col()
         .rounded(px(radius::MEDIUM))
-        .shadow(theme.shadow(Elevation::FLOATING))
-        .child(floating_surface(
-            radius::MEDIUM,
-            beak,
-            theme.floating_fill(),
-            c.border_default,
-        ))
+        .shadow(shadows)
+        .children(chrome)
         .text_color(c.foreground_primary)
         .font_family(theme.font_family.clone())
         .text_style_token(role::BODY_XS)
         .whitespace_nowrap()
-        .child(text)
-        .when_some(shortcut, |this, s| this.child(Kbd::new(s)))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(spacing::X_SMALL))
+                .px(px(spacing::MEDIUM + stroke::HAIRLINE))
+                .py(px(spacing::SMALL + stroke::HAIRLINE))
+                .child(text)
+                .when_some(shortcut, |this, s| this.child(Kbd::new(s))),
+        )
 }
 
 /// A tooltip bubble with its 16×8 beak (2px rounded tip) inset `sizeMedium`
@@ -127,19 +138,36 @@ pub fn tooltip_with_beak_aligned(
     bubble(text.into(), None, Some(Beak::tooltip(side, align)), cx)
 }
 
+/// GPUI places a hover tooltip 1px below-right of the cursor and flips it
+/// above when it would overflow the window. The beak follows that flip and
+/// sits on the facing edge at the start inset.
+fn live_tooltip_beak(window: &Window) -> Beak {
+    let mouse = window.mouse_position();
+    let view = window.viewport_size();
+    let room_below = f32::from(view.height) - f32::from(mouse.y);
+    if room_below < 48. && f32::from(mouse.y) > 48. {
+        Beak::tooltip(BeakSide::Bottom, BeakAlign::Start)
+    } else {
+        Beak::tooltip(BeakSide::Top, BeakAlign::Start)
+    }
+}
+
 impl Render for Tooltip {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // GPUI shows tooltips next to the pointer; fade in like the web
-        // frosted-panel enter (`duration-normal`, standard).
-        // GPUI places tooltips just below-right of the pointer, so the beak
-        // sits on the top edge at the start inset, pointing at the cursor.
+        // frosted-panel enter. The beak is part of one closed outline with
+        // the body (same fill and hairline) and follows a bottom flip.
+        let beak = live_tooltip_beak(window);
+        let pad = component::TOOLTIP_BEAK_HEIGHT + spacing::XX_SMALL;
+        let below = beak.side == BeakSide::Top;
         div()
             .pl(px(4.))
-            .pt(px(component::TOOLTIP_BEAK_HEIGHT + spacing::XX_SMALL))
+            .when(below, |d| d.pt(px(pad)))
+            .when(!below, |d| d.pb(px(pad)))
             .child(bubble(
                 self.text.clone(),
                 self.shortcut.clone(),
-                Some(Beak::tooltip(BeakSide::Top, BeakAlign::Start)),
+                Some(beak),
                 cx,
             ))
             .with_animation(
@@ -151,10 +179,14 @@ impl Render for Tooltip {
                     crate::motion::easing::EMPHASIZED,
                 )
                 .animation(),
-                |d, t| {
-                    d.opacity(t)
-                        .pt(px(component::TOOLTIP_BEAK_HEIGHT + spacing::XX_SMALL
-                            - spacing::X_SMALL * (1. - t)))
+                move |d, t| {
+                    let inset = pad - spacing::X_SMALL * (1. - t);
+                    let d = d.opacity(t);
+                    if below {
+                        d.pt(px(inset))
+                    } else {
+                        d.pb(px(inset))
+                    }
                 },
             )
     }

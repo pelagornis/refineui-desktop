@@ -1,0 +1,19 @@
+[package]
+name = "refineui-material"
+description = "RefineUI Material Engine: real backdrop blur, glass, lighting, grain and elevation for GPUI — independent of the component library."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+gpui.workspace = true
+refineui-foundation.workspace = true
+smallvec.workspace = true
+# Same major as gpui's own `image` dependency (grain tiles are RenderImages).
+image = { version = "0.25.1", default-features = false }
+
+[lints]
+workspace = true

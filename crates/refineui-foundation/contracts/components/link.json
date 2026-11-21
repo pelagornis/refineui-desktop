@@ -1,0 +1,89 @@
+{
+  "$schema": "../schema.json",
+  "id": "link",
+  "name": "Link",
+  "layer": "components",
+  "status": "exists",
+  "phase": 4,
+  "feature": null,
+  "desktop_target": null,
+  "rust_types": [
+    "Link"
+  ],
+  "a11y_role": "link",
+  "states": {
+    "default": {
+      "status": "implemented",
+      "visual": "resting tokens"
+    },
+    "hovered": {
+      "status": "implemented",
+      "visual": "hover fill (`*Hover` alias) over duration-fast"
+    },
+    "pressed": {
+      "status": "implemented",
+      "visual": "active fill (`*Active` alias)"
+    },
+    "focused": {
+      "status": "implemented",
+      "visual": "2px focusRing (borderFocus) on :focus-visible only"
+    },
+    "disabled": {
+      "status": "implemented",
+      "visual": "foregroundDisabled / backgroundSurfaceDisabled, no pointer"
+    },
+    "loading": {
+      "status": "planned",
+      "visual": "spinner replaces the leading icon; not operable"
+    },
+    "selected": {
+      "status": "planned",
+      "visual": "toggled / pressed-in fill when used as a toggle"
+    },
+    "dragging": null
+  },
+  "sizes": {
+    "metric": "content"
+  },
+  "tokens": {
+    "color": [
+      "borderFocus",
+      "foregroundDisabled",
+      "foregroundLink",
+      "foregroundLinkActive",
+      "foregroundLinkHover",
+      "foregroundLinkVisited"
+    ],
+    "radius": [
+      "roundedSmall"
+    ],
+    "spacing": [
+      "sizeXxSmall"
+    ],
+    "typography": [
+      "bodyLg"
+    ],
+    "motion": [
+      "motion.fastEase"
+    ]
+  },
+  "keyboard": [
+    {
+      "keys": "enter",
+      "action": "activate"
+    },
+    {
+      "keys": "space",
+      "action": "activate"
+    }
+  ],
+  "focus": {
+    "tab_stop": "single",
+    "ring": "focusRing",
+    "restores_focus": false
+  },
+  "pointer": {
+    "cursor": "pointer",
+    "hover_only": false
+  }
+}

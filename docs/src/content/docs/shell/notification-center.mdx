@@ -1,0 +1,99 @@
+---
+title: Notification Center
+description: "The history of an app's notifications: a sheet-material panel with unread count, Clear All, per-item dismiss, inline actions and an empty state."
+sidebar:
+  order: 67
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+The history of an app's notifications: a sheet-material panel with unread count, Clear All, per-item dismiss, inline actions and an empty state.
+
+<Screenshot id="notification-center" alt="Notification Center variants and states" />
+
+## Usage
+
+- Toasts are transient; the center keeps them. Push the same events into both and let the user open the center from a titlebar bell.
+- With the `material` feature active the panel is a `Sheet` material (blur, tint, rim, shadow); without it, the opaque floating fill with `Shadow16`.
+- Cards are `backgroundPrimary` at 72% (unread) / 45% (read) over the material, so the panel stays readable over any backdrop. The tone tints the 32px glyph plate.
+- `on_dismiss` shows an × on hover and the card slides/fades out while the list height collapses; new items fade and slide in. `on_clear_all` adds **Clear All**; with no items a compact `ResultView` (`Empty`) reads *No Notifications*.
+- Anchor it to the trailing edge (e.g. `ApplicationShell::overlay`); `inline(true)` lays it out in flow without the slide. Give notifications a stable `.id()` so dismiss animations keep the right card.
+
+```rust
+use refineui::prelude::*;
+
+NotificationCenter::new("notifications")
+    .open(self.show_notifications)
+    .notification(
+        Notification::new("Build finished")
+            .source("Pipelines")
+            .time("now")
+            .body("release-2.4 passed 128 checks.")
+            .icon(IconName::Checkmark, NotificationTone::Success)
+            .unread(true),
+    )
+    .on_dismiss(|ix, _, cx| { /* remove *ix */ })
+    .on_clear_all(|_, _, cx| { /* clear */ })
+    .on_close(|_, _, cx| { /* hide */ })
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story notification-center
+```
+
+## Motion
+
+The panel stays mounted through the exit. It slides in from the trailing edge over `duration-slow` (240ms, ease-out) with opacity, and out over `duration-normal` (180ms, ease-in). The sheet material travels with the plate. Item dismiss uses toast leave (200ms) plus a height collapse; new items use toast enter (280ms). Reduced motion snaps.
+
+## API
+
+Source: [`crates/refineui/src/shell/notification_center.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/notification_center.rs)
+
+### NotificationCenter
+
+Notification history panel.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty, open panel titled "Notifications". |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Header title. |
+| `fn notification(mut self, n: Notification) -> Self` | Add a notification (newest first is the caller's order). |
+| `fn notifications(mut self, n: impl IntoIterator<Item = Notification>) -> Self` | Add several notifications. |
+| `fn open(mut self, open: bool) -> Self` | Shown (slides in from the trailing edge; stays mounted through the exit). |
+| `fn sample_progress(mut self, t: f32) -> Self` | Freeze the panel enter animation at `t` in `0..=1` (gallery / documentation stills). |
+| `fn inline(mut self, inline: bool) -> Self` | Lay out in flow, always shown, no slide. |
+| `fn width(mut self, w: impl Into<Pixels>) -> Self` | Panel width (default 360px). |
+| `fn max_height(mut self, h: impl Into<Pixels>) -> Self` | Cap the height; the list scrolls. |
+| `fn on_dismiss(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Per-item dismiss (shows an × on each card). |
+| `fn on_clear_all(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | "Clear All" in the header. |
+| `fn on_close(mut self, f: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self` | Close button in the header. |
+
+### Notification
+
+One entry in a `NotificationCenter`.
+
+| Method | Description |
+| --- | --- |
+| `fn new(title: impl Into<SharedString>) -> Self` | Notification with a title. |
+| `fn id(mut self, id: impl Into<SharedString>) -> Self` | Stable id used for enter / exit animation. Falls back to a fingerprint of the copy. |
+| `fn body(mut self, b: impl Into<SharedString>) -> Self` | Body text. |
+| `fn source(mut self, s: impl Into<SharedString>) -> Self` | Source (app or feature) name, shown above the title. |
+| `fn time(mut self, t: impl Into<SharedString>) -> Self` | Relative time label ("2m", "Yesterday"). |
+| `fn icon(mut self, icon: IconName, tone: NotificationTone) -> Self` | Glyph and its tone. |
+| `fn unread(mut self, unread: bool) -> Self` | Mark unread (brand dot). |
+| `fn action(mut self, a: impl IntoElement) -> Self` | Inline action (usually a small `Button`). |
+
+### NotificationTone
+
+Tone of a notification's app glyph.
+
+| Variant | Description |
+| --- | --- |
+| `Neutral` | Neutral (default). |
+| `Brand` | Brand accent. |
+| `Success` | Success. |
+| `Warning` | Warning. |
+| `Error` | Error. |
+

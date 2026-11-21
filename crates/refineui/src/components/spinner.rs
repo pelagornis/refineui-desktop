@@ -7,7 +7,7 @@ use gpui::{
     App, Hsla, IntoElement, ParentElement, PathBuilder, RenderOnce, SharedString, Styled, Window,
     canvas, div, point, prelude::*, px,
 };
-use refineui_tokens::{motion::duration, size::component, spacing, typography::role};
+use refineui_foundation::{motion::duration, size::component, spacing, typography::role};
 
 use crate::{ActiveTheme, StyledExt};
 

@@ -1,20 +1,22 @@
 ---
 title: Result
-description: "Outcome screen with an icon, title, description and actions (web `Result`)."
+description: "Outcome screen with an icon, title, description and actions (web `Result`), including an empty state."
 sidebar:
-  order: 66
+  order: 77
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-Outcome screen with an icon, title, description and actions (web `Result`).
+Outcome screen with an icon, title, description and actions (web `Result`), including an empty state.
 
 <Screenshot id="result" alt="Result variants and states" />
 
 ## Usage
 
 - Named `ResultView` so it does not shadow `std::result::Result` in glob imports.
-- The variant picks the status icon and color; `figure` replaces the icon with any element.
+- The variant picks the status icon and color (`Success`, `Info`, `Warning`, `Error`, `Empty`); `figure` replaces the icon with any element.
+- `Empty` is the placeholder a pane shows when it has nothing yet: a secondary folder glyph on a subtle 48px plate. `compact(true)` tightens the layout for narrow panels; `details` adds a monospace well (error codes, paths). Retry is a regular `action(Button)`.
+- Success / Info / Warning / Error stay faithful to the web `Result` (no plate unless you call `plate(true)`).
 
 ```rust
 use refineui::prelude::*;
@@ -23,6 +25,18 @@ ResultView::new(ResultVariant::Success)
     .title("Payment received")
     .description("Your receipt was sent to your email.")
     .action(Button::new("done", "Done").variant(ButtonVariant::Primary));
+
+ResultView::new(ResultVariant::Empty)
+    .icon(IconName::Document)
+    .title("No documents yet")
+    .description("Create a document or drop files here.")
+    .action(Button::new("new", "New Document"));
+
+ResultView::new(ResultVariant::Error)
+    .title("Couldn't load the library")
+    .description("The server took too long to respond.")
+    .details("ETIMEDOUT · api.example.com:443")
+    .action(Button::new("retry", "Try again"));
 ```
 
 Open the live, interactive version in the gallery:
@@ -37,16 +51,19 @@ Source: [`crates/refineui/src/components/result.rs`](https://github.com/pelagorn
 
 ### ResultView
 
-Outcome panel: figure, title, description and actions.
+Outcome panel: figure, title, description, optional details and actions.
 
 | Method | Description |
 | --- | --- |
 | `fn new(variant: ResultVariant) -> Self` | New result of a variant. |
 | `fn title(mut self, t: impl Into<SharedString>) -> Self` | Heading. |
 | `fn description(mut self, t: impl Into<SharedString>) -> Self` | Supporting text (newlines are kept, web `whitespace-pre-line`). |
+| `fn details(mut self, t: impl Into<SharedString>) -> Self` | Technical details (error code, path), shown in a monospace well. |
 | `fn icon(mut self, icon: IconName) -> Self` | Replace the variant icon. |
 | `fn figure(mut self, figure: impl IntoElement) -> Self` | Replace the figure with any element (illustration, avatar…). |
-| `fn action(mut self, button: Button) -> Self` | Add a full-width action button (web `ResultButton`). |
+| `fn action(mut self, button: Button) -> Self` | Add an action button (web `ResultButton`). Use this for retry too: `action(Button::new("retry", "Try Again"))`. |
+| `fn compact(mut self, compact: bool) -> Self` | Smaller layout for narrow panels and list placeholders: tighter padding, a smaller glyph and title, no plate, and a horizontal action row. |
+| `fn plate(mut self, plate: bool) -> Self` | Show or hide the 48px rounded plate behind the icon. Defaults to on for `ResultVariant::Empty` when not compact, off for the web `Result` variants (so Success / Info / Warning / Error stay faithful to the web kit). |
 
 ### ResultVariant
 
@@ -58,8 +75,9 @@ Outcome tone (web `ResultVariant`, default `Info`).
 | `Info` | Info glyph in `foregroundInfo` (default). |
 | `Warning` | Warning glyph in `foregroundWarning`. |
 | `Error` | Error circle in `foregroundError`. |
+| `Empty` | Neutral empty state: folder glyph in `foregroundSecondary`, with a subtle 48px plate unless `ResultView::compact` or overridden by `ResultView::plate`. |
 
 | Method | Description |
 | --- | --- |
-| `fn icon(self) -> IconName` | Default icon (web `variantIcons`). |
+| `fn icon(self) -> IconName` | Default icon (web `variantIcons`, plus a folder for `Empty`). |
 

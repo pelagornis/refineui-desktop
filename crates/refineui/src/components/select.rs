@@ -9,14 +9,18 @@ use gpui::{
 };
 
 use gpui::{CursorStyle, InteractiveElement, Transformation};
-use refineui_tokens::{radius, size::icon, spacing, stroke, typography::role};
+use refineui_foundation::{radius, size::icon, spacing, stroke, typography::role};
 
 use crate::components::plate::row_plate;
 use crate::motion::{
     Interaction, Motion, TrackInteraction, animate, child_id, focus_visible, presence, press_scale,
     probe, scaled_plate, use_interaction, use_layout_probe,
 };
-use crate::{ActiveTheme, ControlSize, Icon, IconName, IconSize, StyledExt};
+use crate::{
+    ActiveTheme, CollisionOptions, ControlSize, FloatingLayout, FloatingSide, Icon, IconName,
+    IconSize, PlacementRect, PlacementViewport, ScrollArea, StyledExt, place_item_aligned,
+    place_popper, scroll_edge_item,
+};
 
 /// Trigger appearance.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -39,8 +43,29 @@ struct SelectState {
     align_scroll: bool,
     /// Geometry captured while open. The exit fade reuses it so the panel
     /// fades in place instead of jumping to re-align with a newly picked item.
-    frozen: Option<(gpui::Point<gpui::Pixels>, f32, f32, f32)>,
+    frozen: Option<SelectLayout>,
+    /// Last highlighted index we scrolled into view, so arrow keys move the
+    /// viewport without fighting a later pointer scroll.
+    last_scrolled_hl: Option<usize>,
 }
+
+/// How the popup is placed relative to the trigger (web `position`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum SelectPosition {
+    /// Radix default: the selected item overlays the trigger (macOS
+    /// pop-up button style), shifting and scrolling to stay in view.
+    #[default]
+    ItemAligned,
+    /// Below the trigger (or above when there is not enough room), with
+    /// [`Select::side_offset`] and collision flipping.
+    Popper,
+}
+
+/// Placement of an open Select popup. Alias of [`FloatingLayout`]; see that
+/// type for the mapping to `--refineui-select-content-available-height`,
+/// `--refineui-select-trigger-height`, and
+/// `--refineui-select-content-transform-origin`.
+pub type SelectLayout = FloatingLayout;
 
 /// Web `CONTENT_MARGIN` (`foundationSize100`).
 const CONTENT_MARGIN: f32 = 10.0;
@@ -53,38 +78,77 @@ const SHELL_INSET: f32 = stroke::HAIRLINE + spacing::XX_SMALL;
 /// Item text start inside the shell: inset + item padding + 16px indicator + gap.
 const ITEM_TEXT_LEFT: f32 = SHELL_INSET + spacing::X_SMALL + icon::X_SMALL + spacing::X_SMALL;
 
-/// Web `Select` `position="item-aligned"` (Radix `SelectItemAlignedPosition`,
-/// macOS pop-up button style): the menu opens **over** the trigger so the
-/// selected item's text sits exactly on the trigger's value text, clamped to
-/// the window with `CONTENT_MARGIN`. Returns `(origin, min_width, height,
-/// scroll_top)` in window coordinates.
-fn item_aligned_geometry(
+fn list_full_height(count: usize) -> f32 {
+    let n = count.max(1) as f32;
+    SHELL_INSET * 2. + n * ITEM_HEIGHT + (n - 1.) * ITEM_GAP
+}
+
+fn selected_item_mid(selected: usize) -> f32 {
+    SHELL_INSET + selected as f32 * (ITEM_HEIGHT + ITEM_GAP) + ITEM_HEIGHT / 2.
+}
+
+/// Collision-aware placement for an open Select, in window coordinates.
+fn select_layout(
+    position: SelectPosition,
     trigger: gpui::Bounds<gpui::Pixels>,
     value_inset: f32,
     selected: usize,
     count: usize,
     viewport: gpui::Size<gpui::Pixels>,
-) -> (gpui::Point<gpui::Pixels>, f32, f32, f32) {
-    let t_left = f32::from(trigger.left());
-    let t_mid = f32::from(trigger.top()) + f32::from(trigger.size.height) / 2.;
-    let t_w = f32::from(trigger.size.width);
-    let vw = f32::from(viewport.width);
-    let vh = f32::from(viewport.height);
-    let left = t_left + value_inset - ITEM_TEXT_LEFT;
-    let min_width = t_w + (t_left - left);
-    let left = left.clamp(
-        CONTENT_MARGIN,
-        (vw - CONTENT_MARGIN - min_width).max(CONTENT_MARGIN),
-    );
-    let n = count.max(1) as f32;
-    let full_h = SHELL_INSET * 2. + n * ITEM_HEIGHT + (n - 1.) * ITEM_GAP;
-    let item_mid = SHELL_INSET + selected as f32 * (ITEM_HEIGHT + ITEM_GAP) + ITEM_HEIGHT / 2.;
-    let desired_top = t_mid - item_mid;
-    let top = desired_top.max(CONTENT_MARGIN);
-    let available = (vh - CONTENT_MARGIN - top).max(ITEM_HEIGHT * 5.0_f32.min(n));
-    let height = full_h.min(available).min(vh - CONTENT_MARGIN * 2.);
-    let scroll = (top - desired_top).clamp(0., (full_h - height).max(0.));
-    (gpui::point(px(left), px(top)), min_width, height, scroll)
+    opts: CollisionOptions,
+) -> SelectLayout {
+    let trigger = PlacementRect::from_bounds(trigger);
+    let viewport = PlacementViewport::from_size(viewport);
+    let full_h = list_full_height(count);
+    let selected = selected.min(count.saturating_sub(1));
+    match position {
+        SelectPosition::ItemAligned => {
+            let left = trigger.x + value_inset - ITEM_TEXT_LEFT;
+            let min_width = trigger.width + (trigger.x - left);
+            place_item_aligned(
+                trigger,
+                viewport,
+                left,
+                min_width,
+                full_h,
+                selected_item_mid(selected),
+                CollisionOptions {
+                    collision_padding: opts.collision_padding,
+                    side_offset: 0.,
+                },
+            )
+        }
+        SelectPosition::Popper => place_popper(
+            trigger,
+            viewport,
+            trigger.width,
+            full_h,
+            FloatingSide::Bottom,
+            opts,
+        ),
+    }
+}
+
+/// Keep the highlighted row inside the visible viewport when the user
+/// arrows through a list taller than the open panel.
+fn ensure_item_visible(scroll: &gpui::ScrollHandle, index: usize, viewport_h: f32) {
+    if viewport_h <= 0. {
+        return;
+    }
+    let stride = ITEM_HEIGHT + ITEM_GAP;
+    let pad = spacing::XX_SMALL;
+    let item_top = pad + index as f32 * stride;
+    let item_bottom = item_top + ITEM_HEIGHT;
+    let current = -f32::from(scroll.offset().y);
+    let mut next = current;
+    if item_top < current + pad {
+        next = (item_top - pad).max(0.);
+    } else if item_bottom > current + viewport_h - pad {
+        next = (item_bottom + pad - viewport_h).max(0.);
+    }
+    if (next - current).abs() > 0.5 {
+        scroll.set_offset(gpui::point(px(0.), px(-next)));
+    }
 }
 
 /// Single-choice dropdown.
@@ -99,6 +163,12 @@ pub struct Select {
     disabled: bool,
     width: Option<gpui::Pixels>,
     on_change: Option<Rc<dyn Fn(&usize, &mut Window, &mut App)>>,
+    /// Open on first mount (stories / screenshots). After that the
+    /// element's own open state takes over.
+    default_open: bool,
+    position: SelectPosition,
+    collision_padding: f32,
+    side_offset: f32,
 }
 
 impl Select {
@@ -118,6 +188,10 @@ impl Select {
             disabled: false,
             width: None,
             on_change: None,
+            default_open: false,
+            position: SelectPosition::ItemAligned,
+            collision_padding: CONTENT_MARGIN,
+            side_offset: crate::DEFAULT_SIDE_OFFSET,
         }
     }
 
@@ -151,6 +225,33 @@ impl Select {
         self
     }
 
+    /// Start with the list open (first frame only; used by the gallery
+    /// screenshot of the open popup).
+    pub fn default_open(mut self, open: bool) -> Self {
+        self.default_open = open;
+        self
+    }
+
+    /// Popup placement (default [`SelectPosition::ItemAligned`]).
+    pub fn position(mut self, position: SelectPosition) -> Self {
+        self.position = position;
+        self
+    }
+
+    /// Viewport-edge padding used when flipping and clamping the popup
+    /// (web `collisionPadding`, default 10).
+    pub fn collision_padding(mut self, padding: f32) -> Self {
+        self.collision_padding = padding.max(0.);
+        self
+    }
+
+    /// Gap between the trigger and a [`SelectPosition::Popper`] popup
+    /// (web `sideOffset`, default 4). Ignored for item-aligned placement.
+    pub fn side_offset(mut self, offset: f32) -> Self {
+        self.side_offset = offset.max(0.);
+        self
+    }
+
     /// Called with the picked index.
     pub fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
         self.on_change = Some(Rc::new(f));
@@ -162,10 +263,15 @@ impl RenderOnce for Select {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme().clone();
         let c = theme.colors;
+        let default_open = self.default_open;
         let state = window.use_keyed_state(
             ElementId::NamedChild(Box::new(self.id.clone()), "state".into()),
             cx,
-            |_, _| SelectState::default(),
+            |_, _| SelectState {
+                open: default_open,
+                align_scroll: default_open,
+                ..SelectState::default()
+            },
         );
         let (open, highlighted) = {
             let s = state.read(cx);
@@ -239,12 +345,15 @@ impl RenderOnce for Select {
             SelectAppearance::Ghost => spacing::X_SMALL,
             SelectAppearance::Plain => 0.,
         };
-        let scroll = window.use_keyed_state(child_id(&self.id, "scroll"), cx, |_, _| {
-            gpui::ScrollHandle::new()
-        });
-        let scroll = scroll.read(cx).clone();
+        let list_id = child_id(&self.id, "list");
+        let scroll = ScrollArea::handle(list_id.clone(), window, cx);
+        let collision = CollisionOptions {
+            collision_padding: self.collision_padding,
+            side_offset: self.side_offset,
+        };
         let geometry = probe_state.read(cx).container.map(|t| {
-            item_aligned_geometry(
+            select_layout(
+                self.position,
                 t,
                 value_inset,
                 self.selected
@@ -252,6 +361,7 @@ impl RenderOnce for Select {
                     .min(self.options.len().saturating_sub(1)),
                 self.options.len(),
                 window.viewport_size(),
+                collision,
             )
         });
         // Freeze the panel geometry during the exit so picking an item does not
@@ -264,13 +374,36 @@ impl RenderOnce for Select {
         } else {
             state.read(cx).frozen.or(geometry)
         };
-        if p.mounted
-            && !crate::vibrancy::native_frost_active(cx)
-            && state.read(cx).align_scroll
-            && let Some((_, _, _, top)) = geometry
-        {
-            scroll.set_offset(gpui::point(px(0.), px(-top)));
-            state.update(cx, |s, _| s.align_scroll = false);
+        if p.mounted && !crate::vibrancy::native_frost_active(cx) {
+            if state.read(cx).align_scroll
+                && let Some(layout) = geometry
+            {
+                if layout.scroll_top > 0. {
+                    scroll.set_offset(gpui::point(px(0.), px(-layout.scroll_top)));
+                } else if let Some(ix) = self
+                    .selected
+                    .or(highlighted)
+                    .filter(|_| self.position == SelectPosition::Popper)
+                {
+                    let vh = f32::from(scroll.bounds().size.height);
+                    if vh > 0. {
+                        ensure_item_visible(&scroll, ix, vh);
+                    }
+                }
+                state.update(cx, |s, _| {
+                    s.align_scroll = false;
+                    s.last_scrolled_hl = highlighted.or(self.selected);
+                });
+            } else if p.open
+                && let Some(ix) = highlighted
+                && state.read(cx).last_scrolled_hl != Some(ix)
+            {
+                let vh = f32::from(scroll.bounds().size.height);
+                if vh > 0. {
+                    ensure_item_visible(&scroll, ix, vh);
+                    state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
+                }
+            }
         }
         let fg = animate(child_id(&self.id, "fg"), fg, Motion::FAST, window, cx);
         let chevron = animate(
@@ -309,7 +442,7 @@ impl RenderOnce for Select {
         };
         if native {
             let bounds = geometry
-                .map(|(origin, w, h, _)| gpui::Bounds::new(origin, gpui::size(px(w), px(h))));
+                .map(|l| gpui::Bounds::new(l.origin(), gpui::size(px(l.width), px(l.height))));
             let list = self.options.clone();
             let list_state = state.clone();
             let still = state.clone();
@@ -332,16 +465,26 @@ impl RenderOnce for Select {
                     }),
                     still_open: Rc::new(move |cx| still.read(cx).open),
                     content: Rc::new(move |window, cx| {
-                        let (_, w, h, top) = geometry.unwrap_or_default();
+                        let layout = geometry.unwrap_or(SelectLayout {
+                            x: 0.,
+                            y: 0.,
+                            width: 0.,
+                            height: 0.,
+                            available_height: 0.,
+                            trigger_height: 0.,
+                            transform_origin: crate::TransformOrigin { x: 0., y: 0. },
+                            side: FloatingSide::Bottom,
+                            scroll_top: 0.,
+                        });
                         native_select_list(
                             &parent,
                             list.clone(),
                             selected,
                             &list_state,
                             on_change.clone(),
-                            w,
-                            h,
-                            top,
+                            layout.width,
+                            layout.height,
+                            layout.scroll_top,
                             window,
                             cx,
                         )
@@ -491,45 +634,67 @@ impl RenderOnce for Select {
                 d.child(
                     crate::layer(
                         anchored()
-                            .when_some(geometry, |a, (origin, _, _, _)| a.position(origin))
-                            .snap_to_window_with_margin(px(CONTENT_MARGIN))
+                            .when_some(geometry, |a, layout| {
+                                // Slide a few px out of the trigger as the
+                                // popup enters, along `transform_origin`.
+                                let mut y = layout.y;
+                                if p.progress < 0.999 {
+                                    let slide = (1.0 - p.progress) * 6.0;
+                                    y += match layout.side {
+                                        FloatingSide::Bottom => -slide,
+                                        FloatingSide::Top => slide,
+                                    };
+                                }
+                                a.position(gpui::point(px(layout.x), px(y)))
+                            })
                             .child(
-                                div()
-                                .id("menu")
-                                // Hidden until the trigger has been measured.
-                                .opacity(if geometry.is_some() { p.progress } else { 0. })
-                                .when_some(trigger_width, |d, w| d.min_w(w))
-                                .when_some(geometry, |d, (_, w, h, _)| {
-                                    d.min_w(px(w)).h(px(h))
-                                })
-                                .overflow_y_scroll()
-                                .track_scroll(&scroll)
-                                .p(px(spacing::XX_SMALL))
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.))
-                                .popover_surface(cx)
-                                .font_family(theme.font_family.clone())
-                                .when(p.open, |d| {
-                                    d.occlude().on_mouse_down_out(move |_, _, cx| {
-                                        close_out.update(cx, |s, cx| {
-                                            s.open = false;
-                                            cx.notify();
-                                        })
-                                    })
-                                })
-                                .child(
-                                    // Non-scrolling content box: the plate is
-                                    // positioned against it so it scrolls with
-                                    // the rows.
+                                // Outer box: the frosted plate (a material
+                                // when active) — it must not scroll, so the
+                                // list scrolls in an inner box.
+                                crate::material::frosted_plate(
                                     div()
-                                        .relative()
+                                        // Hidden until the trigger has been measured.
+                                        .opacity(if geometry.is_some() { p.progress } else { 0. })
+                                        .when_some(trigger_width, |d, w| d.min_w(w))
+                                        .when_some(geometry, |d, layout| {
+                                            d.min_w(px(layout.width)).h(px(layout.height))
+                                        })
                                         .flex()
                                         .flex_col()
-                                        .gap(px(1.))
-                                        .child(probe(&host, None))
-                                        .children(slide_plate)
-                                        .children(options),
+                                        .font_family(theme.font_family.clone())
+                                        .when(p.open, |d| {
+                                            d.occlude().on_mouse_down_out(move |_, _, cx| {
+                                                close_out.update(cx, |s, cx| {
+                                                    s.open = false;
+                                                    cx.notify();
+                                                })
+                                            })
+                                        }),
+                                    crate::SurfaceKind::Menu,
+                                    cx,
+                                )
+                                .child(
+                                    ScrollArea::new(list_id).child(
+                                        div()
+                                            .p(px(spacing::XX_SMALL))
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(1.))
+                                            .child(
+                                                // Non-scrolling content box: the
+                                                // hover plate is positioned
+                                                // against it so it scrolls with
+                                                // the rows.
+                                                div()
+                                                    .relative()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(1.))
+                                                    .child(probe(&host, None))
+                                                    .children(slide_plate)
+                                                    .children(options),
+                                            ),
+                                    ),
                                 ),
                             ),
                     )
@@ -553,7 +718,7 @@ fn select_rows(
     on_change: Option<OnChange>,
     window: &mut Window,
     cx: &mut App,
-) -> (Vec<gpui::Stateful<gpui::Div>>, gpui::AnyElement) {
+) -> (Vec<gpui::AnyElement>, gpui::AnyElement) {
     let c = cx.theme().colors;
     let parent = parent.clone();
     let parent = &parent;
@@ -580,51 +745,55 @@ fn select_rows(
             let handler = on_change.clone();
             let st = state.clone();
             options.push(
-                div()
-                    .id(item_id)
-                    .relative()
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(spacing::X_SMALL))
-                    .p(px(spacing::X_SMALL))
-                    .rounded(px(radius::LARGE))
-                    .child(
-                        scaled_plate(scale)
-                            .rounded(px(radius::LARGE * scale))
-                            .bg(bg),
-                    )
-                    .text_color(ifg)
-                    .text_style_token(role::BODY_MD)
-                    .cursor_action()
-                    .track_interaction(&istate)
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .on_click(move |_, w, cx| {
-                        if let Some(h) = &handler {
-                            h(&ix, w, cx);
-                        }
-                        st.update(cx, |s, cx| {
-                            s.open = false;
-                            cx.notify();
-                        });
-                    })
-                    .child(
-                        div()
-                            .flex_none()
-                            .size(px(icon::X_SMALL))
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .when(is_sel, |d| {
-                                d.child(
-                                    Icon::new(IconName::Checkmark)
-                                        .size(IconSize::XSmall)
-                                        .color(ifg),
-                                )
-                            }),
-                    )
-                    .child(div().flex_1().min_w_0().truncate().child(opt))
-                    .child(probe(&host, Some(ix))),
+                scroll_edge_item(
+                    child_id(&item_id, "edge"),
+                    div()
+                        .id(item_id)
+                        .relative()
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .gap(px(spacing::X_SMALL))
+                        .p(px(spacing::X_SMALL))
+                        .rounded(px(radius::LARGE))
+                        .child(
+                            scaled_plate(scale)
+                                .rounded(px(radius::LARGE * scale))
+                                .bg(bg),
+                        )
+                        .text_color(ifg)
+                        .text_style_token(role::BODY_MD)
+                        .cursor_action()
+                        .track_interaction(&istate)
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(move |_, w, cx| {
+                            if let Some(h) = &handler {
+                                h(&ix, w, cx);
+                            }
+                            st.update(cx, |s, cx| {
+                                s.open = false;
+                                cx.notify();
+                            });
+                        })
+                        .child(
+                            div()
+                                .flex_none()
+                                .size(px(icon::X_SMALL))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(is_sel, |d| {
+                                    d.child(
+                                        Icon::new(IconName::Checkmark)
+                                            .size(IconSize::XSmall)
+                                            .color(ifg),
+                                    )
+                                }),
+                        )
+                        .child(div().flex_1().min_w_0().truncate().child(opt))
+                        .child(probe(&host, Some(ix))),
+                )
+                .into_any_element(),
             );
         }
     }
@@ -657,13 +826,22 @@ fn native_select_list(
     cx: &mut App,
 ) -> gpui::AnyElement {
     let theme = cx.theme().clone();
-    let scroll = window.use_keyed_state(child_id(parent, "native-scroll"), cx, |_, _| {
-        gpui::ScrollHandle::new()
-    });
-    let scroll = scroll.read(cx).clone();
+    let list_id = child_id(parent, "native-list");
+    let scroll = ScrollArea::handle(list_id.clone(), window, cx);
     if state.read(cx).align_scroll {
         scroll.set_offset(gpui::point(px(0.), px(-scroll_top)));
-        state.update(cx, |s, _| s.align_scroll = false);
+        state.update(cx, |s, _| {
+            s.align_scroll = false;
+            s.last_scrolled_hl = s.highlighted;
+        });
+    } else if let Some(ix) = state.read(cx).highlighted
+        && state.read(cx).last_scrolled_hl != Some(ix)
+    {
+        let vh = f32::from(scroll.bounds().size.height);
+        if vh > 0. {
+            ensure_item_visible(&scroll, ix, vh);
+            state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
+        }
     }
     let highlighted = state.read(cx).highlighted;
     let (rows, plate) = select_rows(
@@ -677,23 +855,24 @@ fn native_select_list(
         cx,
     );
     let host = use_layout_probe(&child_id(parent, "highlight"), window, cx);
-    div()
-        .id("menu")
-        .min_w(px(min_width - 2. * stroke::HAIRLINE))
-        .h(px(height - 2. * stroke::HAIRLINE))
-        .overflow_y_scroll()
-        .track_scroll(&scroll)
-        .p(px(spacing::XX_SMALL))
-        .font_family(theme.font_family.clone())
+    let list_h = height - 2. * stroke::HAIRLINE;
+    ScrollArea::new(list_id)
+        .max_height(px(list_h))
         .child(
             div()
-                .relative()
-                .flex()
-                .flex_col()
-                .gap(px(1.))
-                .child(probe(&host, None))
-                .child(plate)
-                .children(rows),
+                .min_w(px(min_width - 2. * stroke::HAIRLINE))
+                .p(px(spacing::XX_SMALL))
+                .font_family(theme.font_family.clone())
+                .child(
+                    div()
+                        .relative()
+                        .flex()
+                        .flex_col()
+                        .gap(px(1.))
+                        .child(probe(&host, None))
+                        .child(plate)
+                        .children(rows),
+                ),
         )
         .into_any_element()
 }

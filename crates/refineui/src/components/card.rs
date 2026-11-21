@@ -6,7 +6,7 @@ use gpui::{
 };
 use smallvec::SmallVec;
 
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::motion::{Interaction, Motion, TrackInteraction, animate, child_id, use_interaction};
 use crate::{ActiveTheme, Elevation, StyledExt};
@@ -262,7 +262,7 @@ impl RenderOnce for Card {
                 if outlined {
                     d.border_1().border_color(border)
                 } else {
-                    d.border(px(refineui_tokens::stroke::HAIRLINE))
+                    d.border(px(refineui_foundation::stroke::HAIRLINE))
                         .border_color(c.border_subtle)
                         .shadow(theme.shadow(Elevation::FLOATING))
                 }
@@ -346,7 +346,7 @@ impl RenderOnce for Card {
                         .absolute()
                         .inset_0()
                         .rounded(px(radius::XX_LARGE))
-                        .border(px(refineui_tokens::stroke::THICK))
+                        .border(px(refineui_foundation::stroke::THICK))
                         .border_color(c.border_focus.opacity(ring)),
                 )
             })

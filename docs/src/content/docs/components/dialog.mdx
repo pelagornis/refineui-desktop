@@ -2,7 +2,7 @@
 title: Dialog
 description: "Modal dialog for focused tasks."
 sidebar:
-  order: 45
+  order: 51
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -50,6 +50,8 @@ A centered modal dialog.  Panel: `backgroundPrimary`, `roundedXXLarge`, `sizeXXL
 | Method | Description |
 | --- | --- |
 | `fn new(id: impl Into<ElementId>, title: impl Into<SharedString>) -> Self` | New dialog. |
+| `fn material(mut self, material: bool) -> Self` | Draw the panel as the Sheet material (thick blur, glass rim, modal shadow) when `crate::materials_active`; otherwise unchanged. Default `false` (web parity: an opaque `backgroundPrimary` panel). |
+| `fn bare(mut self, bare: bool) -> Self` | Transparent panel without title, padding or chrome: children float on the scrim (web `DialogContent` with `commandStyles.dialogContentPanel`, used by `crate::CommandDialog`). |
 | `fn description(mut self, d: impl Into<SharedString>) -> Self` | Supporting text under the title. |
 | `fn size(mut self, size: DialogSize) -> Self` | Width. |
 | `fn footer(mut self, footer: impl IntoElement) -> Self` | Footer (usually buttons, right-aligned). |

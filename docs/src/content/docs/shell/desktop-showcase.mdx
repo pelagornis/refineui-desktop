@@ -1,0 +1,75 @@
+---
+title: Desktop Showcase
+description: "A complete app on the Material Engine: vibrant shell chrome, a sidebar of sections, a document workspace, a status bar and the notification center."
+sidebar:
+  order: 70
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+A complete app on the Material Engine: vibrant shell chrome, a sidebar of sections, a document workspace, a status bar and the notification center.
+
+<Screenshot id="desktop-showcase" alt="Desktop Showcase variants and states" />
+
+## Usage
+
+- `ApplicationShell::vibrant(true)` leaves the shell root unpainted when materials are active, so the titlebar, activity bar, side docks and status bar blur what is behind the window (a transparent / blurred OS window). The workspace stays on opaque `backgroundPrimary` for reading.
+- Chrome materials are square, borderless and shadowless (`Titlebar` kind for bars, `Sidebar` kind for rails and docks); the shell's hairline separators stay as they are, so the layout reads exactly like the opaque RefineUI shell.
+- The notification center is a `Sheet` material overlay opened from the titlebar bell; it springs in from the trailing edge.
+- Without the `material` feature (or with blur disabled / native frost on) every piece falls back to its opaque fill: the same app, solid.
+
+```rust
+use refineui::prelude::*;
+
+ApplicationShell::new("app")
+    .vibrant(true)
+    .title("Atlas")
+    .toolbar(toolbar)
+    .activity_bar(activity)
+    .left_dock(ShellDock::new(sidebar, 210.))
+    .center(document)
+    .status_bar(status)
+    .overlay(div().absolute().top(px(60.)).right(px(12.)).child(
+        NotificationCenter::new("notifications").open(self.show_notifications)
+            .notifications(self.notifications()),
+    ))
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story desktop-showcase
+```
+
+## API
+
+Source: [`crates/refineui/src/shell/app_shell.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/shell/app_shell.rs)
+
+### ApplicationShell
+
+The application shell. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>) -> Self` | Empty shell with the default spec. |
+| `fn os(mut self, os: platform::Os) -> Self` | Lay out and draw chrome for this OS (previews). |
+| `fn embedded(mut self, embedded: bool) -> Self` | A static preview inside another window: the titlebar does not move or close the window and no client-side frame is drawn. |
+| `fn vibrant(mut self, vibrant: bool) -> Self` | Let the chrome (titlebar, menu strip, activity bar, side docks, status bar) show what is behind the window: with the `material` feature active the shell root is left unpainted, so each chrome material blurs the window backdrop (a transparent / blurred OS window, or the gallery wallpaper). The workspace keeps its opaque `backgroundPrimary`. No effect without materials. |
+| `fn bind_keys(cx: &mut App)` | Bind F6 / Shift-F6 to region cycling (also done by `crate::init`). |
+| `fn spec(mut self, spec: ShellSpec) -> Self` | Shell configuration. |
+| `fn title(mut self, t: impl Into<SharedString>) -> Self` | Window title (titlebar). |
+| `fn subtitle(mut self, t: impl Into<SharedString>) -> Self` | Titlebar subtitle. |
+| `fn buttons(mut self, b: impl Into<ControlButtons>) -> Self` | Window buttons (`ControlButtons::from(preset)`). |
+| `fn titlebar_leading(mut self, e: impl IntoElement) -> Self` | Extra element at the titlebar's leading edge. |
+| `fn titlebar_trailing(mut self, e: impl IntoElement) -> Self` | Extra element at the titlebar's trailing edge. |
+| `fn menus(mut self, menus: Vec<AppMenu>) -> Self` | Application menus (in-window bar on Windows / Linux). |
+| `fn toolbar(mut self, e: impl IntoElement) -> Self` | Toolbar (a `Toolbar::new(..).fill(true)`), placed per `ShellSpec::toolbar`. |
+| `fn activity_bar(mut self, e: impl IntoElement) -> Self` | Activity bar / navigation rail. |
+| `fn left_dock(mut self, dock: ShellDock) -> Self` | Leading dock (sidebar). |
+| `fn right_dock(mut self, dock: ShellDock) -> Self` | Trailing dock (inspector). |
+| `fn bottom_dock(mut self, dock: ShellDock) -> Self` | Bottom dock (terminal, problems). |
+| `fn center(mut self, e: impl IntoElement) -> Self` | Center workspace. |
+| `fn workspace(mut self, area: crate::workspace::DockArea) -> Self` | A `crate::workspace::DockArea`: its center becomes the workspace region and its visible docks the left / right / bottom dock regions (F6 stops), honouring zoom and the panel-drag edge zones. Replaces `left_dock` / `right_dock` / `bottom_dock` / `center`. |
+| `fn status_bar(mut self, bar: StatusBar) -> Self` | Status bar. |
+| `fn overlay(mut self, e: impl IntoElement) -> Self` | Element painted over the shell (command palette, toasts). |
+

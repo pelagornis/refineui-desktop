@@ -2,7 +2,7 @@
 title: Carousel
 description: "Looping slides with outline buttons and a sliding-pill meter (web `Carousel`)."
 sidebar:
-  order: 72
+  order: 83
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -13,7 +13,6 @@ Looping slides with outline buttons and a sliding-pill meter (web `Carousel`).
 
 ## Usage
 
-- **Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.
 - Slides are built on demand by index, so the loop continues in the same direction past the last slide.
 - Drag the stage to swipe: the track follows the pointer and a release past 18% of the width (web `DRAG_COMMIT_RATIO`) moves one slide; shorter drags spring back. Buttons, the meter and ← / → (while focused) also navigate.
 

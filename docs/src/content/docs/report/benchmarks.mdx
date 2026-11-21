@@ -1,0 +1,78 @@
+---
+title: Benchmarks
+description: How to reproduce the Material Engine benchmark and the recorded results.
+sidebar:
+  order: 2
+---
+
+## Reproduce
+
+```sh
+./scripts/bench.sh            # 1, 8, 16 panels; blur cache on and off
+./scripts/bench.sh 4 32       # other panel counts
+BENCH_TAG=m2-pro ./scripts/bench.sh
+```
+
+The script builds `crates/refineui-material/examples/blur_bench.rs` in
+release. It runs each panel count twice, once with the blur cache on and
+once with `GPUI_BLUR_CACHE=0`, and writes
+`bench/results/<os>-<tag>-<date>.md` with the environment, a table and the
+raw output. Commit that file next to the existing ones.
+
+The benchmark opens a 960×640 window with an animated, busy backdrop and N
+`Regular` panels (170×130, σ = 16 px, ×4 downsample). It measures three
+phases, each with 0.6 s of warm-up and 3 s of measurement:
+
+| Phase | What changes every frame | What it measures |
+| --- | --- | --- |
+| `blur/moving` | the panels move | full blur per panel per frame |
+| `blur/static` | only a small widget elsewhere | cached backdrop, composite only |
+| `fallback` | panels move, reduced transparency | opaque fill path, no blur |
+
+Frame pacing is tied to the 60 Hz refresh timer, so results come in steps
+of about 16.7 ms. Raise the panel count until the uncached case drops below
+the cap. On headless X, frames are presented only after input, so the
+script moves the pointer with `xdotool` while it measures.
+
+## Results
+
+### Linux: Xvfb + lavapipe (software Vulkan), 8-thread Xeon, release
+
+These are recorded in `bench/results/linux-xvfb-lavapipe-2026-11-20.md`.
+
+| Panels | Cache | blur/moving | blur/static | fallback |
+| --- | --- | --- | --- | --- |
+| 1 | on | 15.98 ms (62.6 fps) | 15.96 ms (62.7 fps) | 15.96 ms (62.7 fps) |
+| 1 | off | 16.06 ms (62.3 fps) | 15.96 ms (62.7 fps) | 15.96 ms (62.7 fps) |
+| 8 | on | 16.88 ms (59.3 fps) | 15.96 ms (62.7 fps) | 16.04 ms (62.3 fps) |
+| 8 | off | 16.23 ms (61.6 fps) | 15.96 ms (62.7 fps) | 15.96 ms (62.7 fps) |
+| 16 | on | 32.30 ms (31.0 fps) | 16.04 ms (62.3 fps) | 16.57 ms (60.3 fps) |
+| 16 | off | 32.13 ms (31.1 fps) | 31.92 ms (31.3 fps) | 15.96 ms (62.7 fps) |
+
+Reading the table:
+
+- On a CPU rasterizer, up to 8 blurred panels stay within one refresh
+  interval.
+- At 16 moving panels the frame takes two intervals.
+- The cache turns 16 static panels from 32 ms back to the 60 Hz cap. This
+  is the common desktop case: sidebars and titlebars over content that is
+  not changing.
+- The fallback path always stays at the cap.
+
+History on the same machine (from Material Engine §7 and §8):
+
+- Phase 2 (no cache): 8 panels took 36.0 ms.
+- Phase 3: the cache and a cheaper pass brought 8 panels to the cap.
+
+### macOS (Metal)
+
+Not recorded yet. Run `BENCH_TAG=<mac model> ./scripts/bench.sh` on the
+Mac and commit the result. Expected: every phase at the display cap up to
+16 panels on Apple-silicon GPUs. The target from the brief is ≤ 0.3 ms per
+typical panel on an integrated GPU.
+
+### Windows (DirectX)
+
+Not applicable to blur: the DirectX renderer has no backdrop blur, and
+materials use the fallback path. `fallback` numbers can still be recorded
+with the same script under Git Bash.

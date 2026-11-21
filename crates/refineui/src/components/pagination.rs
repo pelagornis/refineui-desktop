@@ -6,7 +6,7 @@ use gpui::{
     App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, size::component, spacing, typography::role};
+use refineui_foundation::{radius, size::component, spacing, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, use_focus_handle, use_interaction,
@@ -140,9 +140,9 @@ fn shell(
     let width = animate(
         child_id(&id, "bw"),
         if selected {
-            refineui_tokens::stroke::THICK
+            refineui_foundation::stroke::THICK
         } else {
-            refineui_tokens::stroke::THIN
+            refineui_foundation::stroke::THIN
         },
         Motion::FAST_EASE,
         window,

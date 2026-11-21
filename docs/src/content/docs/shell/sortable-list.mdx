@@ -1,0 +1,80 @@
+---
+title: Sortable List
+description: "Reorderable lists with drag between lists (Kanban, playlists, docks of items), drop indicators, auto-scroll and a full keyboard alternative."
+sidebar:
+  order: 64
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Reorderable lists with drag between lists (Kanban, playlists, docks of items), drop indicators, auto-scroll and a full keyboard alternative.
+
+<Screenshot id="sortable-list" alt="Sortable List variants and states" />
+
+## Usage
+
+- Lists sharing a `group` accept each other's items; `on_move` receives a `SortableMove::{Reorder, Transfer}` — call `apply` on your data.
+- Pointer: drag a row; a 2px indicator shows the slot, the list auto-scrolls within 32px of its edges, Escape cancels the drag.
+- Keyboard: Space lifts the focused row, ↑ / ↓ move the slot, ← / → send it to the `neighbors` list, Enter drops, Escape cancels. ⌥↑ / ⌥↓ move a row immediately.
+
+```rust
+use refineui::prelude::*;
+
+SortableList::new("todo", "todo", "board")
+    .items(self.todo.iter().map(|t| SortableItem::new(t.id.clone(), t.title.clone())))
+    .neighbors(None, Some("doing".into()))
+    .max_height(px(320.))
+    .on_move(cx.listener(|this, m: &SortableMove, _, cx| {
+        m.apply(&mut this.columns);
+        cx.notify();
+    }));
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story sortable-list
+```
+
+## Motion
+
+The drop indicator follows the slot; rows lift into a frosted `DragPreview` chip while dragging.
+
+## API
+
+Source: [`crates/refineui/src/components/sortable.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/sortable.rs)
+
+### SortableList
+
+A reorderable list. See the module docs.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, list: impl Into<SharedString>, group: impl Into<SharedString>) -> Self` | List `list` (its key in `SortableMove`s), accepting drags from lists of the same `group`. |
+| `fn items(mut self, items: impl IntoIterator<Item = SortableItem>) -> Self` | Rows. |
+| `fn on_move(mut self, f: impl Fn(&SortableMove, &mut Window, &mut App) + 'static) -> Self` | Move handler. |
+| `fn max_height(mut self, h: Pixels) -> Self` | Scroll beyond this height (auto-scroll applies). |
+| `fn neighbors(mut self, prev: Option<SharedString>, next: Option<SharedString>) -> Self` | Previous / next list keys for keyboard transfers (← / →). |
+
+### SortableItem
+
+One row.
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self` | Row `id` showing `label`. |
+| `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
+| `fn detail(mut self, d: impl Into<SharedString>) -> Self` | Trailing detail text. |
+
+### SortableMove
+
+A move reported by a `SortableList`.
+
+| Method | Description |
+| --- | --- |
+| `fn apply<T>(&self, lists: &mut [(SharedString, Vec<T>)])` | Applies the move to `lists` (looked up by key). |
+
+### SortableDrag
+
+Drag payload shared by every `SortableList`.
+

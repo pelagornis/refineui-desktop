@@ -1,0 +1,106 @@
+---
+title: Material Effects
+description: "Lighting (directional, ambient, edge rim, reflection, specular), tint blend modes, masks, layered and inner shadows, and nested materials."
+sidebar:
+  order: 5
+---
+
+import Screenshot from '../../../components/Screenshot.astro';
+
+Lighting (directional, ambient, edge rim, reflection, specular), tint blend modes, masks, layered and inner shadows, and nested materials.
+
+<Screenshot id="material-effects" alt="Material Effects variants and states" />
+
+## Usage
+
+- **Lighting** is evaluated per pixel in the blur composite: a directional sheen that falls off away from the light, an ambient lift, an edge rim that follows the rounded-rect normal, a diagonal reflection band and a soft specular spot. `Lighting::glass(edge, reflection, specular)` is the glass preset; `Lighting::edge(s)` is a plain rim.
+- **Tint blend modes** (`BlendMode`): Normal, Multiply, Screen, Overlay and Soft Light, applied between the blurred backdrop and the tint before the tint opacity.
+- **Masks** (`Mask::linear`, `fade_bottom`, `fade_top`) fade the whole material (backdrop, lighting, grain) along a direction — e.g. a toolbar that dissolves into content.
+- **Shadows**: up to four drop shadows (`ShadowPreset`, including `Ambient`) are drawn by the blur composite outside the shape; more fall back to GPUI shadows. `InnerShadow` (`pressed`, `well`, `glass_rim`) draws inset shading on both paths.
+- **Grain** is a per-pixel integer-hash noise plus ±1 LSB dithering, so large soft gradients do not band.
+- Without real blur (DirectX, reduced transparency) the same `Material` draws a fallback: shadows, fill (a gradient when masked), a grain tile and quad-based lighting. The reflection band is blur-only.
+
+```rust
+use refineui::prelude::*;
+
+use refineui_material::prelude::*;
+
+material_surface(
+    Material::glass(Mode::Dark)
+        .tint_blend(BlendMode::SoftLight)
+        .mask(Mask::fade_bottom(0.6))
+        .inner_shadow(InnerShadow::glass_rim(Mode::Dark))
+        .lighting(
+            Lighting::glass(0.8, 0.3, 0.35)
+                .angle(-30.)
+                .specular_at(point(0.2, 0.1), px(56.)),
+        ),
+)
+.size(px(180.))
+.child(content);
+```
+
+Open the live, interactive version in the gallery:
+
+```sh
+cargo run -p refineui-gallery -- --story material-effects
+```
+
+## API
+
+Source: [`crates/refineui-material/src/lighting.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui-material/src/lighting.rs)
+
+### Lighting
+
+Light on a material surface. Every strength is 0–1 (0 = off).
+
+| Method | Description |
+| --- | --- |
+| `fn edge(strength: f32) -> Self` | Top light: an edge highlight of `strength` with a matching soft directional sheen. |
+| `fn glass(edge: f32, reflection: f32, specular: f32) -> Self` | Glass light: rim, sheen, reflection band and a specular highlight. |
+| `fn angle(mut self, angle: f32) -> Self` | Light direction (degrees; 0 = top). |
+| `fn color(mut self, color: Hsla) -> Self` | Light color. |
+| `fn ambient(mut self, ambient: f32) -> Self` | Ambient lift. |
+| `fn directional(mut self, directional: f32) -> Self` | Directional sheen. |
+| `fn rim(mut self, edge: f32, width: Pixels) -> Self` | Rim highlight strength and falloff width. |
+| `fn specular(mut self, specular: f32) -> Self` | Specular highlight strength. |
+| `fn specular_at(mut self, position: Point<f32>, size: Pixels) -> Self` | Specular highlight position (shape-relative, 0–1) and size. |
+| `fn reflection(mut self, reflection: f32) -> Self` | Reflection band strength. |
+| `fn is_none(&self) -> bool` | `true` when nothing would be drawn. |
+| `fn direction(&self) -> Point<f32>` | Unit vector pointing *towards* the light (screen space, y down). |
+| `fn to_backdrop(&self) -> BackdropLight` | The renderer's per-pixel lighting parameters (real-blur path). |
+| `fn paint(&self, bounds: Bounds<Pixels>, radius: Pixels, opacity: f32, window: &mut Window)` | Paint an approximation of the light over `bounds` with quads (the fallback path, after the opaque fill). The reflection band is GPU only. |
+
+### BlendMode
+
+How a material's tint combines with the blurred backdrop.
+
+| Variant | Description |
+| --- | --- |
+| `Normal` | Mix the tint over the backdrop (alpha = amount). Frosted surfaces. |
+| `Multiply` | Darken by the tint: colored, smoked glass. |
+| `Screen` | Lighten by the tint: milky, luminous glass. |
+| `Overlay` | Contrast: multiply darks, screen lights. |
+| `SoftLight` | Gentle contrast (W3C soft-light). |
+
+### Mask
+
+A linear alpha mask across a surface: opaque before `start`, transparent after `end` (positions 0–1 across the shape along `angle`).
+
+| Method | Description |
+| --- | --- |
+| `fn linear(angle: f32, start: f32, end: f32) -> Self` | Fade towards `angle` between `start` and `end`. |
+| `fn fade_bottom(start: f32) -> Self` | Solid at the top, fading out towards the bottom from `start`. |
+| `fn fade_top(start: f32) -> Self` | Solid at the bottom, fading out towards the top. |
+
+### InnerShadow
+
+A shadow cast *inside* a surface (CSS `box-shadow: inset`): pressed controls, wells, glass thickness.
+
+| Method | Description |
+| --- | --- |
+| `fn pressed(mode: Mode) -> Self` | A pressed control: a soft dark band along the top. |
+| `fn well(mode: Mode) -> Self` | A recessed well (inputs, tracks): even darkening all round. |
+| `fn glass_rim(mode: Mode) -> Self` | Glass thickness: a light inner glow around the rim. |
+| `fn paint(&self, bounds: Bounds<Pixels>, radius: Pixels, opacity: f32, window: &mut Window)` | Paint inside `bounds` (rounded by `radius`) at `opacity`.  Nested rounded borders of growing width, each with an equal share of the alpha, add up to a smooth ramp from `color` at the edge to nothing at `spread + blur` (offset shifts it per side). |
+

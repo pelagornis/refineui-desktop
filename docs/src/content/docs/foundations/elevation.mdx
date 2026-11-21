@@ -42,14 +42,14 @@ The active RefineUI theme. Read it with `ActiveTheme::theme`.
 | `fn is_dark(&self) -> bool` | Whether the theme is dark. |
 | `fn set_appearance(appearance: Appearance, cx: &mut App)` | Switch appearance and repaint every window. |
 | `fn toggle_appearance(cx: &mut App)` | Toggle between light and dark. |
-| `fn desktop(&self) -> refineui_tokens::size::DesktopMetrics` | Shell / workspace metrics for the current density. |
+| `fn desktop(&self) -> refineui_foundation::size::DesktopMetrics` | Shell / workspace metrics for the current density. |
 | `fn set_density(density: Density, cx: &mut App)` | Change density and repaint. |
 | `fn sync_system_appearance(window: &Window, cx: &mut App)` | If `Self::follow_system` is set, adopt the window's OS appearance. Call from a `cx.observe_window_appearance` callback. |
 | `fn shadow(&self, elevation: Elevation) -> Vec<BoxShadow>` | GPUI box shadows for an elevation step in the current appearance. |
 | `fn focus_ring(&self) -> Vec<BoxShadow>` | Focus ring — `outline: 2px solid var(--refineui-focus-color)` with a 2px offset (`semantic/focus.ts`). GPUI has no outlines, so it is drawn as two zero-blur shadows: the ring, then a gap in the page background on top. |
 | `fn focus_ring_color(&self, color: Hsla) -> Vec<BoxShadow>` | Focus ring in a specific color (2px, 2px offset) — e.g. Switch / Slider use `borderFocus`. |
 | `fn ring(&self, color: Hsla, width: f32) -> Vec<BoxShadow>` | A ring hugging the element (no offset) — inputs' 0.5px focus halo, inset rings. |
-| `fn floating_fill(&self) -> Hsla` | The one fill for every frosted floating surface (Menu and its submenus, ContextMenu, Dropdown, Select, Popover, Tooltip, SidebarPeek): web `surfaceFrosted` pre-composited over `backgroundPrimary`. GPUI cannot blur what is behind a panel (`backdrop-filter`), so a raw translucent fill would show the content behind sharply; this is the color the frost produces over a plain page, and it is always fully opaque. |
+| `fn floating_fill(&self) -> Hsla` | The one fill for every frosted floating surface (Menu and its submenus, ContextMenu, Dropdown, Select, Popover, Tooltip, SidebarPeek): web `surfaceFrosted` pre-composited over `backgroundPrimary`. Stock GPUI cannot blur what is behind a panel (`backdrop-filter`), so a raw translucent fill would show the content behind sharply; this is the color the frost produces over a plain page, and it is always fully opaque. With the `material` feature these panels draw a real blurred material instead (see `crate::material`), and this stays their fallback. |
 | `fn frosted_fill(&self) -> Hsla` | Alias of `Self::floating_fill`. |
 | `fn focus_color(&self) -> Hsla` | `--refineui-focus-color`: primary black (light) / neutral white (dark). |
 | `fn button_metrics(&self, size: ControlSize) -> ControlMetrics` | Button metrics for a size in the current density. |

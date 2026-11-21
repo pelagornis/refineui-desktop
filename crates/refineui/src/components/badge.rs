@@ -4,7 +4,7 @@ use gpui::{
     App, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div,
     prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing, typography::role};
 
 use crate::motion::{Interaction, Motion, TrackInteraction, animate, child_id, use_interaction};
 use crate::{ActiveTheme, StyledExt};

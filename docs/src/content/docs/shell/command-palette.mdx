@@ -1,29 +1,35 @@
 ---
 title: Command Palette
-description: "The ⇧⌘P / Ctrl+Shift+P action search: grouped commands with icons and keymap shortcuts, built on `Command`."
+description: "The ⇧⌘P / Ctrl+Shift+P action search: the web `Command` in a `CommandDialog`, plus desktop options (global shortcut, recents, action dispatch, nested pages)."
 sidebar:
-  order: 59
+  order: 66
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-The ⇧⌘P / Ctrl+Shift+P action search: grouped commands with icons and keymap shortcuts, built on `Command`.
+The ⇧⌘P / Ctrl+Shift+P action search: the web `Command` in a `CommandDialog`, plus desktop options (global shortcut, recents, action dispatch, nested pages).
 
 <Screenshot id="command-palette" alt="Command Palette variants and states" />
 
 ## Usage
 
-- `CommandPalette` is an entity: render it as an overlay of the window root and toggle it from a `ToggleCommandPalette` handler.
-- Commands name GPUI actions; running one closes the palette, restores focus to where it was and dispatches the action there.
-- Shortcut labels are refreshed from the installed keymap every time it opens. Typing filters by label and keywords; ↑ / ↓ move, Enter runs, Escape closes.
+- Not a separate widget — the field, list, groups, fuzzy match and indicator are all `Command`. `CommandPalette` is the overlay host: it opens that `Command` in a `CommandDialog`.
+- Items are `CommandItem`s. `.action("editor::Save")` dispatches that GPUI action after the palette closes and restores focus. Shortcut labels come from the installed keymap and refresh on every open.
+- The last five commands appear in a **Recent** group while the query is empty. `CommandItem::page(label, page_id)` opens a nested `CommandPage`; the title is a breadcrumb chip, Backspace on an empty query or Escape goes back, and the list slides in.
+- Bind `ToggleCommandPalette` (⇧⌘P / Ctrl+Shift+P) and render the entity as the last child of the window root.
 
 ```rust
 use refineui::prelude::*;
 
 let palette = cx.new(|cx| CommandPalette::new(vec![
-    PaletteCommand::new("Save", "editor::Save").group("File").icon(IconName::Save),
-    PaletteCommand::new("Toggle Sidebar", "workspace::ToggleSidebar").group("View"),
-], window, cx));
+    CommandItem::new("Save").action("editor::Save").group("File").icon(IconName::Save),
+    CommandItem::new("Toggle Sidebar").action("workspace::ToggleSidebar").group("View"),
+    CommandItem::page("Color Theme…", "theme").group("Preferences"),
+], window, cx)
+.page(CommandPage::new("theme", "Color Theme", vec![
+    CommandItem::new("Light").action("theme::Light"),
+    CommandItem::new("Dark").action("theme::Dark"),
+])));
 
 root(cx)
     .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
@@ -40,11 +46,11 @@ cargo run -p refineui-gallery -- --story command-palette
 
 ## Motion
 
-Opens and closes instantly (desktop palettes do not animate in); the result indicator moves over `duration-fast`.
+The host is a `CommandDialog`: the dialog fades and rises like `Dialog`; nested `CommandPage`s slide in over `duration-panel`; the `Command` indicator moves over `duration-medium` (emphasized).
 
 ## API
 
-Source: [`crates/refineui/src/components/command_palette.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/command_palette.rs)
+Source: [`crates/refineui/src/components/command.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/command.rs)
 
 ### CommandPalette
 
@@ -53,21 +59,63 @@ The palette (an entity). See the module docs.
 | Method | Description |
 | --- | --- |
 | `fn bind_keys(cx: &mut App)` | Bind ⇧⌘P / Ctrl+Shift+P to `ToggleCommandPalette`. |
-| `fn new(commands: Vec<PaletteCommand>, window: &mut Window, cx: &mut Context<Self>) -> Self` | New (closed) palette over `commands`. |
-| `fn set_commands(&mut self, commands: Vec<PaletteCommand>, cx: &mut Context<Self>)` | Replace the command list. |
+| `fn new(commands: Vec<CommandItem>, window: &mut Window, cx: &mut Context<Self>) -> Self` | New (closed) palette over `commands`. |
+| `fn page(mut self, page: CommandPage) -> Self` | Adds a nested page (opened by `CommandItem::page`). |
+| `fn set_commands(&mut self, commands: Vec<CommandItem>, cx: &mut Context<Self>)` | Replace the root command list. |
+| `fn set_pages(&mut self, pages: Vec<CommandPage>, cx: &mut Context<Self>)` | Replace the nested pages. |
+| `fn recent(&self) -> &[SharedString]` | Recently run actions, newest first. |
 | `fn is_open(&self) -> bool` | Is it showing? |
-| `fn open(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open (refreshing shortcut labels, clearing the query, focusing the search field). |
+| `fn page_stack(&self) -> &[SharedString]` | Open page ids (root excluded). |
+| `fn open(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open on the root page (refreshing shortcut labels, clearing the query, focusing the search field). |
+| `fn push_page(&mut self, id: impl Into<SharedString>, cx: &mut Context<Self>)` | Opens nested page `id`. |
+| `fn back(&mut self, cx: &mut Context<Self>)` | Goes back one page. |
+| `fn dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Escape: back one page, or close on the root. |
 | `fn close(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Close and give focus back. |
 | `fn toggle(&mut self, window: &mut Window, cx: &mut Context<Self>)` | Open or close. |
 
-### PaletteCommand
+### CommandPage
 
-One palette entry: a GPUI action by name.
+A nested page of commands (desktop; the web Command has no pages).
 
 | Method | Description |
 | --- | --- |
-| `fn new(label: impl Into<SharedString>, action: impl Into<SharedString>) -> Self` | Entry for `action` labelled `label`. |
-| `fn group(mut self, group: impl Into<SharedString>) -> Self` | Group heading (e.g. `"File"`, `"View"`). |
+| `fn new(id: impl Into<SharedString>, title: impl Into<SharedString>, commands: Vec<CommandItem>) -> Self` | Page `id` titled `title`. |
+| `fn placeholder(mut self, p: impl Into<SharedString>) -> Self` | Search placeholder on this page. |
+
+### CommandDialog
+
+Web `CommandDialog`: a `Command` inside a `crate::Dialog` whose panel is transparent (the search field and results panel float on the scrim).  Controlled like `Dialog`: keep rendering it and pass `open`; close it in `on_close` (scrim click or Escape). Focus the command's search field when you open it (`window.focus(&cmd.read(cx).search().focus_handle(cx))`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(id: impl Into<ElementId>, command: Entity<Command>) -> Self` | Dialog around `command`. |
+| `fn content(mut self, content: impl IntoElement) -> Self` | Wraps the command in custom content (it must contain the command entity); used by `crate::CommandPalette` for its page transition. |
+| `fn open(mut self, open: bool) -> Self` | Open state (web `open`). |
+| `fn size(mut self, size: crate::DialogSize) -> Self` | Dialog width (web `size`). |
+| `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Close request (web `onOpenChange(false)`). |
+| `fn inline(mut self, inline: bool) -> Self` | Render in flow (docs / previews). |
+
+### CommandItem
+
+One runnable entry.
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | Item whose value is its label. |
+| `fn subtitle(mut self, s: impl Into<SharedString>) -> Self` | Secondary line under the label (palette results). |
+| `fn end_icon(mut self, icon: IconName) -> Self` | Trailing icon (web `endIcon`), e.g. a chevron for an item that opens a page. |
+| `fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self` | Runs when the item is chosen (web `onSelect`), in addition to `CommandEvent::Select`. |
+| `fn value_str(&self) -> &SharedString` | The item's value. |
+| `fn label(&self) -> &SharedString` | The item's label. |
+| `fn score(&self, query: &str) -> Option<CommandMatch>` | Scores this item: the label fuzzily (with highlight positions), else keywords (substring of every query word, no highlight). |
+| `fn value(mut self, v: impl Into<SharedString>) -> Self` | Stable value reported on select (defaults to the label). |
 | `fn icon(mut self, icon: IconName) -> Self` | Leading icon. |
-| `fn keywords(mut self, k: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Extra search words. |
+| `fn shortcut(mut self, s: impl Into<SharedString>) -> Self` | Shortcut hint. |
+| `fn keywords(mut self, k: impl IntoIterator<Item = impl Into<SharedString>>) -> Self` | Extra search terms. |
+| `fn disabled(mut self, d: bool) -> Self` | Disabled (shown, not selectable). |
+| `fn action(mut self, name: impl Into<SharedString>) -> Self` | Dispatch the GPUI action named `name` when this item is run (also used as `value`). Desktop addition used by `CommandPalette`. |
+| `fn group(mut self, group: impl Into<SharedString>) -> Self` | Catalog group heading when building a `CommandPalette` from a flat list. |
+| `fn opens_page(mut self, page: impl Into<SharedString>) -> Self` | Opens the nested `CommandPage` with this id (chevron, `page:{id}` value). |
+| `fn page(label: impl Into<SharedString>, page: impl Into<SharedString>) -> Self` | Item that opens nested page `page` (web has no pages; desktop palette). |
+| `fn matches(&self, query: &str) -> bool` | Does the item match `query` (fuzzy label or keywords)? |
 

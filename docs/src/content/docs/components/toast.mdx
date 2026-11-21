@@ -2,7 +2,7 @@
 title: Toast
 description: "Transient notifications stacked at the top centre of the window."
 sidebar:
-  order: 33
+  order: 38
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -49,6 +49,7 @@ Toast stack host. Create with `cx.new(\|_\| Toaster::new())` and render it once 
 | Method | Description |
 | --- | --- |
 | `fn new() -> Self` | Empty toaster (3 visible toasts). |
+| `fn material(mut self, material: bool) -> Self` | Draw toasts as the Toast material (see `Toast::material`). |
 | `fn max_toasts(mut self, n: usize) -> Self` | Maximum toasts kept in the stack (web default is 1). |
 | `fn push(&mut self, data: ToastData, cx: &mut Context<Self>) -> u64` | Show a toast; returns its id. |
 | `fn dismiss(&mut self, id: u64, cx: &mut Context<Self>)` | Animate a toast out, then remove it. |
@@ -83,5 +84,6 @@ A single toast card (also usable inline).
 | Method | Description |
 | --- | --- |
 | `fn new(id: impl Into<ElementId>, data: ToastData) -> Self` | Card for `data`. |
+| `fn material(mut self, material: bool) -> Self` | Draw the card as the Toast material (real blur, toast elevation) when `crate::materials_active`; otherwise unchanged. Default `false` (web parity: an opaque `backgroundPrimary` card). |
 | `fn on_close(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self` | Show a ghost dismiss button (desktop addition; the web swipes away). |
 

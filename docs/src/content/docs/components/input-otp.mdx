@@ -2,7 +2,7 @@
 title: Input OTP
 description: "One-time-code input made of independent soft square cells."
 sidebar:
-  order: 11
+  order: 15
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -13,7 +13,7 @@ One-time-code input made of independent soft square cells.
 
 ## Usage
 
-- Cells are `controlHeight` squares (36 / 44 / 52) with title-scale digits.
+- Cells are soft squares, not circles: sm 36px / radius 12, md 44px / radius 14, lg 52px / radius 16, with an 8px gap — the web values, independent of `Density` (a compact density used to shrink lg cells to 32px while keeping radius 16, which drew circles; a test now guards the ratio).
 - Digits fill the next empty cell, Backspace clears, ⌘V / Ctrl-V pastes; `on_complete` fires once every cell is filled.
 
 ```rust

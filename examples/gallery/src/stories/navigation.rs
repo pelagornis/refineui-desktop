@@ -72,20 +72,32 @@ pub(super) fn stories() -> Vec<Story> {
     ]
 }
 
-fn tabs(w: &mut Window, cx: &mut App) -> AnyElement {
-    let sel = state("tabs-sel", w, cx, || 0usize);
-    Tabs::new(
-        "tabs",
-        [
-            Tab::new("Overview").icon(IconName::Home),
-            Tab::new("Issues").count(12),
-            Tab::new("Pull requests").count(3),
-            Tab::new("Archived").disabled(true),
-        ],
-        *sel.read(cx),
-    )
-    .on_change(setter(&sel))
-    .into_any_element()
+fn tabs(_w: &mut Window, cx: &mut App) -> AnyElement {
+    let c = cx.theme().colors;
+    let panel = |t: &'static str| {
+        div()
+            .p(px(16.))
+            .rounded(px(12.))
+            .bg(c.background_surface)
+            .child(Text::new(t).color(TextColor::Secondary))
+    };
+    // Web usage: value-keyed triggers + content panels, uncontrolled here.
+    Tabs::new("tabs")
+        .default_value("overview")
+        .trigger(TabsTrigger::new("overview", "Overview").icon(IconName::Home))
+        .trigger(TabsTrigger::new("issues", "Issues").count(12))
+        .trigger(TabsTrigger::new("pulls", "Pull requests").count(3))
+        .trigger(TabsTrigger::new("archived", "Archived").disabled(true))
+        .content(TabsContent::new(
+            "overview",
+            panel("Project overview and recent activity."),
+        ))
+        .content(TabsContent::new("issues", panel("12 open issues.")))
+        .content(TabsContent::new(
+            "pulls",
+            panel("3 pull requests waiting for review."),
+        ))
+        .into_any_element()
 }
 
 fn breadcrumb(_w: &mut Window, cx: &mut App) -> AnyElement {

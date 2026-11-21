@@ -6,7 +6,9 @@
 //!   bound keymap, and standard items get their `OsAction` (Undo, Redo,
 //!   Cut, Copy, Paste, Select All) so the system routes them natively.
 //! * **Windows / Linux** — [`MenuBar`], an in-window row of top-level
-//!   menus (`bodySm`, `roundedMedium` 28px buttons). Click opens a
+//!   menus built on **ButtonGroup**: a detached `ButtonGroup` row of ghost
+//!   `sm` [`crate::Button`]s (Button height, radius, type, hover / press
+//!   motion; the open menu shows as the selected button). Click opens a
 //!   [`crate::Menu`] panel under the menu; while one is open, hovering
 //!   another top-level menu switches to it (native menu-bar behaviour).
 //!   Items dispatch their action to the focused element and show the
@@ -19,14 +21,13 @@
 
 use gpui::{
     App, ElementId, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent, MouseButton,
-    OsAction, ParentElement, RenderOnce, SharedString, Styled, Window, anchored, div, point, px,
+    OsAction, ParentElement, RenderOnce, SharedString, Styled, Window, anchored, div, point,
+    prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, typography::role};
+use refineui_foundation::{radius, spacing};
 
-use crate::motion::{
-    TrackInteraction, child_id, focus_visible, probe, use_interaction, use_layout_probe,
-};
-use crate::{ActiveTheme, Menu, MenuItem, StyledExt};
+use crate::motion::{child_id, focus_visible, probe, use_layout_probe};
+use crate::{ActiveTheme, Menu, MenuItem};
 
 #[allow(missing_docs)]
 mod actions {
@@ -271,41 +272,24 @@ impl RenderOnce for MenuBar {
         };
         let n = self.menus.len();
         let ring = focused && focus_visible(cx);
-        let h = theme.density.desktop().tab_height.min(28.);
-
         let buttons = self
             .menus
             .iter()
             .enumerate()
             .map(|(ix, m)| {
                 let id = cid(&self.id, format!("menu-{ix}"));
-                let (istate, i) = use_interaction(&id, window, cx);
                 let active = open == Some(ix);
-                let bg = if active || i.pressed {
-                    c.background_primary_active
-                } else if i.hovered || (ring && cursor == ix && open.is_none()) {
-                    c.background_primary_hover
-                } else {
-                    gpui::transparent_black()
-                };
+                let cursor_ring = ring && cursor == ix && open.is_none();
                 let click = state.clone();
                 let hover = state.clone();
                 let f = focus.clone();
+                // The Button draws itself; the wrapper owns the menu-bar
+                // behaviour (open on press, switch on hover, anchor probe).
                 div()
-                    .id(id)
+                    .id(cid(&self.id, format!("menu-wrap-{ix}")))
                     .relative()
                     .flex_none()
-                    .h(px(h))
-                    .px(px(spacing::X_SMALL))
-                    .flex()
-                    .items_center()
-                    .rounded(px(radius::MEDIUM))
-                    .bg(bg)
-                    .text_style_token(role::BODY_SM)
-                    .text_color(c.foreground_primary)
-                    .cursor_action()
                     .child(probe(&host, Some(ix)))
-                    .track_interaction(&istate)
                     .on_mouse_down(MouseButton::Left, move |_, window, cx| {
                         cx.stop_propagation();
                         let prev = window.focused(cx);
@@ -319,8 +303,6 @@ impl RenderOnce for MenuBar {
                         });
                         window.focus(&f);
                     })
-                    // `track_interaction` owns `on_hover`; a mouse-move over
-                    // the title (hit-tested) switches the open menu.
                     .on_mouse_move(move |_, _, cx| {
                         hover.update(cx, |s, cx| {
                             if s.open.is_some() && s.open != Some(ix) {
@@ -330,7 +312,16 @@ impl RenderOnce for MenuBar {
                             }
                         });
                     })
-                    .child(m.name.clone())
+                    .when(cursor_ring, |d| {
+                        d.rounded(px(radius::MEDIUM)).bg(c.background_primary_hover)
+                    })
+                    .child(
+                        crate::Button::new(id, m.name.clone())
+                            .variant(crate::ButtonVariant::Ghost)
+                            .size(crate::ControlSize::Small)
+                            .selected(active)
+                            .tab_index(-1),
+                    )
             })
             .collect::<Vec<_>>();
 
@@ -395,10 +386,9 @@ impl RenderOnce for MenuBar {
             .flex()
             .flex_none()
             .items_center()
-            .gap(px(spacing::XXX_SMALL))
             .relative()
             .child(probe(&host, None))
-            .children(buttons)
+            .child(crate::components::button_group::group_row(false).children(buttons))
             .children(open_panel)
             .on_action(move |_: &FocusMenuBar, window, cx| {
                 enter_bar(&focus_action, &focus_state, window, cx)

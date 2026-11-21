@@ -1,6 +1,6 @@
 //! **Foundation layer** (GPUI side) — brief §3/§4.
 //!
-//! The GPUI-free values live in `refineui_tokens` (colors, typography,
+//! The GPUI-free values live in `refineui_foundation` (colors, typography,
 //! spacing, sizing, radius, stroke, elevation, opacity, motion, blur,
 //! z-index, density, window metrics, component contracts). This module is
 //! the one place that turns them into GPUI behaviour:
@@ -15,18 +15,18 @@
 //! | Layers / z-order | [`LayerOrder`] + [`crate::layer()`] |
 //! | Blur / frost | [`crate::vibrancy`] ([`FrostMode`]) |
 //! | Pointer and cursor | [`CursorRole`] |
-//! | Window metrics | [`crate::platform::PlatformAdapter`] over `refineui_tokens::window` |
+//! | Window metrics | [`crate::platform::PlatformAdapter`] over `refineui_foundation::window` |
 //!
 //! Components must take every visual value from here or from tokens —
 //! never a literal when a semantic token exists (brief §8).
 
-pub use refineui_tokens::size::{ControlSize, Density, DesktopMetrics};
-pub use refineui_tokens::{blur, window as window_metrics, z_index};
+pub use refineui_foundation::size::{ControlSize, Density, DesktopMetrics};
+pub use refineui_foundation::{blur, window as window_metrics, z_index};
 
 pub use crate::theme::{ActiveTheme, Appearance, Theme};
 pub use crate::vibrancy::{FrostMode, frost_mode, set_frost_mode};
 
-/// Desktop stacking layers, lowest first (`refineui_tokens::z_index`).
+/// Desktop stacking layers, lowest first (`refineui_foundation::z_index`).
 ///
 /// GPUI paints in tree order; overlays are lifted with [`crate::layer()`].
 /// [`LayerOrder::priority`] is the `layer(..).priority(..)` value that keeps

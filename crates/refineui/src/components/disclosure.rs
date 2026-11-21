@@ -7,7 +7,7 @@
 //! [`LayoutProbe`] and the clip height is tweened instead.
 
 use gpui::{AnyElement, App, ElementId, IntoElement, ParentElement, Styled, Window, div, px};
-use refineui_tokens::spacing;
+use refineui_foundation::spacing;
 
 use crate::motion::{Motion, animate, child_id, probe, use_layout_probe};
 

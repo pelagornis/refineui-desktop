@@ -20,6 +20,32 @@ pub struct ToggleButton {
 }
 
 impl ToggleButton {
+    /// Overflow-menu entry: `(label, icon, pressed, disabled, change)`.
+    #[allow(clippy::type_complexity)]
+    pub(crate) fn menu_parts(
+        &self,
+    ) -> (
+        SharedString,
+        Option<IconName>,
+        bool,
+        bool,
+        Option<ToggleHandler>,
+    ) {
+        let label = self
+            .label
+            .clone()
+            .filter(|l| !l.is_empty())
+            .or_else(|| self.tooltip.clone())
+            .unwrap_or_else(|| self.id.to_string().into());
+        (
+            label,
+            self.icon,
+            self.pressed,
+            self.disabled,
+            self.on_change.clone(),
+        )
+    }
+
     /// Labelled toggle.
     pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>, pressed: bool) -> Self {
         Self {

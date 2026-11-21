@@ -15,7 +15,7 @@
 //! Nothing renders when an action has no binding.
 
 use gpui::{App, IntoElement, ParentElement, RenderOnce, SharedString, Styled, Window, div, px};
-use refineui_tokens::{spacing, typography::role};
+use refineui_foundation::{spacing, typography::role};
 
 use crate::platform::Os;
 use crate::{ActiveTheme, Kbd, StyledExt};

@@ -13,8 +13,10 @@ is available; the default matches RefineUI web sizing.
 
 | Crate | Description |
 | --- | --- |
-| [`refineui-tokens`](crates/refineui-tokens) | Colors, typography, spacing, radius, stroke, opacity, shadow, motion and size tokens. No GPUI dependency. |
-| [`refineui`](crates/refineui) | GPUI theme, icons and components. |
+| [`refineui-foundation`](crates/refineui-foundation) | Colors, typography, spacing, radius, stroke, opacity, shadow, motion, size and material tokens, component contracts. No GPUI dependency. |
+| [`refineui-tokens`](crates/refineui-tokens) | Compatibility re-export of `refineui-foundation`. |
+| [`refineui`](crates/refineui) | GPUI theme, icons, components, interaction, workspace and shell. |
+| [`refineui-material`](crates/refineui-material) | Material Engine: real backdrop blur, tint, lighting, grain and elevation. |
 | [`refineui-gallery`](examples/gallery) | Gallery app and screenshot generator (not published). |
 
 ## Quick start
@@ -23,6 +25,12 @@ is available; the default matches RefineUI web sizing.
 [dependencies]
 gpui = "0.2.2"
 refineui = { git = "https://github.com/pelagornis/refineui-gpui" }
+refineui-material = { git = "https://github.com/pelagornis/refineui-gpui" } # optional
+
+# Real backdrop blur needs RefineUI's small GPUI patch (still version 0.2.2).
+# Without it refineui-material does not compile; refineui alone works with stock gpui.
+[patch.crates-io]
+gpui = { git = "https://github.com/pelagornis/refineui-gpui" }
 ```
 
 ```rust
@@ -53,7 +61,6 @@ Requires Rust 1.88+ (see `rust-toolchain.toml`). The main target is macOS on App
 
 ```sh
 cargo run -p refineui-gallery            # browse every component
-cargo run -p refineui-gallery --bin refineui-shell  # desktop app shell demo (titlebar, menus, activity bar, palette)
 ./scripts/screenshots.sh                 # regenerate docs screenshots
 cd docs && bun install && bun run dev    # documentation site
 ```

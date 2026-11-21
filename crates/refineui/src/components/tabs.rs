@@ -1,14 +1,32 @@
-//! Tabs — web `Tabs` (tab list with an underline indicator).
+//! Tabs — web `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`.
+//!
+//! Same usage as the web: tabs are keyed by a string `value`; the root is
+//! uncontrolled with `default_value` or controlled with `value` +
+//! `on_value_change`; each `TabsContent` renders only while its value is
+//! selected, `gap-medium` below the list.
+//!
+//! ```ignore
+//! Tabs::new("t")
+//!     .default_value("overview")
+//!     .trigger(TabsTrigger::new("overview", "Overview").icon(IconName::Home))
+//!     .trigger(TabsTrigger::new("issues", "Issues").count(12))
+//!     .content(TabsContent::new("overview", overview_panel()))
+//!     .content(TabsContent::new("issues", issues_panel()))
+//! ```
+//!
+//! Keyboard (web parity): Left/Up and Right/Down move focus *and* selection
+//! across enabled triggers (wrapping), Home/End jump to the ends.
 
 use std::rc::Rc;
 
 use gpui::{
-    App, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
-    StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
+    AnyElement, App, ElementId, FocusHandle, InteractiveElement, IntoElement, KeyDownEvent,
+    ParentElement, RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div,
+    prelude::*, px,
 };
 
 use gpui::CursorStyle;
-use refineui_tokens::{spacing, stroke, typography::role};
+use refineui_foundation::{spacing, stroke, typography::role};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, probe, use_interaction,
@@ -16,19 +34,21 @@ use crate::motion::{
 };
 use crate::{ActiveTheme, Badge, BadgeVariant, Icon, IconName, IconSize, StyledExt};
 
-/// One tab.
+/// One trigger in the list (web `TabsTrigger`).
 #[derive(Clone)]
-pub struct Tab {
+pub struct TabsTrigger {
+    value: SharedString,
     label: SharedString,
     icon: Option<IconName>,
     count: Option<usize>,
     disabled: bool,
 }
 
-impl Tab {
-    /// New tab.
-    pub fn new(label: impl Into<SharedString>) -> Self {
+impl TabsTrigger {
+    /// Trigger for `value` showing `label`.
+    pub fn new(value: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
         Self {
+            value: value.into(),
             label: label.into(),
             icon: None,
             count: None,
@@ -48,20 +68,30 @@ impl Tab {
         self
     }
 
-    /// Disabled.
+    /// Disabled (skipped by keyboard navigation).
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 }
 
-impl<T: Into<SharedString>> From<T> for Tab {
-    fn from(label: T) -> Self {
-        Tab::new(label)
+/// A panel shown while its `value` is selected (web `TabsContent`).
+pub struct TabsContent {
+    value: SharedString,
+    child: AnyElement,
+}
+
+impl TabsContent {
+    /// Panel for `value`.
+    pub fn new(value: impl Into<SharedString>, child: impl IntoElement) -> Self {
+        Self {
+            value: value.into(),
+            child: child.into_any_element(),
+        }
     }
 }
 
-/// Horizontal tab list (web `Tabs`). Render the selected panel yourself below it.
+/// Web `Tabs` root: a `TabsList` of triggers plus optional content panels.
 ///
 /// `captionLg` triggers over a 1px `borderDefault` rule; a 2px brand underline
 /// slides to the selected tab (transform + width over `duration-medium`,
@@ -70,31 +100,72 @@ impl<T: Into<SharedString>> From<T> for Tab {
 #[derive(IntoElement)]
 pub struct Tabs {
     id: ElementId,
-    tabs: Vec<Tab>,
-    selected: usize,
-    on_change: Option<Rc<dyn Fn(&usize, &mut Window, &mut App)>>,
+    triggers: Vec<TabsTrigger>,
+    contents: Vec<TabsContent>,
+    value: Option<SharedString>,
+    default_value: Option<SharedString>,
+    on_value_change: Option<Rc<dyn Fn(&SharedString, &mut Window, &mut App)>>,
 }
 
 impl Tabs {
-    /// New tab list.
-    pub fn new(
-        id: impl Into<ElementId>,
-        tabs: impl IntoIterator<Item = impl Into<Tab>>,
-        selected: usize,
-    ) -> Self {
+    /// Empty tab root.
+    pub fn new(id: impl Into<ElementId>) -> Self {
         Self {
             id: id.into(),
-            tabs: tabs.into_iter().map(Into::into).collect(),
-            selected,
-            on_change: None,
+            triggers: Vec::new(),
+            contents: Vec::new(),
+            value: None,
+            default_value: None,
+            on_value_change: None,
         }
     }
 
-    /// Called with the chosen index.
-    pub fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self {
-        self.on_change = Some(Rc::new(f));
+    /// Adds a trigger to the list.
+    pub fn trigger(mut self, trigger: TabsTrigger) -> Self {
+        self.triggers.push(trigger);
         self
     }
+
+    /// Adds several triggers.
+    pub fn triggers(mut self, triggers: impl IntoIterator<Item = TabsTrigger>) -> Self {
+        self.triggers.extend(triggers);
+        self
+    }
+
+    /// Adds a content panel.
+    pub fn content(mut self, content: TabsContent) -> Self {
+        self.contents.push(content);
+        self
+    }
+
+    /// Controlled selected value.
+    pub fn value(mut self, value: impl Into<SharedString>) -> Self {
+        self.value = Some(value.into());
+        self
+    }
+
+    /// Initial value when uncontrolled (defaults to the first enabled trigger).
+    pub fn default_value(mut self, value: impl Into<SharedString>) -> Self {
+        self.default_value = Some(value.into());
+        self
+    }
+
+    /// Called with the newly selected value.
+    pub fn on_value_change(
+        mut self,
+        f: impl Fn(&SharedString, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_value_change = Some(Rc::new(f));
+        self
+    }
+}
+
+/// Next enabled index from `from` by `delta` (wrapping); `None` if none enabled.
+pub(crate) fn roving(enabled: &[bool], from: usize, delta: i32) -> Option<usize> {
+    let n = enabled.len() as i32;
+    (1..=n)
+        .map(|k| (from as i32 + delta * k).rem_euclid(n) as usize)
+        .find(|i| enabled[*i])
 }
 
 impl RenderOnce for Tabs {
@@ -102,11 +173,39 @@ impl RenderOnce for Tabs {
         let theme = cx.theme().clone();
         let c = theme.colors;
         let parent = self.id.clone();
+        // Uncontrolled value lives in keyed state; `value` overrides it.
+        let first_enabled = self
+            .triggers
+            .iter()
+            .find(|t| !t.disabled)
+            .map(|t| t.value.clone())
+            .unwrap_or_default();
+        let initial = self.default_value.clone().unwrap_or(first_enabled);
+        let inner = window.use_keyed_state(child_id(&self.id, "value"), cx, |_, _| initial);
+        let current = self.value.clone().unwrap_or_else(|| inner.read(cx).clone());
+        let selected_ix = self
+            .triggers
+            .iter()
+            .position(|t| t.value == current)
+            .unwrap_or(0);
+        let select: Rc<dyn Fn(SharedString, &mut Window, &mut App)> = {
+            let inner = inner.clone();
+            let cb = self.on_value_change.clone();
+            Rc::new(move |v: SharedString, w: &mut Window, cx: &mut App| {
+                inner.update(cx, |s, cx| {
+                    *s = v.clone();
+                    cx.notify();
+                });
+                if let Some(cb) = &cb {
+                    cb(&v, w, cx);
+                }
+            })
+        };
         let probe_state = use_layout_probe(&self.id, window, cx);
-        let measured = probe_state.read(cx).relative(self.selected);
+        let measured = probe_state.read(cx).relative(selected_ix);
         let sel_id = ElementId::NamedChild(
             Box::new(child_id(&self.id, "tab")),
-            format!("{}", self.selected).into(),
+            format!("{selected_ix}").into(),
         );
         let (_, sel_i) = use_interaction(&sel_id, window, cx);
         let line = if sel_i.hovered {
@@ -136,12 +235,33 @@ impl RenderOnce for Tabs {
         let ready = indicator.is_some();
         let show_focus = focus_visible(cx);
         let mut items = Vec::new();
-        for (ix, tab) in self.tabs.into_iter().enumerate() {
-            let selected = ix == self.selected;
+        let enabled: Vec<bool> = self.triggers.iter().map(|t| !t.disabled).collect();
+        let values: Vec<SharedString> = self.triggers.iter().map(|t| t.value.clone()).collect();
+        let handles: Vec<FocusHandle> = (0..self.triggers.len())
+            .map(|ix| {
+                window
+                    .use_keyed_state(
+                        ElementId::NamedChild(
+                            Box::new(child_id(&parent, "focus")),
+                            format!("{ix}").into(),
+                        ),
+                        cx,
+                        |_, cx| cx.focus_handle(),
+                    )
+                    .read(cx)
+                    .clone()
+            })
+            .collect();
+        for (ix, tab) in self.triggers.into_iter().enumerate() {
+            let selected = ix == selected_ix;
             let item_id =
                 ElementId::NamedChild(Box::new(child_id(&parent, "tab")), format!("{ix}").into());
             let (state, i) = use_interaction(&item_id, window, cx);
-            let handler = self.on_change.clone().filter(|_| !tab.disabled);
+            let handler = (!tab.disabled).then(|| {
+                let select = select.clone();
+                let v = tab.value.clone();
+                move |w: &mut Window, cx: &mut App| select(v.clone(), w, cx)
+            });
             let fg = if tab.disabled {
                 c.foreground_disabled
             } else if selected {
@@ -170,7 +290,7 @@ impl RenderOnce for Tabs {
                     .when(!tab.disabled, |d| {
                         d.cursor_action()
                             .track_interaction(&state)
-                            .tab_index(0)
+                            .track_focus(&handles[ix].clone().tab_index(if selected { 0 } else { -1 }).tab_stop(selected))
                             .when(show_focus, |d| d.focus(move |s| s.shadow(ring)))
                     })
                     .when(tab.disabled, |d| d.cursor(CursorStyle::OperationNotAllowed))
@@ -192,14 +312,29 @@ impl RenderOnce for Tabs {
                         )
                     })
                     .child(probe(&probe_state, Some(ix)))
-                    .when_some(handler, |d, h| d.on_click(move |_, w, cx| h(&ix, w, cx))),
+                    .when_some(handler, |d, h| d.on_click(move |_, w, cx| h(w, cx))),
             );
         }
-        div()
-            .id(self.id)
+        let key_select = select.clone();
+        let list = div()
+            .id(child_id(&self.id, "list"))
             .relative()
             .flex()
             .w_full()
+            .on_key_down(move |ev: &KeyDownEvent, window, cx| {
+                let target = match ev.keystroke.key.as_str() {
+                    "right" | "down" => roving(&enabled, selected_ix, 1),
+                    "left" | "up" => roving(&enabled, selected_ix, -1),
+                    "home" => enabled.iter().position(|e| *e),
+                    "end" => enabled.iter().rposition(|e| *e),
+                    _ => return,
+                };
+                cx.stop_propagation();
+                if let Some(t) = target {
+                    window.focus(&handles[t]);
+                    key_select(values[t].clone(), window, cx);
+                }
+            })
             .child(probe(&probe_state, None))
             // `::after` list rule — 1px `borderDefault` across the full width.
             .child(
@@ -222,6 +357,34 @@ impl RenderOnce for Tabs {
                         .h(px(stroke::THICK))
                         .bg(line),
                 )
-            })
+            });
+        let panel = self
+            .contents
+            .into_iter()
+            .find(|c| c.value == current)
+            .map(|c| c.child);
+        div()
+            .id(self.id)
+            .flex()
+            .flex_col()
+            .w_full()
+            .min_w_0()
+            .gap(px(spacing::MEDIUM))
+            .child(list)
+            .children(panel)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::roving;
+
+    #[test]
+    fn roving_skips_disabled_and_wraps() {
+        let e = [true, false, true, true];
+        assert_eq!(roving(&e, 0, 1), Some(2));
+        assert_eq!(roving(&e, 3, 1), Some(0));
+        assert_eq!(roving(&e, 0, -1), Some(3));
+        assert_eq!(roving(&[false, false], 0, 1), None);
     }
 }

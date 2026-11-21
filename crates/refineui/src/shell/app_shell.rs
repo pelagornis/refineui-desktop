@@ -27,7 +27,7 @@ use gpui::{
     AnyElement, App, ElementId, FocusHandle, InteractiveElement, IntoElement, ParentElement,
     RenderOnce, SharedString, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::stroke;
+use refineui_foundation::stroke;
 
 use super::{
     AppMenu, ControlButtons, MenuBar, ShellRegion, ShellSpec, StatusBar, Titlebar,
@@ -77,10 +77,12 @@ pub struct ApplicationShell {
     right: Option<ShellDock>,
     bottom: Option<ShellDock>,
     center: Option<AnyElement>,
+    area: Option<crate::workspace::DockArea>,
     status_bar: Option<StatusBar>,
     overlays: Vec<AnyElement>,
     os: Option<platform::Os>,
     embedded: bool,
+    vibrant: bool,
 }
 
 impl ApplicationShell {
@@ -101,10 +103,12 @@ impl ApplicationShell {
             right: None,
             bottom: None,
             center: None,
+            area: None,
             status_bar: None,
             overlays: Vec::new(),
             os: None,
             embedded: false,
+            vibrant: false,
         }
     }
 
@@ -118,6 +122,17 @@ impl ApplicationShell {
     /// or close the window and no client-side frame is drawn.
     pub fn embedded(mut self, embedded: bool) -> Self {
         self.embedded = embedded;
+        self
+    }
+
+    /// Let the chrome (titlebar, menu strip, activity bar, side docks,
+    /// status bar) show what is behind the window: with the `material`
+    /// feature active the shell root is left unpainted, so each chrome
+    /// material blurs the window backdrop (a transparent / blurred OS
+    /// window, or the gallery wallpaper). The workspace keeps its opaque
+    /// `backgroundPrimary`. No effect without materials.
+    pub fn vibrant(mut self, vibrant: bool) -> Self {
+        self.vibrant = vibrant;
         self
     }
 
@@ -209,6 +224,15 @@ impl ApplicationShell {
         self
     }
 
+    /// A [`crate::workspace::DockArea`]: its center becomes the workspace
+    /// region and its visible docks the left / right / bottom dock regions
+    /// (F6 stops), honouring zoom and the panel-drag edge zones. Replaces
+    /// `left_dock` / `right_dock` / `bottom_dock` / `center`.
+    pub fn workspace(mut self, area: crate::workspace::DockArea) -> Self {
+        self.area = Some(area);
+        self
+    }
+
     /// Status bar.
     pub fn status_bar(mut self, bar: StatusBar) -> Self {
         self.status_bar = Some(bar);
@@ -227,7 +251,16 @@ fn region_id(shell: &ElementId, r: ShellRegion) -> ElementId {
 }
 
 impl RenderOnce for ApplicationShell {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        if let Some(area) = self.area.take() {
+            let parts = area.into_parts(cx);
+            let dock =
+                |p: Option<(AnyElement, f32)>| p.map(|(element, size)| ShellDock { element, size });
+            self.left = dock(parts.left);
+            self.right = dock(parts.right);
+            self.bottom = dock(parts.bottom);
+            self.center = Some(parts.center);
+        }
         let theme = cx.theme().clone();
         let c = theme.colors;
         let os = self.os.unwrap_or_else(|| platform::chrome_os(cx));
@@ -355,8 +388,15 @@ impl RenderOnce for ApplicationShell {
                     .h(px(metrics.menu_bar))
                     .flex()
                     .items_center()
-                    .px(px(refineui_tokens::spacing::X_SMALL))
-                    .bg(c.surface_sunken)
+                    .px(px(refineui_foundation::spacing::X_SMALL))
+                    .map(|el| {
+                        let (fill, layer) = crate::material::chrome(
+                            crate::SurfaceKind::Sidebar,
+                            c.surface_sunken,
+                            cx,
+                        );
+                        el.bg(fill).children(layer)
+                    })
                     .border_b(hair)
                     .border_color(c.border_subtle)
                     .child(m),
@@ -371,7 +411,7 @@ impl RenderOnce for ApplicationShell {
                     .h(px(metrics.toolbar))
                     .flex()
                     .items_center()
-                    .px(px(refineui_tokens::spacing::X_SMALL))
+                    .px(px(refineui_foundation::spacing::X_SMALL))
                     .bg(c.background_primary)
                     .border_b(hair)
                     .border_color(c.border_subtle)
@@ -403,7 +443,14 @@ impl RenderOnce for ApplicationShell {
                     .w(px(d.size))
                     .h_full()
                     .overflow_hidden()
-                    .bg(c.surface_sunken)
+                    .map(|el| {
+                        let (fill, layer) = crate::material::chrome(
+                            crate::SurfaceKind::Sidebar,
+                            c.surface_sunken,
+                            cx,
+                        );
+                        el.bg(fill).children(layer)
+                    })
                     .border_r(hair)
                     .border_color(c.border_subtle)
                     .child(d.element),
@@ -418,7 +465,14 @@ impl RenderOnce for ApplicationShell {
                     .w(px(d.size))
                     .h_full()
                     .overflow_hidden()
-                    .bg(c.surface_sunken)
+                    .map(|el| {
+                        let (fill, layer) = crate::material::chrome(
+                            crate::SurfaceKind::Sidebar,
+                            c.surface_sunken,
+                            cx,
+                        );
+                        el.bg(fill).children(layer)
+                    })
                     .border_l(hair)
                     .border_color(c.border_subtle)
                     .child(d.element),
@@ -474,7 +528,11 @@ impl RenderOnce for ApplicationShell {
             .size_full()
             .flex()
             .flex_col()
-            .bg(c.background_primary)
+            .bg(if self.vibrant && crate::material::materials_active(cx) {
+                gpui::transparent_black()
+            } else {
+                c.background_primary
+            })
             .when_some(menu_focus, |d, (f, st)| {
                 d.on_action(move |_: &super::FocusMenuBar, window, cx| {
                     super::menu_bar::enter_bar(&f, &st, window, cx)

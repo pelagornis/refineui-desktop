@@ -1,7 +1,7 @@
 //! Styling helpers shared by components.
 
 use gpui::{App, Styled};
-use refineui_tokens::typography::TextStyle;
+use refineui_foundation::typography::TextStyle;
 
 use crate::{ActiveTheme, Elevation};
 
@@ -36,9 +36,9 @@ pub trait StyledExt: Styled + Sized {
     fn popover_surface(self, cx: &App) -> Self {
         let theme = cx.theme();
         self.bg(theme.floating_fill())
-            .border(gpui::px(refineui_tokens::stroke::HAIRLINE))
+            .border(gpui::px(refineui_foundation::stroke::HAIRLINE))
             .border_color(theme.colors.border_default)
-            .rounded(gpui::px(refineui_tokens::radius::XX_LARGE))
+            .rounded(gpui::px(refineui_foundation::radius::XX_LARGE))
             .shadow(theme.shadow(Elevation::SURFACE))
     }
 }

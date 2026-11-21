@@ -32,6 +32,10 @@ struct ShotView {
 impl Render for ShotView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let content = (self.story.render)(window, cx);
+        if self.story.fills_external_window() {
+            // Full-bleed: the story already sizes itself to the window.
+            return refineui::root(cx).size_full().child(content);
+        }
         refineui::root(cx)
             .p(px(PADDING))
             .flex()
@@ -83,11 +87,6 @@ fn main() {
                 .is_none_or(|ids| ids.iter().any(|id| id == s.id))
         })
         .collect();
-    let shell_shots = args
-        .only
-        .as_ref()
-        .is_none_or(|ids| ids.iter().any(|id| id == "shell-demo"));
-    let modes = args.modes.clone();
     let mut jobs = Vec::new();
     for story in stories {
         for mode in &args.modes {
@@ -124,27 +123,6 @@ fn main() {
                         }
                     }
                 }
-                // The real `refineui-shell` window (id `shell-demo`).
-                if shell_shots {
-                    for mode in &modes {
-                        let name = format!(
-                            "shell-demo-{}.png",
-                            if *mode == Appearance::Dark {
-                                "dark"
-                            } else {
-                                "light"
-                            }
-                        );
-                        let path = out.join(&name);
-                        match shoot_shell(*mode, &path, cx).await {
-                            Ok(()) => println!("wrote {}", path.display()),
-                            Err(e) => {
-                                failures += 1;
-                                eprintln!("failed {name}: {e:#}");
-                            }
-                        }
-                    }
-                }
                 if let Some(prev) = previous.take() {
                     prev.update(cx, |_, window, _| window.remove_window()).ok();
                 }
@@ -155,63 +133,6 @@ fn main() {
             })
             .detach();
         });
-}
-
-/// Size of the `shell-demo` capture (logical px).
-const SHELL_SHOT: (f32, f32) = (1180., 720.);
-
-async fn shoot_shell(
-    mode: Appearance,
-    path: &std::path::Path,
-    cx: &mut AsyncApp,
-) -> anyhow::Result<()> {
-    use refineui_gallery::{demo, shell_demo::ShellDemo};
-    let title = format!("refineui-shot-shell-{}", std::process::id());
-    let state = std::env::temp_dir().join(format!("refineui-shot-shell-{}", std::process::id()));
-    let handle: WindowHandle<ShellDemo> = cx.update(|cx| {
-        demo::install(cx);
-        Theme::set_appearance(mode, cx);
-        cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(Bounds {
-                    origin: point(px(40.), px(80.)),
-                    size: size(px(SHELL_SHOT.0), px(SHELL_SHOT.1)),
-                })),
-                titlebar: Some(gpui::TitlebarOptions {
-                    title: Some(title.clone().into()),
-                    ..Default::default()
-                }),
-                focus: true,
-                show: true,
-                is_movable: false,
-                is_resizable: false,
-                kind: if cfg!(target_os = "macos") {
-                    WindowKind::PopUp
-                } else {
-                    WindowKind::Normal
-                },
-                ..Default::default()
-            },
-            |window, cx| cx.new(|cx| ShellDemo::new(state.join("window.state"), window, cx)),
-        )
-    })??;
-    for _ in 0..8 {
-        cx.background_executor()
-            .timer(Duration::from_millis(150))
-            .await;
-        handle.update(cx, |_, window, _| window.refresh())?;
-        capture::nudge(&title);
-    }
-    cx.background_executor()
-        .timer(Duration::from_millis(400))
-        .await;
-    let r = handle
-        .update(cx, |_, window, _| capture::capture(window, &title, path))
-        .and_then(|r| r);
-    handle
-        .update(cx, |_, window, _| window.remove_window())
-        .ok();
-    r
 }
 
 async fn shoot(
@@ -273,7 +194,10 @@ async fn shoot(
     handle
         .update(cx, |_, window, _| capture::capture(window, &title, path))
         .and_then(|r| r)?;
-    autocrop(path, w)
+    if !story.fills_external_window() {
+        autocrop(path, w)?;
+    }
+    Ok(())
 }
 
 /// Trim uniform background on the right and bottom (stories declare a generous

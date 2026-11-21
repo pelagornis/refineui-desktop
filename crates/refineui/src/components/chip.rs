@@ -9,7 +9,7 @@ use gpui::{
     App, ClickEvent, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing};
+use refineui_foundation::{radius, spacing};
 
 use crate::motion::{
     Interaction, Motion, TrackInteraction, animate, child_id, focus_visible, use_focus_handle,

@@ -1,20 +1,22 @@
 //! Status Bar — the window's bottom strip (brief §5 Application).
 //!
-//! Height from density (`status_bar_height`: 22 / 24 / 28),
-//! `surfaceSunken` with a hairline `borderSubtle` top edge, `captionMd`
-//! text in `foregroundSecondary`. Items sit in a leading group (context:
-//! branch, problems, sync) and a trailing group (cursor position,
-//! encoding, language, notifications). Item kinds:
+//! RefineUI look (not an IDE strip): the bar sits on `backgroundPrimary`
+//! like the content above it, separated by a hairline `borderSubtle`; it is
+//! roomier than a classic status line (density `status_bar_height` + 8 →
+//! 30 / 32 / 36). Items are soft chips — `roundedMedium`, `px-small`,
+//! `captionLg` in `foregroundSecondary`; clickable chips fill
+//! `backgroundSurfaceHover` / `backgroundSurfaceActive` (motion `fast`).
+//! Tones tint only the icon (or a 6px dot when there is none), never the
+//! whole bar. Item kinds:
 //!
 //! * [`StatusItem::text`] — static label, optional icon;
-//! * [`StatusItem::button`] — clickable (hover `backgroundPrimaryHover`,
-//!   `roundedSmall`), with an optional action tooltip;
-//! * [`StatusItem::progress`] — a label with a thin determinate bar;
+//! * [`StatusItem::button`] — clickable chip with an optional action tooltip;
+//! * [`StatusItem::progress`] — a label with a rounded determinate track;
 //! * [`StatusItem::custom`] — any element.
 //!
-//! An item can carry a [`StatusTone`] (`Warning` / `Danger` / `Accent`)
-//! that tints its icon and text; [`StatusBar::accent`] turns the whole
-//! bar `backgroundBrand` (e.g. remote / debugging session).
+//! [`StatusBar::accent`] marks a special session (remote, debugging): a 2px
+//! brand top rule and the first leading item as a `backgroundBrandSubtle`
+//! pill — instead of painting the whole bar brand.
 
 use std::rc::Rc;
 
@@ -22,7 +24,7 @@ use gpui::{
     AnyElement, App, ElementId, Hsla, InteractiveElement, IntoElement, ParentElement, RenderOnce,
     SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px, relative,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::motion::{TrackInteraction, use_interaction};
 use crate::{ActiveTheme, Icon, IconName, IconSize, StyledExt, Tooltip};
@@ -159,32 +161,48 @@ impl StatusBar {
         self
     }
 
-    /// Brand-coloured bar.
+    /// Session accent (brand top rule + brand first item).
     pub fn accent(mut self, accent: bool) -> Self {
         self.accent = accent;
         self
     }
 }
 
+/// `(height, chip height)` for a density's status line.
+pub(crate) fn status_metrics(base: f32) -> (f32, f32) {
+    (base + 8., base)
+}
+
+fn tone_color(tone: StatusTone, c: &crate::ThemeColors) -> Option<Hsla> {
+    match tone {
+        StatusTone::Neutral => None,
+        StatusTone::Success => Some(c.foreground_success),
+        StatusTone::Warning => Some(c.foreground_warning),
+        StatusTone::Danger => Some(c.foreground_error),
+        StatusTone::Accent => Some(c.foreground_brand),
+    }
+}
+
 fn render_item(
     bar: &ElementId,
     item: StatusItem,
-    accent: bool,
+    pill: bool,
+    chip_h: f32,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
     let theme = cx.theme().clone();
     let c = theme.colors;
-    let fg: Hsla = if accent {
-        c.foreground_on_brand
+    let tint = tone_color(item.tone, &c);
+    let fg = if pill {
+        c.foreground_brand
     } else {
-        match item.tone {
-            StatusTone::Neutral => c.foreground_secondary,
-            StatusTone::Success => c.foreground_success,
-            StatusTone::Warning => c.foreground_warning,
-            StatusTone::Danger => c.foreground_error,
-            StatusTone::Accent => c.foreground_brand,
-        }
+        c.foreground_secondary
+    };
+    let icon_fg = if pill {
+        c.foreground_brand
+    } else {
+        tint.unwrap_or(fg)
     };
     let id = ElementId::NamedChild(Box::new(bar.clone()), item.id.clone());
     let content = div()
@@ -192,62 +210,61 @@ fn render_item(
         .items_center()
         .gap(px(spacing::XX_SMALL))
         .text_color(fg)
-        .when_some(item.icon, |d, i| {
-            d.child(Icon::new(i).size(IconSize::XSmall).color(fg))
+        .map(|d| match (item.icon, tint) {
+            (Some(i), _) => d.child(Icon::new(i).size(IconSize::XSmall).color(icon_fg)),
+            (None, Some(t)) if !pill => d.child(div().size(px(6.)).rounded_full().bg(t)),
+            _ => d,
         })
         .when_some(item.label.clone(), |d, l| {
             d.child(div().whitespace_nowrap().child(l))
         });
-    let el = match item.kind {
-        Kind::Text => div().id(id).px(px(spacing::XX_SMALL)).child(content),
-        Kind::Custom(e) => div().id(id).px(px(spacing::XX_SMALL)).child(e),
-        Kind::Progress(v) => div()
-            .id(id)
-            .px(px(spacing::XX_SMALL))
+    let chip = |d: gpui::Stateful<gpui::Div>| {
+        d.h(px(chip_h))
+            .px(px(spacing::SMALL))
             .flex()
             .items_center()
+            .rounded(px(radius::MEDIUM))
+            .when(pill, |d| d.bg(c.background_brand_subtle))
+    };
+    let el = match item.kind {
+        Kind::Text => chip(div().id(id)).child(content),
+        Kind::Custom(e) => chip(div().id(id)).child(e),
+        Kind::Progress(v) => chip(div().id(id))
             .gap(px(spacing::X_SMALL))
             .child(content)
             .child(
                 div()
-                    .w(px(64.))
-                    .h(px(stroke::THICK * 2.))
+                    .w(px(72.))
+                    .h(px(4.))
                     .rounded_full()
-                    .bg(if accent {
-                        c.foreground_on_brand.opacity(0.3)
-                    } else {
-                        c.background_surface_selected
-                    })
-                    .child(div().h_full().w(relative(v)).rounded_full().bg(if accent {
-                        c.foreground_on_brand
-                    } else {
-                        c.background_brand
-                    })),
+                    .bg(c.background_surface_selected)
+                    .child(
+                        div()
+                            .h_full()
+                            .w(relative(v.clamp(0., 1.)))
+                            .rounded_full()
+                            .bg(c.background_brand),
+                    ),
             ),
         Kind::Button(on_click) => {
             let (state, i) = use_interaction(&id, window, cx);
             let bg = if i.pressed {
-                if accent {
-                    c.foreground_on_brand.opacity(0.24)
-                } else {
-                    c.background_primary_active
-                }
+                c.background_surface_active
             } else if i.hovered {
-                if accent {
-                    c.foreground_on_brand.opacity(0.16)
-                } else {
-                    c.background_primary_hover
-                }
+                c.background_surface_hover
+            } else if pill {
+                c.background_brand_subtle
             } else {
                 gpui::transparent_black()
             };
-            div()
-                .id(id)
-                .px(px(spacing::XX_SMALL))
-                .h_full()
-                .flex()
-                .items_center()
-                .rounded(px(radius::SMALL))
+            let bg = crate::motion::animate(
+                crate::motion::child_id(&id, "bg"),
+                bg,
+                crate::motion::Motion::FAST,
+                window,
+                cx,
+            );
+            chip(div().id(id))
                 .bg(bg)
                 .cursor_action()
                 .track_interaction(&state)
@@ -268,45 +285,52 @@ impl RenderOnce for StatusBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme().clone();
         let c = theme.colors;
-        let h = theme.density.desktop().status_bar_height;
+        let (h, chip_h) = status_metrics(theme.density.desktop().status_bar_height);
         let accent = self.accent;
         let leading: Vec<AnyElement> = self
             .leading
             .into_iter()
-            .map(|i| render_item(&self.id, i, accent, window, cx))
+            .enumerate()
+            .map(|(ix, i)| render_item(&self.id, i, accent && ix == 0, chip_h, window, cx))
             .collect();
         let trailing: Vec<AnyElement> = self
             .trailing
             .into_iter()
-            .map(|i| render_item(&self.id, i, accent, window, cx))
+            .map(|i| render_item(&self.id, i, false, chip_h, window, cx))
             .collect();
         div()
             .id(self.id)
+            .relative()
             .flex()
             .flex_none()
             .items_center()
             .w_full()
             .h(px(h))
             .px(px(spacing::X_SMALL))
-            .gap(px(spacing::XX_SMALL))
-            .bg(if accent {
-                c.background_brand
-            } else {
-                c.surface_sunken
+            .gap(px(spacing::SMALL))
+            .map(|d| {
+                let (fill, layer) =
+                    crate::material::chrome(crate::SurfaceKind::Titlebar, c.background_primary, cx);
+                d.bg(fill).children(layer)
             })
             .border_t(px(stroke::HAIRLINE))
-            .border_color(if accent {
-                c.background_brand
-            } else {
-                c.border_subtle
+            .border_color(c.border_subtle)
+            .when(accent, |d| {
+                d.child(
+                    div()
+                        .absolute()
+                        .top(px(-stroke::HAIRLINE))
+                        .left_0()
+                        .right_0()
+                        .h(px(stroke::THICK))
+                        .bg(c.background_brand),
+                )
             })
-            .text_style_token(role::CAPTION_MD)
+            .text_style_token(role::CAPTION_LG)
             .font_family(theme.font_family.clone())
             .child(
                 div()
                     .flex()
-                    .h_full()
-                    .py(px(2.))
                     .items_center()
                     .gap(px(spacing::XXX_SMALL))
                     .children(leading),
@@ -315,11 +339,20 @@ impl RenderOnce for StatusBar {
             .child(
                 div()
                     .flex()
-                    .h_full()
-                    .py(px(2.))
                     .items_center()
                     .gap(px(spacing::XXX_SMALL))
                     .children(trailing),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn status_bar_is_roomier_than_an_ide_strip() {
+        assert_eq!(status_metrics(22.), (30., 22.));
+        assert_eq!(status_metrics(28.), (36., 28.));
     }
 }

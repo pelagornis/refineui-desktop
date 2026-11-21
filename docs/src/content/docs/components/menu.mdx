@@ -2,7 +2,7 @@
 title: Menu
 description: "Action list anchored to a trigger (web `Menu` / `MenuPopover`)."
 sidebar:
-  order: 42
+  order: 47
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -14,7 +14,8 @@ Action list anchored to a trigger (web `Menu` / `MenuPopover`).
 ## Usage
 
 - Menus close on selection, Escape or a click outside. ↑/↓ move, Enter activates.
-- Rows: `p sizeSmall`, radius large, gap `sizeXSmall`; titles `bodyMd`, shortcuts `bodyXs` tertiary; the panel is `min-w 200`, `p4`, radius 16 on the frosted surface.
+- Rows: `p sizeSmall`, radius large, gap `sizeXSmall`; titles `bodyMd`, shortcuts `bodyXs` tertiary; the panel is `p4`, radius 16 on the frosted surface.
+- Width: `MENU_MIN_WIDTH` (200, the web `min-w-[200px]`) to `MENU_MAX_WIDTH` (320); `Menu::width` is clamped to that range.
 - `Menu::submenu(item, menu)` adds a hover-opened submenu (chevron row).
 - For right click at the pointer, use [Context Menu](/components/context-menu/).
 
@@ -58,7 +59,7 @@ A menu panel (static). Use `DropdownMenu` / `ContextMenu` for popups.
 | `fn divider(mut self) -> Self` | Add a divider line (web `MenuDivider`). |
 | `fn separator(self) -> Self` | Deprecated name of `Self::divider`. |
 | `fn submenu(mut self, item: MenuItem, menu: Menu) -> Self` | Add a row that opens `menu` to its side on hover (web `ContextMenuSub` + `SubTrigger` + `SubContent`): placed at the row's right edge, flipping left when it would leave the window. |
-| `fn width(mut self, width: Pixels) -> Self` | Panel width. |
+| `fn width(mut self, width: Pixels) -> Self` | Panel width, clamped to [`MENU_MIN_WIDTH`, `MENU_MAX_WIDTH`] (web `w-/min-w-refineui-menu-panel-width`; long labels wrap inside it). |
 
 ### MenuItem
 

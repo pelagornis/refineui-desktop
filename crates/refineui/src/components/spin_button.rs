@@ -8,7 +8,7 @@ use gpui::{
 };
 
 use gpui::{CursorStyle, InteractiveElement, MouseButton};
-use refineui_tokens::{size::component, spacing};
+use refineui_foundation::{size::component, spacing};
 
 use crate::motion::{
     Motion, TrackInteraction, animate, child_id, use_focus_handle, use_interaction,

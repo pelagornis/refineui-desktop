@@ -16,7 +16,7 @@ use gpui::{
     App, ClipboardItem, ElementId, IntoElement, ParentElement, RenderOnce, SharedString, Styled,
     Window, div, prelude::*, px,
 };
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::motion::child_id;
 use crate::{ActiveTheme, Button, ButtonVariant, ControlSize, Icon, IconName, IconSize, StyledExt};

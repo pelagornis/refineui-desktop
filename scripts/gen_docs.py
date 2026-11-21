@@ -7,7 +7,11 @@ crates/refineui/src. Page order follows the gallery stories.
 
   python3 scripts/gen_docs.py
 
-Edit this file, not the generated .mdx files under components/ and foundations/.
+It also writes reference/<crate>.mdx: every public item of every crate with
+the first line of its `///` doc.
+
+Edit this file, not the generated .mdx files under components/, shell/,
+foundations/ and reference/.
 """
 import re, os, json, pathlib
 ROOT=str(pathlib.Path(__file__).resolve().parent.parent)
@@ -88,10 +92,84 @@ def api_md(file, names):
             out.append('')
     return '\n'.join(out)
 
+def src_path(file):
+    # `../../refineui-material/src/x.rs` → `crates/refineui-material/src/x.rs`
+    return 'crates/'+file[6:] if file.startswith('../../') else 'crates/refineui/src/'+file
+
 # id: (title, group, file, types, description, usage notes, example, order)
 P={}
 def page(id,title,group,file,types,desc,notes,example): P[id]=(title,group,file,types,desc,notes,example)
 
+page('materials','Materials','foundations','../../refineui-material/src/element.rs',['MaterialSurface','../../refineui-material/src/surface.rs:Material','../../refineui-material/src/lighting.rs:Lighting','../../refineui-material/src/shadow.rs:ShadowPreset','../../refineui-material/src/backdrop.rs:BlurSupport','../../refineui-material/src/backdrop.rs:MaterialSettings'],
+ 'Material Engine (`refineui-material`): surfaces with real backdrop blur, tint, saturation, lighting, grain and elevation.',
+ ['Materials sample the pixels already painted behind them — the renderer copies that region, blurs it (downsample + separable Gaussian in a float texture) and composites it inside the rounded shape. It is not a translucent fill.',
+  'Roles come from foundation tokens (`MaterialRole`): **thin**, **regular** (menus, popovers), **thick**, **chrome** (titlebars, sidebars), **glass** (clear, vivid, lit edges, grain) and **scrim** (modal backdrop). Each has a near-opaque `fallback` fill.',
+  'Paint order: shadows → backdrop (blur + saturation + blended tint) → lighting → grain → mask → inner shadows → border → children. Drop shadows are drawn outside the shape only, so a material never blurs its own shadow. Nested materials blur whatever the outer one composited.',
+  'Ready-made recipes live in `refineui_material::recipes` (sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim, glass). The **Material Effects** and **Material Recipes** pages show every effect and recipe.',
+  'Real blur on Blade (Linux / FreeBSD) and Metal (macOS, unverified on hardware). On DirectX (Windows) or with `MaterialSettings { reduced_transparency: true }` surfaces draw their fallback fill — check `BlurSupport::current()`.',
+  'The blur is a small patch to GPUI (`vendor/gpui`, see the Material Engine architecture page).'],
+ """use refineui_material::prelude::*;
+
+material_surface(Material::role(MaterialRole::Regular, Mode::Light))
+    .w(px(240.))
+    .p(px(12.))
+    .child("Frosted panel");
+
+material_surface(
+    Material::glass(Mode::Dark)
+        .radius(px(24.))
+        .lighting(Lighting::edge(0.9).angle(90.)),
+)
+.child(content);""")
+page('material-effects','Material Effects','foundations','../../refineui-material/src/lighting.rs',['Lighting','../../refineui-material/src/composite.rs:BlendMode','../../refineui-material/src/composite.rs:Mask','../../refineui-material/src/shadow.rs:InnerShadow'],
+ 'Lighting (directional, ambient, edge rim, reflection, specular), tint blend modes, masks, layered and inner shadows, and nested materials.',
+ ['**Lighting** is evaluated per pixel in the blur composite: a directional sheen that falls off away from the light, an ambient lift, an edge rim that follows the rounded-rect normal, a diagonal reflection band and a soft specular spot. `Lighting::glass(edge, reflection, specular)` is the glass preset; `Lighting::edge(s)` is a plain rim.',
+  '**Tint blend modes** (`BlendMode`): Normal, Multiply, Screen, Overlay and Soft Light, applied between the blurred backdrop and the tint before the tint opacity.',
+  '**Masks** (`Mask::linear`, `fade_bottom`, `fade_top`) fade the whole material (backdrop, lighting, grain) along a direction — e.g. a toolbar that dissolves into content.',
+  '**Shadows**: up to four drop shadows (`ShadowPreset`, including `Ambient`) are drawn by the blur composite outside the shape; more fall back to GPUI shadows. `InnerShadow` (`pressed`, `well`, `glass_rim`) draws inset shading on both paths.',
+  '**Grain** is a per-pixel integer-hash noise plus ±1 LSB dithering, so large soft gradients do not band.',
+  'Without real blur (DirectX, reduced transparency) the same `Material` draws a fallback: shadows, fill (a gradient when masked), a grain tile and quad-based lighting. The reflection band is blur-only.'],
+ """use refineui_material::prelude::*;
+
+material_surface(
+    Material::glass(Mode::Dark)
+        .tint_blend(BlendMode::SoftLight)
+        .mask(Mask::fade_bottom(0.6))
+        .inner_shadow(InnerShadow::glass_rim(Mode::Dark))
+        .lighting(
+            Lighting::glass(0.8, 0.3, 0.35)
+                .angle(-30.)
+                .specular_at(point(0.2, 0.1), px(56.)),
+        ),
+)
+.size(px(180.))
+.child(content);""")
+page('material-recipes','Material Recipes','foundations','../../refineui-material/src/recipes.rs',['Recipe'],
+ 'Preset materials for desktop surfaces: sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim and glass.',
+ ['Each recipe is a plain function returning a `Material` (`recipes::sidebar(mode)`, `recipes::popover(mode)`, `recipes::hud()`, …), so it can be tweaked with the usual builders.',
+  '`Recipe::foreground(mode)` gives a text color that reads on the recipe (the HUD is always dark).',
+  'Radii and elevation follow the foundation tokens: popovers use `X_LARGE` + overlay elevation, menus `LARGE` + floating, sheets `XX_LARGE` + modal with a glass rim, tooltips `MEDIUM` without lighting.'],
+ """use refineui_material::prelude::*;
+
+material_surface(recipes::sidebar(mode)).w(px(220.)).h_full().child(nav);
+material_surface(recipes::popover(mode)).p(px(12.)).child(content);
+material_surface(recipes::hud()).p(px(16.)).child("Volume 60%");""")
+page('material-components','Material Components','foundations','components/surface.rs',['Surface','material.rs:SurfaceKind'],
+ 'Components on the Material Engine: `Surface`, Text / Icon / Separator on surfaces, glass Button and Input, and material Popover, Tooltip, Menu, Toast and Dialog.',
+ ['Enable the **`material`** cargo feature of `refineui` (it needs the vendored gpui, see the Material Engine architecture page). Without it — or on DirectX, with reduced transparency, or with native macOS frost — every component keeps its opaque web-parity look; the API is the same either way. `materials_active(cx)` tells which path is used.',
+  '**Automatic** with the feature: Popover, Tooltip and Menu panels use the Popover / Tooltip / Menu materials (the beak stays an opaque fill — blur is limited to rounded rectangles), and the Dialog / Drawer scrim becomes the Scrim material (the web\'s 2px backdrop blur).',
+  '**Opt-in**: `Button::glass(true)`, `TextInput::glass(true)`, `Toast::material(true)` / `Toaster::material(true)` and `Dialog::material(true)` (Sheet material). Web parity keeps these opaque by default.',
+  '`Surface::new(SurfaceKind::…)` is a `div` whose plate is the matching recipe (panel, sidebar, titlebar, popover, menu, tooltip, HUD, sheet, toast, scrim, glass). `Text::on_surface`, `Icon::on_surface` and `Separator::on_surface` pick colors that read on it (light text on the HUD, a translucent rule instead of an opaque gray line).',
+  'Materials draw the component\'s shadows outside the shape and its border above the blur, so neither is blurred into the backdrop.'],
+ """Surface::new(SurfaceKind::Hud)
+    .p(px(14.))
+    .child(Icon::new(IconName::WeatherSunny).on_surface(SurfaceKind::Hud))
+    .child(Separator::horizontal().on_surface(SurfaceKind::Hud))
+    .child(Text::new("Volume 60%").on_surface(SurfaceKind::Hud));
+
+Button::new("play", "Play").glass(true);
+Toast::new("saved", ToastData::new("Saved")).material(true);
+Dialog::new("save", "Save changes?").material(true);""")
 page('button','Button','actions','components/button.rs',['Button','ButtonVariant'],
  'Primary, secondary, outline and ghost buttons in three sizes, with icons, loading and disabled states.',
  ['Buttons are focusable with Tab and activate on click, Enter or Space.','Use `Button::icon_only` for toolbar actions and always give it a `tooltip`.','`loading(true)` swaps the leading icon for a spinner and blocks clicks.'],
@@ -121,7 +199,7 @@ page('segmented-control','Segmented Control','actions','components/segmented_con
     cx.notify();
 }));''')
 page('link','Link','actions','components/link.rs',['Link'],'Inline text link that opens a URL or runs a handler.',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','With `href` the link opens the URL in the default browser via `cx.open_url`.'],
+ ['With `href` the link opens the URL in the default browser via `cx.open_url`.'],
  '''Link::new("docs", "Read the docs").href("https://github.com/pelagornis/refineui-gpui");
 Link::new("gpui", "GPUI").href("https://gpui.rs").external(true);''')
 page('input','Input','forms','components/input.rs',['TextInput','InputEvent'],'Single-line text input with selection, clipboard, IME, placeholder, search and password modes.',
@@ -143,7 +221,9 @@ page('textarea','Textarea','forms','components/input.rs',['Textarea'],'Multi-lin
 // in render():
 div().w(px(320.)).child(self.notes.clone())''')
 page('search-field','Search Field','forms','components/input.rs',['SearchField','InputAppearance'],'Filled search input with a leading search icon and clear button (web `SearchField`).',
- ['`SearchField::new(cx)` returns a filled `TextInput`: `backgroundSurfaceHover` plate, `backgroundSurfaceActive` on hover, a thin `borderDefault` while focused.','Escape clears the text; the leading icon is small / medium / large per size.'],
+ ['`SearchField::new(cx)` returns a filled `TextInput`: `backgroundSurfaceHover` plate, `backgroundSurfaceActive` on hover, a thin `borderDefault` while focused.',
+  'Sizes match the web exactly and ignore `Density`: 36 / 44 / 52px tall, with a 20 / 24 / 28px leading `search` icon.',
+  'A filled `dismiss` button appears once there is text; clicking it or pressing Escape clears the field and emits `InputEvent::Change("")`.'],
  '''let search = cx.new(|cx| SearchField::new(cx).placeholder("Search components"));
 cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
     if let InputEvent::Change(query) = event {
@@ -152,7 +232,7 @@ cx.subscribe(&search, |this, _, event: &InputEvent, cx| {
 })
 .detach();''')
 page('input-otp','Input OTP','forms','components/input_otp.rs',['InputOtp'],'One-time-code input made of independent soft square cells.',
- ['Cells are `controlHeight` squares (36 / 44 / 52) with title-scale digits.','Digits fill the next empty cell, Backspace clears, ⌘V / Ctrl-V pastes; `on_complete` fires once every cell is filled.'],
+ ['Cells are soft squares, not circles: sm 36px / radius 12, md 44px / radius 14, lg 52px / radius 16, with an 8px gap — the web values, independent of `Density` (a compact density used to shrink lg cells to 32px while keeping radius 16, which drew circles; a test now guards the ratio).','Digits fill the next empty cell, Backspace clears, ⌘V / Ctrl-V pastes; `on_complete` fires once every cell is filled.'],
  '''InputOtp::new("code")
     .length(6)
     .on_complete(cx.listener(|this, code: &SharedString, _, cx| this.verify(code, cx)));''')
@@ -208,15 +288,30 @@ page('spin-button','Spin Button','forms','components/spin_button.rs',['SpinButto
         this.delay = *v;
         cx.notify();
     }));''')
-page('select','Select','forms','components/select.rs',['Select','SelectAppearance'],'Pick one option from a popup list.',
- ['Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.'],
+page('select','Select','forms','components/select.rs',['Select','SelectAppearance','SelectPosition','SelectLayout','components/positioning.rs:FloatingLayout','components/positioning.rs:FloatingSide','components/positioning.rs:CollisionOptions','components/positioning.rs:TransformOrigin'],'Pick one option from a popup list.',
+ ['Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.',
+  'Placement is collision-aware: `SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow, constraining height to the available space and scrolling inside a `ScrollArea`. `SelectPosition::ItemAligned` (default, Radix) overlays the selected row on the trigger.',
+  'Tune `collision_padding` (default 10) and `side_offset` (default 4, popper only). Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.',
+  'GPUI has no CSS variables; `SelectLayout` / `FloatingLayout` exposes the same values as `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation uses that origin (a short slide from the trigger). See the `select-position` gallery story for flip, constrained scroll and item-aligned screenshots.'],
  '''Select::new("font", ["Inter", "SF Pro", "Menlo"], self.font)
     .placeholder("Font")
+    .position(SelectPosition::Popper)
     .width(px(180.))
     .on_change(cx.listener(|this, ix: &usize, _, cx| {
         this.font = Some(*ix);
         cx.notify();
     }));''')
+page('select-position','Select Position','forms','components/select.rs',['SelectPosition','components/positioning.rs:FloatingLayout','components/positioning.rs:CollisionOptions'],
+ 'Collision-aware Select placement: popper flip, constrained height with scrolling, and item-aligned overlay.',
+ ['`SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow. Height is constrained to the available space — not a fixed max-height alone — and the list scrolls in a `ScrollArea`.',
+  '`SelectPosition::ItemAligned` (Radix default) overlays the selected row on the trigger, shifting and scrolling so it stays in view.',
+  'Padding and offset are `collision_padding` (default 10) and `side_offset` (default 4). Placement is a pure function in `components::positioning` (`place_popper`, `place_item_aligned`) so Menu, Dropdown and Popover can reuse it.',
+  'GPUI has no CSS variables; `FloatingLayout` / `SelectLayout` exposes `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation slides from that origin.'],
+ '''Select::new("tz", zones, Some(0))
+    .position(SelectPosition::Popper)
+    .collision_padding(10.)
+    .side_offset(4.)
+    .width(px(280.));''')
 page('text','Text','display','components/text.rs',['Text','TextRole','TextVariant','TextColor','Heading','Label'],'Typography primitives mapped to the RefineUI type scale and semantic roles.',
  ['Prefer `TextRole` (bodyLg, labelMd, captionSm, titleMd …) — the same semantic roles as the web `Text` component.','`TextVariant` mirrors the raw Foundation tokens (heading1…caption3).'],
  '''Text::new("Settings").role(TextRole::TitleMd);
@@ -247,7 +342,7 @@ page('alert','Alert','display','components/alert.rs',['Alert','AlertVariant'],'I
  '''Alert::new("offline", "You are offline")
     .variant(AlertVariant::Warning)
     .description("Changes will sync when you reconnect.");''')
-page('divider','Divider','display','components/divider.rs',['Divider','Axis','DividerAlign'],'Horizontal and vertical separators, optionally labelled or with a centered icon.',['Labels use `captionMd` in `foregroundBrand`; `align` moves the label to either end.'],
+page('divider','Divider','display','components/divider.rs',['Divider','Separator','Axis','DividerAlign'],'Horizontal and vertical separators, optionally labelled or with a centered icon. `Separator` is the same component.',['Labels use `captionMd` in `foregroundBrand`; `align` moves the label to either end.'],
  '''Divider::horizontal().label("or");
 h_stack(8.).h(px(20.)).child("A").child(Divider::vertical()).child("B");''')
 page('kbd','Kbd','display','components/kbd.rs',['Kbd'],'Keyboard shortcut hint.',['Use `inverted(true)` on dark surfaces such as tooltips.'],
@@ -288,12 +383,17 @@ toaster.update(cx, |t, cx| {
 
 // in render():
 refineui::root(cx).child(content).child(self.toaster.clone())''')
-page('tabs','Tabs','navigation','components/tabs.rs',['Tabs','Tab'],'Switch between views in the same context.',[],
- '''Tabs::new("tabs", [Tab::new("Overview"), Tab::new("Issues").count(12)], self.tab)
-    .on_change(cx.listener(|this, ix: &usize, _, cx| {
-        this.tab = *ix;
-        cx.notify();
-    }));''')
+page('tabs','Tabs','navigation','components/tabs.rs',['Tabs','TabsTrigger','TabsContent'],'Switch between views in the same context (web `Tabs` / `TabsList` / `TabsTrigger` / `TabsContent`).',
+ ['Same model as the web: tabs are identified by a string `value`; `default_value` makes it uncontrolled, `value` + `on_value_change` controlled.',
+  'Each `TabsContent` renders only while its value is selected, `gap-medium` below the list.',
+  'Keyboard: the list is one tab stop; ← / → move and select (roving focus), Home / End jump to the ends; disabled triggers are skipped.'],
+ '''Tabs::new("project")
+    .default_value("overview")
+    .trigger(TabsTrigger::new("overview", "Overview"))
+    .trigger(TabsTrigger::new("issues", "Issues").count(12))
+    .trigger(TabsTrigger::new("settings", "Settings").disabled(true))
+    .content(TabsContent::new("overview", overview))
+    .content(TabsContent::new("issues", issues));''')
 page('breadcrumb','Breadcrumb','navigation','components/breadcrumb.rs',['Breadcrumb'],'Shows the location within a hierarchy; earlier items are clickable.',[],
  '''Breadcrumb::new("path", ["Workspace", "crates", "button.rs"])
     .on_select(|ix, _, _| println!("go to {ix}"));''')
@@ -349,7 +449,7 @@ page('calendar','Calendar','navigation','components/calendar.rs',['Calendar','Da
         cx.notify();
     }));''')
 page('menu','Menu','overlays','components/menu.rs',['Menu','MenuItem','DropdownMenu'],'Action list anchored to a trigger (web `Menu` / `MenuPopover`).',
- ['Menus close on selection, Escape or a click outside. ↑/↓ move, Enter activates.','Rows: `p sizeSmall`, radius large, gap `sizeXSmall`; titles `bodyMd`, shortcuts `bodyXs` tertiary; the panel is `min-w 200`, `p4`, radius 16 on the frosted surface.','`Menu::submenu(item, menu)` adds a hover-opened submenu (chevron row).','For right click at the pointer, use [Context Menu](/components/context-menu/).'],
+ ['Menus close on selection, Escape or a click outside. ↑/↓ move, Enter activates.','Rows: `p sizeSmall`, radius large, gap `sizeXSmall`; titles `bodyMd`, shortcuts `bodyXs` tertiary; the panel is `p4`, radius 16 on the frosted surface.','Width: `MENU_MIN_WIDTH` (200, the web `min-w-[200px]`) to `MENU_MAX_WIDTH` (320); `Menu::width` is clamped to that range.','`Menu::submenu(item, menu)` adds a hover-opened submenu (chevron row).','For right click at the pointer, use [Context Menu](/components/context-menu/).'],
  '''DropdownMenu::new(
     "file",
     Button::new("file-btn", "Open").variant(ButtonVariant::Secondary),
@@ -373,13 +473,19 @@ page('context-menu','Context Menu','overlays','components/context_menu.rs',['Con
             Menu::new("ctx-more").item(MenuItem::new("Rename")).item(MenuItem::new("Move")),
         ),
 );''')
-page('popover','Popover','overlays','components/popover.rs',['Popover','PopoverAlign'],'Anchored floating panel with rich content and a beak.',['The content closure receives a `close` callback.','Opens below the trigger, centered by default (`align_end()` / `.align(...)` for start / end); the 24×12 beak is part of the same outline as the panel.'],
+page('popover','Popover','overlays','components/popover.rs',['Popover','PopoverAlign'],'Anchored floating panel with rich content and a beak.',['The content closure receives a `close` callback.','Opens below the trigger, centered by default (`placement(AnchorSide::…)` / `align_end()` / `.align(...)`). The 24×12 beak and the panel are one closed outline; the beak aims at the trigger midpoint, clamps off the corner radius, and follows a flip when the preferred side does not have room.'],
  '''Popover::new("dims", Button::new("open", "Open").variant(ButtonVariant::Secondary), |close, _, _| {
     v_stack(16.)
         .child(Text::new("Dimensions"))
         .child(Button::new("done", "Done").on_click(move |_, _, cx| close(cx)))
         .into_any_element()
 });''')
+page('popover-sides','Popover Sides','overlays','components/popover.rs',['Popover','PopoverAlign','components/positioning.rs:AnchorSide'],
+ 'The popover beak on each of the four sides, continuous with the panel.',
+ ['`placement` chooses the preferred side (`AnchorSide::{Top,Bottom,Left,Right}`). The panel flips when that side does not have room, via `place_anchored`.',
+  'The 24×12 beak and the panel are one closed outline (shared fill and a single hairline). The beak aims at the trigger midpoint and is clamped off the corner radius.'],
+ '''Popover::new("side", Button::new("open", "Open"), |_,_,_| Text::new("Top").into_any_element())
+    .placement(AnchorSide::Top);''')
 page('dialog','Dialog','overlays','components/dialog.rs',['Dialog','DialogSize'],'Modal dialog for focused tasks.',
  ['Keep the dialog rendered and drive `open(bool)` so the exit transition can play; clear your flag in `on_close` (scrim click, × or Escape).'],
  '''Dialog::new("discard", "Discard changes?")
@@ -433,7 +539,7 @@ page('typography','Typography','foundations','components/text.rs',['TextVariant'
  '''Text::new("Section title").variant(TextVariant::SubTitle1);''')
 page('elevation','Elevation','foundations','theme.rs',['Theme'],'Shadow (key + ambient) and radius tokens.',['Use `cx.theme().shadow(Elevation::FLOATING)` or the `StyledExt::elevation` helper.'],
  '''div().rounded(px(12.)).shadow(cx.theme().shadow(Elevation::RAISED))''')
-page('icon','Icon','foundations','icon.rs',['Icon','IconSize','IconStyle'],'RefineUI System Icons in regular and filled styles.',['Icons are embedded SVGs served by `refineui::Assets`; register it with `Application::new().with_assets(refineui::Assets)`.','Add icons with `python3 scripts/gen_icons.py <name>…`.'],
+page('icon','Icon','foundations','icon.rs',['Icon','IconSize','IconStyle'],'RefineUI System Icons in regular and filled styles.',['Glyphs come from the `refineui-system-icons` crate (git dependency on pelagornis/refineui-system-icons, `default-features = false`) and are served by `refineui::Assets`; register it with `Application::new().with_assets(refineui::Assets)`.','`Icon::new(IconName::…)` uses the curated set components rely on; `Icon::named(refineui::system_icons::icons::AIRPLANE)` reaches any of the 890 glyphs.','The optical source size (16/20/24/28/32/48) is chosen from the rendered size, so a 24px icon uses the 24px drawing.','Add a curated icon: append it to `CURATED` in `scripts/gen_icons.py`, then `python3 scripts/gen_icons.py`.'],
  '''Icon::new(IconName::Settings).size(IconSize::Large).color(cx.theme().colors.foreground_secondary);
 Icon::new(IconName::Star).style(IconStyle::Filled);''')
 
@@ -462,8 +568,9 @@ page('date-input','Date Input','forms','components/date_input.rs',['DateInput'],
         this.due = Some(*d);
         cx.notify();
     }));""")
-page('time-input','Time Input','forms','components/time_input.rs',['TimeInput','Time'],'Field that opens hour / minute wheels (web `TimeInput`).',
- ['Wheels are 140px tall with 32px rows; rows fade toward the edges and the wheel snaps to a row 120ms after scrolling stops.','`minute_step(15)` and `twelve_hour(true)` match the web props.'],
+page('time-input','Time Input','forms','components/time_input.rs',['TimeInput','Time'],'Native segmented time entry with an optional hour / minute wheel popover (web `TimeInput`).',
+ ['Type straight into the field: hour, minute and (12-hour) AM/PM are separate segments. Digits fill the focused segment and auto-advance (e.g. `9` → hour 09 → minute); ↑ / ↓ step the segment (minutes by `minute_step`), ← / → / Tab move between segments, Backspace clears, `a` / `p` set the period.',
+  'The clock button opens the wheels: 140px tall with 32px rows; rows fade toward the edges and the wheel snaps to a row 120ms after scrolling stops.','`minute_step(15)` and `twelve_hour(true)` match the web props.'],
  """TimeInput::new("start", Some(Time::new(9, 30)))
     .minute_step(15)
     .on_change(cx.listener(|this, t: &Time, _, cx| {
@@ -474,12 +581,26 @@ page('label','Label','forms','components/text.rs',['Label'],'Form label in three
  """Label::new("Email").required(true);""")
 page('tag','Tag','display','components/chip.rs',['Chip','ChipVariant'],'Tag — an alias of Chip, exactly like the web (`Tag` re-exports `Chip`).',['`Tag` / `TagVariant` are type aliases of `Chip` / `ChipVariant`; `Chip::tag` is the same as `Chip::new`.'],
  """Tag::tag("rust", "Rust").variant(TagVariant::Outline);""")
-page('result','Result','display','components/result.rs',['ResultView','ResultVariant'],'Outcome screen with an icon, title, description and actions (web `Result`).',
- ['Named `ResultView` so it does not shadow `std::result::Result` in glob imports.','The variant picks the status icon and color; `figure` replaces the icon with any element.'],
+page('result','Result','display','components/result.rs',['ResultView','ResultVariant'],'Outcome screen with an icon, title, description and actions (web `Result`), including an empty state.',
+ ['Named `ResultView` so it does not shadow `std::result::Result` in glob imports.','The variant picks the status icon and color (`Success`, `Info`, `Warning`, `Error`, `Empty`); `figure` replaces the icon with any element.',
+  '`Empty` is the placeholder a pane shows when it has nothing yet: a secondary folder glyph on a subtle 48px plate. `compact(true)` tightens the layout for narrow panels; `details` adds a monospace well (error codes, paths). Retry is a regular `action(Button)`.',
+  'Success / Info / Warning / Error stay faithful to the web `Result` (no plate unless you call `plate(true)`).'],
  """ResultView::new(ResultVariant::Success)
     .title("Payment received")
     .description("Your receipt was sent to your email.")
-    .action(Button::new("done", "Done").variant(ButtonVariant::Primary));""")
+    .action(Button::new("done", "Done").variant(ButtonVariant::Primary));
+
+ResultView::new(ResultVariant::Empty)
+    .icon(IconName::Document)
+    .title("No documents yet")
+    .description("Create a document or drop files here.")
+    .action(Button::new("new", "New Document"));
+
+ResultView::new(ResultVariant::Error)
+    .title("Couldn't load the library")
+    .description("The server took too long to respond.")
+    .details("ETIMEDOUT · api.example.com:443")
+    .action(Button::new("retry", "Try again"));""")
 page('message','Message','display','components/message.rs',['Message'],'Conversation row: avatar, bubbles and a footer (web `Message`).',['Pair with `BubbleGroup` for runs of bubbles from one sender.'],
  """Message::new()
     .avatar(Avatar::new("Ada Lovelace"))
@@ -506,42 +627,35 @@ page('chart','Chart','display','components/chart.rs',['Chart','ChartKind','Chart
     ["Jan", "Feb", "Mar", "Apr", "May", "Jun"]);
 Chart::line("visitors", values, labels).series(ChartSeries::Info);""")
 page('carousel','Carousel','display','components/carousel.rs',['Carousel'],'Looping slides with outline buttons and a sliding-pill meter (web `Carousel`).',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','Slides are built on demand by index, so the loop continues in the same direction past the last slide.','Drag the stage to swipe: the track follows the pointer and a release past 18% of the width (web `DRAG_COMMIT_RATIO`) moves one slide; shorter drags spring back. Buttons, the meter and ← / → (while focused) also navigate.'],
+ ['Slides are built on demand by index, so the loop continues in the same direction past the last slide.','Drag the stage to swipe: the track follows the pointer and a release past 18% of the width (web `DRAG_COMMIT_RATIO`) moves one slide; shorter drags spring back. Buttons, the meter and ← / → (while focused) also navigate.'],
  """Carousel::new("hero", 4, |ix, _window, _cx| {
     div().size_full().child(format!("Slide {}", ix + 1)).into_any_element()
 })
 .height(220.);""")
-page('navigation-menu','Navigation Menu','navigation','components/navigation_menu.rs',['NavigationMenu','NavigationLink'],'Top navigation with links and dropdown panels (web `NavigationMenu`).',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','While a panel is open, hovering another trigger switches to it.','`menu` builds the compact frosted dropdown; `panel(label, layout, content)` takes any content in a `NavigationLayout` — `Dropdown`, `Floating` (mega panel, see Navigation Menu · Mega) or `Overlay` (full-width sheet, see Navigation Menu · Overlay).','`default_open(index)` opens an entry on first render (previews).'],
- """NavigationMenu::new("nav")
-    .link("Overview", true, |_, _| {})
-    .menu("Products", [
-        NavigationLink::new("Design system").description("Tokens and components"),
-        NavigationLink::new("Icons"),
-    ]);""")
-page('navigation-menu-mega','Navigation Menu · Mega','navigation','components/navigation_menu.rs',['NavigationLayout'],'Floating mega panel centred under the bar (web `NavigationMenuContent layout="floating"`).',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','Centred in the window (clamped 8px from the edges), 4px below the trigger, at most 1000px wide (`navigationMenuMegaWidth`).','`backgroundPrimary` fill, hairline `borderDefault`, `roundedXXLarge`, raised shadow.'],
- """NavigationMenu::new("nav")
-    .panel("Products", NavigationLayout::Floating, |_, cx| mega_columns(cx).into_any_element());""")
-page('navigation-menu-overlay','Navigation Menu · Overlay','navigation','components/navigation_menu.rs',['NavigationLayout'],'Full-width sheet from the bar edge over a scrim (web `NavigationMenuContent layout="overlay"`).',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','Spans the window from the bar\'s bottom edge; the rest of the window is covered by the `surfaceOverlay` scrim.','Hovering or clicking the scrim closes the sheet (web pointer-enter close).','No rounding; hairline bottom border; content centred.'],
- """NavigationMenu::new("nav")
-    .panel("Products", NavigationLayout::Overlay, |_, cx| mega_columns(cx).into_any_element());""")
-page('footer','Footer','navigation','components/footer.rs',['Footer','FooterGroup'],'Sitemap groups and a social | brand | locale meta row (web `Footer`).',[],
- """Footer::new("footer")
-    .group(FooterGroup::new("Product", ["Components", "Tokens"]))
-    .brand(None, "RefineUI", Some("© 2026 Pelagornis".into()))
-    .social([IconName::Mail, IconName::Link]);""")
-page('command','Command','overlays','components/command.rs',['Command','CommandGroup','CommandItem','CommandEvent'],'Searchable command list with groups, shortcuts and keyboard navigation (web `Command`).',
- ['**Optional** — behind the `web-extras` cargo feature (web-oriented, not part of Desktop Core): `refineui = { version = "0.1", features = ["web-extras"] }`.','`Command` is an entity; subscribe to `CommandEvent::Select`.','Typing filters items by every word of the label, value or keywords; ↑ / ↓ move the indicator and Enter selects.','Put it in a `Dialog` for a ⌘K palette.'],
- """let palette = cx.new(|cx| Command::new(window, cx)
+page('command','Command','overlays','components/command.rs',['Command','CommandGroup','CommandItem','CommandEvent','CommandDialog','components/command_palette.rs:CommandPalette','components/command_palette.rs:CommandPage'],'Searchable command list with groups, shortcuts and keyboard navigation (web `Command`).',
+ ['`Command` is an entity (web `Command` + `CommandInput` + `CommandList` + `CommandEmpty`); subscribe to `CommandEvent::{Select, QueryChange, Highlight, Back}` or give items `on_select`. The desktop command palette is this same component in a `CommandDialog`, not a second widget (see Command Palette).',
+  'Filtering is fuzzy (subsequence with word-start and contiguity bonuses) over the label, then value and keywords; matched letters are highlighted. Items sort by score within a group and groups by their best item. `should_filter(false)` turns it off; `filter(fn)` supplies your own scorer (web `filter`).',
+  'When nothing matches, a compact `ResultView` (`ResultVariant::Empty`) is rendered inside the results plate, like web `CommandEmpty`. The search field is a sibling above that plate, so it stays pinned while the list scrolls.',
+  '↑ / ↓ move the indicator, Enter selects; Backspace on an empty query emits `CommandEvent::Back` (for nested pages). `hints(true)` shows a ↑↓ / ↵ / esc footer; `set_breadcrumb` shows page chips above the input.',
+  '`CommandDialog` is the web `CommandDialog`: the same `Command` inside a centered `Dialog` (scrim, Escape / outside click closes, focus returns to the trigger).'],
+ """let command = cx.new(|cx| Command::new(window, cx)
     .group(CommandGroup::new("Suggestions")
         .item(CommandItem::new("Calendar").icon(IconName::Calendar))
         .item(CommandItem::new("Search files").shortcut("⌘P"))));
-cx.subscribe(&palette, |this, _, CommandEvent::Select(value), cx| {
-    this.run(value, cx);
+cx.subscribe(&command, |this, _, event: &CommandEvent, cx| {
+    if let CommandEvent::Select(value) = event {
+        this.run(value, cx);
+    }
 })
-.detach();""")
+.detach();
+
+// ⌘K dialog:
+CommandDialog::new("cmdk", self.command.clone())
+    .open(self.open)
+    .on_close(move |_window, cx| view.update(cx, |this, cx| {
+        this.open = false;
+        cx.notify();
+    }));""")
 page('dropdown','Dropdown','overlays','components/menu.rs',['DropdownMenu'],'A trigger that opens a Menu below it (web `Dropdown`). Optional real backdrop blur on macOS.',
  ['`align_end()` aligns the menu with the trigger end edge.','`refineui::set_frost_mode(FrostMode::Native, cx)` makes dropdowns open in an OS-blurred pop-up window on macOS (prototype; see the Blur guide). Other platforms keep the opaque panel.'],
  """DropdownMenu::new(
@@ -563,8 +677,7 @@ page('application-shell','Application Shell','desktop','shell/app_shell.rs',['Ap
  ['Compose the parts in one builder; every slot is optional. Per-OS metrics (titlebar height, traffic-light reserve, menu bar) come from the `PlatformAdapter` and the current `Density`.',
   'On macOS the menus go to the system menu bar (call `set_system_menus` once); on Windows / Linux the same `AppMenu` model renders as an in-window `MenuBar`.',
   '**F6 / Shift-F6** cycle focus between regions (menu bar → toolbar → activity bar → docks → workspace → status bar); Tab then moves inside the region. **F10** (and Alt on Windows / Linux) focuses the menu bar. A region gets an inset `borderFocus` outline only for keyboard focus.',
-  'On Linux the shell wraps itself in `WindowFrame` (client-side decorations: rounded corners, shadow, resize edges). Use `.embedded(true)` and `.os(..)` for previews inside another window.',
-  'Run the full demo: `cargo run -p refineui-gallery --bin refineui-shell`.'],
+  'On Linux the shell wraps itself in `WindowFrame` (client-side decorations: rounded corners, shadow, resize edges). Use `.embedded(true)` and `.os(..)` for previews inside another window.'],
  """ApplicationShell::new("app")
     .title("refineui-gpui")
     .subtitle("main.rs")
@@ -582,7 +695,8 @@ page('titlebar','Titlebar','desktop','shell/titlebar.rs',['Titlebar','WindowFram
   '**Windows** — caption buttons drawn by RefineUI (46 × titlebar height) tagged with `WindowControlArea::{Min, Max, Close}` so the system hit test handles them (snap layouts on maximize hover). The rest of the bar is `WindowControlArea::Drag`.',
   '**Linux** — client-side decorations: round header-bar buttons, `start_window_move` on press, right-click opens the window menu, `WindowFrame` draws the rounded frame, shadow and resize edges.',
   'Double-click follows the platform: `titlebar_double_click` on macOS (respects the user preference), maximize toggle elsewhere. Interactive children are occluded so they never start a window drag.',
-  'Window options come from `window_options(&WindowSpec, cx)`, which sets the transparent titlebar, traffic-light point, min size and decorations to match.'],
+  'Window options come from `window_options(&WindowSpec, cx)`, which sets the transparent titlebar, traffic-light point, min size and decorations to match.',
+  'Look: `backgroundPrimary` with a hairline `borderSubtle` bottom edge; the title reads as one line — title (`bodySm` medium) › subtitle (secondary), separated by a small tertiary chevron.'],
  """let spec = WindowSpec::new(WindowPreset::Main, "My App").restore(WindowState::load(&path));
 cx.open_window(window_options(&spec, cx), |window, cx| { /* … */ })?;
 
@@ -604,7 +718,8 @@ page('menu-bar','Menu Bar','desktop','shell/menu_bar.rs',['MenuBar','AppMenu','A
  'One `AppMenu` model for the system menu bar on macOS and an in-window menu bar on Windows and Linux.',
  ['Items name GPUI actions (`"editor::Save"`); shortcuts are read from the installed keymap, so the menu, tooltips and the command palette always agree.',
   '`set_system_menus(&menus, cx)` builds `gpui::Menu`s with key equivalents and standard `OsAction`s (Undo, Redo, Cut, Copy, Paste, Select All) and returns any unregistered action names.',
-  'In-window: click a title or press **F10** / **Alt**; ← / → move between menus, ↓ / Enter open, Escape closes and returns focus. While one menu is open, hovering another title switches to it.'],
+  'In-window, the bar is a horizontal `ButtonGroup` row of ghost small `Button`s; the open menu\'s button is `selected`.',
+  'Click a title or press **F10** / **Alt**; ← / → move between menus, ↓ / Enter open, Escape closes and returns focus. While one menu is open, hovering another title switches to it.'],
  """let menus = vec![
     AppMenu::new("File").action("New File", "demo::NewFile").separator().action("Save", "demo::Save"),
     AppMenu::new("Edit").action("Undo", "demo::Undo").action("Copy", "demo::Copy"),
@@ -615,31 +730,36 @@ if Os::current() == Os::MacOs {
 MenuBar::new("menubar", menus);""")
 page('status-bar','Status Bar','desktop','shell/status_bar.rs',['StatusBar','StatusItem','StatusTone'],
  'The strip at the bottom of the window: leading and trailing groups of text, buttons, progress and custom items.',
- ['Height follows density (`status_bar_height`: 22 / 24 / 28); items use `captionMd` text and 12px icons.',
-  'Buttons are quiet (fill on hover only) and can carry a tooltip with a keymap shortcut: `.tooltip("Toggle Panel", Some("workspace::TogglePanel"))`.',
-  '`accent(true)` paints the bar `backgroundBrand` (e.g. while debugging or connected to a remote).'],
+ ['A quiet `backgroundPrimary` strip with a hairline top border — no solid colour band. Height is the density control height + 8; items are rounded chips (`captionLg`, `foregroundSecondary`).',
+  'Tones (`Warning`, `Danger`, `Success`, `Info`) tint only the icon, or show a 6px dot when the item has none, so the bar never turns into a row of coloured text.',
+  'Buttons fill on hover / press (animated) and can carry a tooltip with a keymap shortcut: `.tooltip("Toggle Panel", Some("workspace::TogglePanel"))`. Progress items show a 4px rounded track.',
+  '`accent(true)` (e.g. debugging, remote) adds a 2px brand rule along the top and turns the first leading item into a `backgroundBrandSubtle` pill.'],
  """StatusBar::new("status")
     .leading(StatusItem::button("branch", "main", |_, _| {}).icon(IconName::Git))
     .leading(StatusItem::text("problems", "2 warnings").icon(IconName::Warning).tone(StatusTone::Warning))
     .leading(StatusItem::progress("index", "Indexing", 0.6))
     .trailing(StatusItem::text("pos", "Ln 12, Col 4"));""")
-page('activity-bar','Activity Bar','desktop','shell/activity_bar.rs',['ActivityBar','ActivityItem','ActivityBarStyle','ActivityBarPreset','ItemShape','IndicatorStyle','LabelMode','BarSide','ActivityItemState','ItemBadge'],
- 'A vertical rail of views (Explorer, Search, Source Control …) — RefineUI style by default, fully restylable: shape, size, indicator, colours, labels, custom faces.',
- ['**Refine** (default) — density-sized bar (48px comfortable), 36px rounded tiles, the selected item sits on a `backgroundSurfaceSelected` plate; tooltips name each item.',
-  '**Navigation rail** — 80px, captions under the icons (`LabelMode::Below`). **Expanded** — `expanded(true)` shows labels beside the icons at `expanded_width`.',
-  '**Rail preset** — `ActivityBar::rail` keeps the former Side Dock look (circle → squircle morph, edge pill, brand fill) for chat-style apps.',
-  'Every knob is on `ActivityBarStyle`: `shape` (Rounded / Square / Circle / Morph), `indicator` (None / Bar / Dot / Plate), `item_size`, `gap`, `icon`, `border` and every colour. `render_item` draws the face yourself; the bar keeps hit-testing, focus, indicator and tooltip.',
-  'Items: `icon`, `image`, `initials` (+`tint`), `folder`; `badge(n)`, `dot()`, `unread`, `disabled`, `action` (shows the keymap shortcut in the tooltip). `header` / `footer` slots and `footer_item`s pin to the ends.',
-  'Keyboard: the bar is one tab stop; ↑ / ↓ move, Enter / Space activate, **⌥↑ / ⌥↓** reorder when `on_reorder` is set (drag also reorders, with a drop indicator).'],
+page('activity-bar','Activity Bar','desktop','shell/activity_bar.rs',['ActivityBar','ActivityItem','BarSide','ActivityItemState','ItemBadge'],
+ 'One vertical rail of views (Explorer, Search, Source Control, chats …) in RefineUI style.',
+ ['There is a single look — no presets or variants: density-sized bar (48px comfortable), rounded tiles that morph toward a squircle when selected, a `backgroundBrandSubtle` selected plate with `foregroundBrand` ink and a brand bar indicator on the edge. Tooltips name each item.',
+  'Items: `icon`, `image` (external URL, asset, or bytes), `folder`; `badge(n)`, `dot()`, `unread`, `disabled`, `action` (shows the keymap shortcut in the tooltip). `header` / `footer` slots and `footer_item`s pin to the ends. `render_item` draws a custom face; the bar keeps hit-testing, focus, indicator and tooltip.',
+  '**Folders** — `ActivityItem::folder` groups items in a Toolbar-style tube (hairline `borderDefault`, `backgroundBrandSubtle`, `XXX_SMALL` padding, radius = tile radius + pad). A closed folder shows a 2×2 stacked preview of up to four members and a count badge when there are more than four (unless the item already has a badge). An open folder shows the FolderOpen icon; members sit inside the same plate, which grows and shrinks with accordion height motion (`default_open(true)` seeds the first frame).',
+  'Keyboard: the bar is one tab stop; ↑ / ↓ move (open-folder children are in the order), Enter / Space activate and also toggle a focused folder, **⌥↑ / ⌥↓** reorder main items when `on_reorder` is set (folder children are skipped; drag also reorders, with a drop indicator).'],
  """ActivityBar::new("activity")
     .items([
         ActivityItem::icon("explorer", "Explorer", IconName::Document),
         ActivityItem::icon("search", "Search", IconName::Search).action("workspace::Find"),
         ActivityItem::icon("git", "Source Control", IconName::Git).badge(3),
+        ActivityItem::folder("apps", "Apps", [
+            ActivityItem::icon("mail", "Mail", IconName::Mail),
+            ActivityItem::icon("photo", "Photos", IconName::Grid),
+        ]),
+        ActivityItem::folder("projects", "Projects", [
+            ActivityItem::icon("docs", "Docs", IconName::Document),
+        ]).default_open(true),
+        ActivityItem::image("workspace", "Workspace", workspace_logo),
     ])
     .footer_item(ActivityItem::icon("settings", "Settings", IconName::Settings))
-    .indicator(IndicatorStyle::Bar)
-    .shape(ItemShape::Rounded(8.))
     .selected(self.view.clone())
     .on_select(cx.listener(|this, id: &SharedString, _, cx| { this.view = id.clone(); cx.notify(); }))
     .on_reorder(move |from, to, _window, cx| {
@@ -666,6 +786,19 @@ page('drag-and-drop','Drag and Drop','desktop','components/drag.rs',['DragHandle
 
 // In a pane:
 div().relative().child(content).child(DropZone::new(self.hover_zone));""")
+page('sortable-list','Sortable List','desktop','components/sortable.rs',['SortableList','SortableItem','SortableMove','SortableDrag'],
+ 'Reorderable lists with drag between lists (Kanban, playlists, docks of items), drop indicators, auto-scroll and a full keyboard alternative.',
+ ['Lists sharing a `group` accept each other\'s items; `on_move` receives a `SortableMove::{Reorder, Transfer}` — call `apply` on your data.',
+  'Pointer: drag a row; a 2px indicator shows the slot, the list auto-scrolls within 32px of its edges, Escape cancels the drag.',
+  'Keyboard: Space lifts the focused row, ↑ / ↓ move the slot, ← / → send it to the `neighbors` list, Enter drops, Escape cancels. ⌥↑ / ⌥↓ move a row immediately.'],
+ """SortableList::new("todo", "todo", "board")
+    .items(self.todo.iter().map(|t| SortableItem::new(t.id.clone(), t.title.clone())))
+    .neighbors(None, Some("doing".into()))
+    .max_height(px(320.))
+    .on_move(cx.listener(|this, m: &SortableMove, _, cx| {
+        m.apply(&mut this.columns);
+        cx.notify();
+    }));""")
 page('selection-box','Selection Box','desktop','components/selection_box.rs',['SelectionArea','SelectionLayout'],
  'Rubber-band (marquee) selection over a grid or list, with click, ⌘/Ctrl-click, Shift-click and keyboard selection.',
  ['Press on empty space and drag: items touching the marquee are selected live; Shift or ⌘/Ctrl adds to the previous selection. A press under 4px clears it.',
@@ -676,15 +809,21 @@ page('selection-box','Selection Box','desktop','components/selection_box.rs',['S
     .item("b.png", tile("b.png"))
     .selected(["a.png"])
     .on_change(|keys, _, _| println!("{} selected", keys.len()));""")
-page('command-palette','Command Palette','desktop','components/command_palette.rs',['CommandPalette','PaletteCommand'],
- 'The ⇧⌘P / Ctrl+Shift+P action search: grouped commands with icons and keymap shortcuts, built on `Command`.',
- ['`CommandPalette` is an entity: render it as an overlay of the window root and toggle it from a `ToggleCommandPalette` handler.',
-  'Commands name GPUI actions; running one closes the palette, restores focus to where it was and dispatches the action there.',
-  'Shortcut labels are refreshed from the installed keymap every time it opens. Typing filters by label and keywords; ↑ / ↓ move, Enter runs, Escape closes.'],
+page('command-palette','Command Palette','desktop','components/command.rs',['components/command_palette.rs:CommandPalette','components/command_palette.rs:CommandPage','CommandDialog','CommandItem'],
+ 'The ⇧⌘P / Ctrl+Shift+P action search: the web `Command` in a `CommandDialog`, plus desktop options (global shortcut, recents, action dispatch, nested pages).',
+ ['Not a separate widget — the field, list, groups, fuzzy match and indicator are all `Command`. `CommandPalette` is the overlay host: it opens that `Command` in a `CommandDialog`.',
+  'Items are `CommandItem`s. `.action("editor::Save")` dispatches that GPUI action after the palette closes and restores focus. Shortcut labels come from the installed keymap and refresh on every open.',
+  'The last five commands appear in a **Recent** group while the query is empty. `CommandItem::page(label, page_id)` opens a nested `CommandPage`; the title is a breadcrumb chip, Backspace on an empty query or Escape goes back, and the list slides in.',
+  'Bind `ToggleCommandPalette` (⇧⌘P / Ctrl+Shift+P) and render the entity as the last child of the window root.'],
  """let palette = cx.new(|cx| CommandPalette::new(vec![
-    PaletteCommand::new("Save", "editor::Save").group("File").icon(IconName::Save),
-    PaletteCommand::new("Toggle Sidebar", "workspace::ToggleSidebar").group("View"),
-], window, cx));
+    CommandItem::new("Save").action("editor::Save").group("File").icon(IconName::Save),
+    CommandItem::new("Toggle Sidebar").action("workspace::ToggleSidebar").group("View"),
+    CommandItem::page("Color Theme…", "theme").group("Preferences"),
+], window, cx)
+.page(CommandPage::new("theme", "Color Theme", vec![
+    CommandItem::new("Light").action("theme::Light"),
+    CommandItem::new("Dark").action("theme::Dark"),
+])));
 
 root(cx)
     .on_action(cx.listener(|this, _: &ToggleCommandPalette, window, cx| {
@@ -692,21 +831,82 @@ root(cx)
     }))
     .child(self.palette.clone());""")
 
+page('notification-center','Notification Center','desktop','shell/notification_center.rs',['NotificationCenter','Notification','NotificationTone'],
+ 'The history of an app\'s notifications: a sheet-material panel with unread count, Clear All, per-item dismiss, inline actions and an empty state.',
+ ['Toasts are transient; the center keeps them. Push the same events into both and let the user open the center from a titlebar bell.',
+  'With the `material` feature active the panel is a `Sheet` material (blur, tint, rim, shadow); without it, the opaque floating fill with `Shadow16`.',
+  'Cards are `backgroundPrimary` at 72% (unread) / 45% (read) over the material, so the panel stays readable over any backdrop. The tone tints the 32px glyph plate.',
+  '`on_dismiss` shows an × on hover and the card slides/fades out while the list height collapses; new items fade and slide in. `on_clear_all` adds **Clear All**; with no items a compact `ResultView` (`Empty`) reads *No Notifications*.',
+  'Anchor it to the trailing edge (e.g. `ApplicationShell::overlay`); `inline(true)` lays it out in flow without the slide. Give notifications a stable `.id()` so dismiss animations keep the right card.'],
+ """NotificationCenter::new("notifications")
+    .open(self.show_notifications)
+    .notification(
+        Notification::new("Build finished")
+            .source("Pipelines")
+            .time("now")
+            .body("release-2.4 passed 128 checks.")
+            .icon(IconName::Checkmark, NotificationTone::Success)
+            .unread(true),
+    )
+    .on_dismiss(|ix, _, cx| { /* remove *ix */ })
+    .on_clear_all(|_, _, cx| { /* clear */ })
+    .on_close(|_, _, cx| { /* hide */ })""")
+page('preferences-window','Preferences Window','desktop','shell/preferences.rs',['PreferencesWindow','PreferencesSection','PreferencesGroup','PreferencesRow'],
+ 'The layout of a preferences / settings window: a sidebar of sections and a content pane of titled groups with label + control rows.',
+ ['The sidebar is window chrome: a `Sidebar` material with the `material` feature (vibrant over a transparent window), `surfaceSunken` otherwise; the selected section gets `backgroundSurfaceSelected` and a brand glyph.',
+  'The content pane shows the section title (`titleSm`) and description, then your `PreferencesGroup`s, capped at 640px for readable line lengths.',
+  'A group is a `backgroundSurface` card (12px radius) with hairline separators between `PreferencesRow`s; the row puts the label and description left and any control (Switch, Select, ShortcutRecorder…) right.',
+  'Open it in its own window (`WindowPreset` dialog size) or as a page of the main window.'],
+ """PreferencesWindow::new("prefs")
+    .section(PreferencesSection::new("General", IconName::Settings)
+        .description("How the app starts, saves and updates."))
+    .section(PreferencesSection::new("Shortcuts", IconName::Keyboard))
+    .selected(self.section)
+    .on_select(cx.listener(|this, ix: &usize, _, cx| { this.section = *ix; cx.notify(); }))
+    .child(
+        PreferencesGroup::new()
+            .title("Startup")
+            .row(PreferencesRow::new("Open at login")
+                .description("Start in the menu bar when you sign in.")
+                .control(Switch::new("login", self.open_at_login))),
+    )""")
+page('shortcut-recorder','Shortcut Recorder','desktop','components/shortcut_recorder.rs',['ShortcutRecorder','ShortcutChanged'],
+ 'A field that records a keyboard shortcut: click, press a combination, see it as platform keycaps; warns when the keymap already uses it.',
+ ['Click (or focus and press Enter / Space) to record. Held modifiers show live; the first non-modifier key completes the shortcut. Escape cancels, Backspace / Delete clears, the × button clears.',
+  'The value is GPUI key syntax with the platform primary modifier written as `secondary` (`secondary-shift-p`), so it can go straight into `KeybindingManager::bind`.',
+  'Labels follow the chrome OS: one `⇧⌘P` keycap on macOS, `Ctrl` `Shift` `P` keycaps on Windows / Linux.',
+  'With a `Keymap` installed, a binding of another action on the same keys turns the border `borderError` and shows *Already used by …*; `action(..)` names the binding being edited so it is not reported against itself.',
+  '`chords(true)` records two-keystroke chords (`secondary-k secondary-s`): after the first stroke the field waits `CHORD_TIMEOUT` (1s) for a second one, showing `…`; if none comes, the single stroke is kept.',
+  'Subscribe to `ShortcutChanged` to persist the new binding.'],
+ """let recorder = cx.new(|cx| {
+    ShortcutRecorder::new(cx)
+        .with_keys("secondary-shift-p")
+        .action("workspace::ToggleCommandPalette")
+});
+cx.subscribe(&recorder, |this, _, ShortcutChanged(keys), cx| {
+    this.save_binding("workspace::ToggleCommandPalette", keys.clone(), cx);
+}).detach();""")
+page('desktop-showcase','Desktop Showcase','desktop','shell/app_shell.rs',['ApplicationShell'],
+ 'A complete app on the Material Engine: vibrant shell chrome, a sidebar of sections, a document workspace, a status bar and the notification center.',
+ ['`ApplicationShell::vibrant(true)` leaves the shell root unpainted when materials are active, so the titlebar, activity bar, side docks and status bar blur what is behind the window (a transparent / blurred OS window). The workspace stays on opaque `backgroundPrimary` for reading.',
+  'Chrome materials are square, borderless and shadowless (`Titlebar` kind for bars, `Sidebar` kind for rails and docks); the shell\'s hairline separators stay as they are, so the layout reads exactly like the opaque RefineUI shell.',
+  'The notification center is a `Sheet` material overlay opened from the titlebar bell; it springs in from the trailing edge.',
+  'Without the `material` feature (or with blur disabled / native frost on) every piece falls back to its opaque fill: the same app, solid.'],
+ """ApplicationShell::new("app")
+    .vibrant(true)
+    .title("Atlas")
+    .toolbar(toolbar)
+    .activity_bar(activity)
+    .left_dock(ShellDock::new(sidebar, 210.))
+    .center(document)
+    .status_bar(status)
+    .overlay(div().absolute().top(px(60.)).right(px(12.)).child(
+        NotificationCenter::new("notifications").open(self.show_notifications)
+            .notifications(self.notifications()),
+    ))""")
+
 # Extra MDX after the usage section.
 EXTRA={
- 'application-shell':"""## The shell demo
-
-A complete desktop app built only from these parts — titlebar with a unified toolbar, menu bar (the system menu bar on macOS), activity bar, explorer sidebar, editor placeholder with tabs, bottom panel, status bar and the command palette. Window placement is restored on the next launch.
-
-<Screenshot id="shell-demo" alt="The refineui-shell demo window" />
-
-```sh
-cargo run -p refineui-gallery --bin refineui-shell
-```
-
-Or press **Shell demo** in the gallery's top bar.
-
-""",
 }
 
 MOTION={
@@ -722,7 +922,7 @@ MOTION={
  'radio':'The inner dot grows over `duration-fast`.',
  'switch':'Thumb slides and the track recolors over `duration-medium`.',
  'slider':'Thumb grows on hover and recolors over `duration-fast`.',
- 'select':'The popup fades in with the frosted-surface motion and a hover plate slides between options, item-aligned so the selected row sits over the trigger; trigger and items scale to 0.98 when pressed.',
+ 'select':'The popup fades in with the frosted-surface motion, sliding a few pixels out of the trigger along `SelectLayout::transform_origin` (the web `--refineui-select-content-transform-origin`). A hover plate slides between options; trigger and items scale to 0.98 when pressed.',
  'badge':'Interactive badges tween their plate over `duration-fast`.',
  'chip':'Plate and remove-glyph opacity tween over `duration-fast`.',
  'card':'Hover / pressed plates and the selection ring tween over `duration-fast`.',
@@ -743,6 +943,7 @@ MOTION={
  'calendar':'Day plates tween over `duration-normal` (emphasized) and press to 0.96; range mode shows two months with an endpoint band.',
  'menu':'Panel fades in (frosted motion); one hover plate slides between rows over `duration-medium` (emphasized) — fading in where it first lands, out in place; rows scale to 0.98 when pressed; submenus open on hover.',
  'popover':'Fades in and slides 6px away from the trigger over `duration-fast` (emphasized), like the web `useFloatingPresence` (the web 0.96 scale is not reproducible in GPUI).',
+ 'popover-sides':'Same enter motion as Popover; the beak is part of one outline with the panel on every side.',
  'dialog':'Scrim fades over 280ms and the panel fades and rises 8px over `duration-panel`; both reverse on close.',
  'drawer':'Scrim fades over `duration-overlay` and the panel slides in from the edge over `duration-panel` (panel curve); reverses on close.',
  'table':'A single `surfaceHover` plate slides between hovered rows over `duration-medium` (emphasized); selection tweens over `duration-fast`.',
@@ -754,22 +955,22 @@ MOTION={
  'time-input':'Same popover motion as Date Input; wheels snap to a row 120ms after scrolling stops and rows fade toward the edges.',
  'marker':'The status dot pulses like Skeleton (1.5s).',
  'code-block':'The copy glyph swaps to a check for 1.6s.',
- 'navigation-menu-mega':'The panel fades in and rises 6px over `duration-normal` (emphasized); closes over `duration-fast`.',
- 'navigation-menu-overlay':'The sheet grows to its content height while the scrim fades in, both over `duration-panel` (panel curve); reverses on close.',
- 'activity-bar':'Item fill, ink and the indicator tween over `duration-fast`; `ItemShape::Morph` tiles round → squircle over `duration-fast`; the bar indicator grows over `duration-medium` (emphasized); tooltips fade and slide 6px over `duration-fast`.',
- 'command-palette':'Opens and closes instantly (desktop palettes do not animate in); the result indicator moves over `duration-fast`.',
- 'menu-bar':'Menus open instantly; hover-switching between open menus is immediate, like native menu bars.',
+ 'activity-bar':'Folders expand and collapse with accordion height motion (`ACCORDION_PANEL` / `ACCORDION_CONTENT`); the group tube grows with the members, and the tile switches from a 2×2 member preview to the FolderOpen icon over `Motion::CHEVRON`. Item fill, ink and the indicator tween over `duration-fast`; tiles morph round → squircle over `duration-fast`; the bar indicator grows over `duration-medium` (emphasized); tooltips fade and slide 6px over `duration-fast`.',
+ 'notification-center':'The panel stays mounted through the exit. It slides in from the trailing edge over `duration-slow` (240ms, ease-out) with opacity, and out over `duration-normal` (180ms, ease-in). The sheet material travels with the plate. Item dismiss uses toast leave (200ms) plus a height collapse; new items use toast enter (280ms). Reduced motion snaps.',
+ 'shortcut-recorder':'Border and plate switch to the recording state immediately; keycaps appear as keys are held.',
+ 'command-palette':'The host is a `CommandDialog`: the dialog fades and rises like `Dialog`; nested `CommandPage`s slide in over `duration-panel`; the `Command` indicator moves over `duration-medium` (emphasized).',
+ 'sortable-list':'The drop indicator follows the slot; rows lift into a frosted `DragPreview` chip while dragging.',
+ 'menu-bar':'Menus open instantly; hover-switching between open menus is immediate, like native menu bars. Title buttons use the Button hover / press motion.',
  'chart':'Bars grow from the baseline and the line draws in over `duration-panel` (emphasized); the hover cursor and tooltip fade over `duration-fast`.',
  'carousel':'Slides glide over `duration-panel` and the meter thumb over `duration-medium` (both emphasized). While dragging the track follows the pointer 1:1; on release it settles over `duration-panel` (emphasized).',
- 'navigation-menu':'Panels fade and slide in over `duration-normal` (emphasized); the chevron turns 180° over `duration-fast`.',
- 'command':'A `surfaceHover` indicator slides between items over `duration-medium` (emphasized); rows press to 0.96; the empty state fades.',
+ 'command':'A `surfaceHover` indicator slides between items over `duration-medium` (emphasized); rows press to 0.96; the empty `ResultView` fades in inside the results plate.',
  'dropdown':'Same as Menu. With native frost the panel is a separate OS window whose alpha fades in over `duration-normal`; it closes immediately.',
  'resizable':'The grip recolors `borderDefault` → `borderStrong` on hover, focus and drag over `duration-fast`.',
 }
 GROUPS={'foundations':'Foundations','actions':'Actions','forms':'Forms','display':'Display','navigation':'Navigation','overlays':'Overlays','data':'Data','desktop':'Desktop shell'}
 os.makedirs(OUT+'components',exist_ok=True); os.makedirs(OUT+'foundations',exist_ok=True); os.makedirs(OUT+'shell',exist_ok=True)
 # story order from gallery
-order=re.findall(r'id: "([a-z-]+)"', ''.join(open(ROOT+'/examples/gallery/src/stories/'+f).read() for f in ['foundations.rs','actions.rs','forms.rs','display.rs','navigation.rs','overlays.rs','data.rs','desktop.rs','extra.rs']))
+order=re.findall(r'id: "([a-z-]+)"', ''.join(open(ROOT+'/examples/gallery/src/stories/'+f).read() for f in ['foundations.rs','materials.rs','actions.rs','forms.rs','display.rs','navigation.rs','overlays.rs','data.rs','desktop.rs','extra.rs']))
 assert set(order)==set(P), set(order)^set(P)
 for n,id in enumerate(order):
     title,group,file,types,desc,notes,example=P[id]
@@ -808,7 +1009,7 @@ cargo run -p refineui-gallery -- --story {id}
 
 {EXTRA.get(id, '')}{motion_md}## API
 
-Source: [`crates/refineui/src/{file}`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/{file})
+Source: [`{src_path(file)}`](https://github.com/pelagornis/refineui-gpui/blob/main/{src_path(file)})
 
 {api_md(file,types)}
 '''
@@ -820,3 +1021,81 @@ for d in ('components','shell'):
         if f.endswith('.mdx') and (f[:-4] not in P or (P[f[:-4]][1]=='desktop')!=(d=='shell')):
             os.remove(OUT+d+'/'+f); stale.append(d+'/'+f)
 print(len(order),'pages', 'removed', stale)
+
+# ---------------------------------------------------------------------------
+# API reference: every `pub` item (and `pub fn` on impls) of every crate,
+# with the first line of its `///` doc, one page per crate under reference/.
+CRATES=[
+ ('refineui-foundation','GPUI-free design data: tokens, semantic colors, typography, density, motion, blur and material tokens, contracts.'),
+ ('refineui-material','The Material Engine: `Material`, real backdrop blur, lighting, grain, shadows, `MaterialSurface` (gpui + foundation only).'),
+ ('refineui','The desktop component library: theme, components, interaction, shell, workspace, platform adapters, motion and (feature `material`) the material glue.'),
+ ('refineui-tokens','Compatibility crate: re-exports `refineui-foundation` unchanged.'),
+]
+ITEM=re.compile(r'^pub (?:const fn|unsafe fn|async fn|fn|struct|enum|trait|const|type|static|mod|use) +([A-Za-z0-9_:{}*, ]+)')
+KIND=re.compile(r'^pub (const fn|unsafe fn|async fn|fn|struct|enum|trait|const|type|static|mod|use)')
+def mod_doc(dirpath,name):
+    for cand in (f'{dirpath}/{name}.rs', f'{dirpath}/{name}/mod.rs'):
+        if os.path.exists(cand):
+            for l in open(cand):
+                if l.startswith('//!'):
+                    t=l[3:].strip()
+                    if t and not t.startswith('#'): return t
+                    if t.startswith('#'): return t.lstrip('# ')
+    return ''
+def scan_crate(crate):
+    base=f'{ROOT}/crates/{crate}/src'
+    mods=[]
+    for dp,_,fs in os.walk(base):
+        for f in sorted(fs):
+            if not f.endswith('.rs'): continue
+            path=os.path.join(dp,f); rel=os.path.relpath(path,base)
+            mod=rel[:-3].replace('/mod','').replace('/','::')
+            mod='crate root' if mod=='lib' else mod
+            items=[]; doc=[]; impl=None; feat=None; cfg_test=False
+            for line in open(path):
+                s=line.rstrip('\n')
+                if s.startswith('#[cfg(test)]'): cfg_test=True; continue
+                if cfg_test and re.match(r'^mod \w+', s): break
+                cfg_test=False
+                st=s.strip()
+                if st.startswith('///'):
+                    doc.append(st[3:].strip()); continue
+                if st.startswith('#['):
+                    m=re.search(r'feature *= *"([^"]+)"', st)
+                    if m: feat=m.group(1)
+                    continue
+                m=re.match(r'^impl(?:<[^>]*>)? (?:([\w:]+)(?:<[^>]*>)? for )?([\w:]+)', s)
+                if m:
+                    impl=None if m.group(1) else m.group(2); doc=[]; feat=None; continue
+                if s.startswith('}'): impl=None
+                if s.startswith('pub ') and not s.startswith('pub use'):
+                    k=KIND.match(s); n=ITEM.match(s)
+                    if k and n:
+                        name=n.group(1).split('(')[0].split('<')[0].split(':')[0].split('{')[0].strip()
+                        d=doc[0] if doc else ''
+                        if k.group(1)=='mod' and not d:
+                            d=mod_doc(dp if f in ('lib.rs','mod.rs') else os.path.join(dp,f[:-3]),name)
+                        items.append((name,k.group(1).replace('const fn','fn').replace('unsafe fn','fn'),d,feat))
+                elif impl and re.match(r'^    pub (?:const )?fn ', s):
+                    name=re.match(r'^    pub (?:const )?fn (\w+)', s).group(1)
+                    items.append((f'{impl}::{name}','method',doc[0] if doc else '',feat))
+                if st and not st.startswith('//'):
+                    doc=[]; feat=None if not st.startswith('#[') else feat
+            if items: mods.append((mod,rel,items))
+    return mods
+os.makedirs(OUT+'reference',exist_ok=True)
+total=0
+for i,(crate,summary) in enumerate(CRATES):
+    mods=scan_crate(crate)
+    n=sum(len(x[2]) for x in mods); total+=n
+    lines=[f'---\ntitle: {crate}\ndescription: Every public item of {crate}, generated from the source.\nsidebar:\n  order: {i+1}\n---\n',
+           '{/* Generated by scripts/gen_docs.py — do not edit. */}\n',
+           esc(summary)+'\n',
+           f'{n} public items in {len(mods)} modules. Items in private modules are reached through the re-exports in `lib.rs` (`refineui::prelude::*` for apps). Full signatures: `cargo doc -p {crate} --all-features --open`.\n']
+    for mod,rel,items in sorted(mods,key=lambda m:(m[0]!='crate root',m[0])):
+        lines.append(f'\n## `{mod}`\n\nSource: `crates/{crate}/src/{rel}`\n\n| Item | Kind | Summary |\n| --- | --- | --- |')
+        for name,kind,doc,feat in items:
+            f=f' *(feature `{feat}`)*' if feat else ''
+            lines.append(f'| `{code(name)}` | {kind} | {esc(doc)}{f} |')
+    open(f'{OUT}reference/{crate}.mdx','w').write('\n'.join(lines)+'\n')
+print('API reference:', total, 'items in', len(CRATES), 'crates')

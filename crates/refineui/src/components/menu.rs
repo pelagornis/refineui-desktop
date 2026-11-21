@@ -10,14 +10,14 @@ use gpui::{
 };
 
 use gpui::CursorStyle;
-use refineui_tokens::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, spacing, stroke, typography::role};
 
 use crate::components::plate::row_plate;
 use crate::motion::{
     Interaction, Motion, TrackInteraction, animate, child_id, presence, press_scale, probe,
     scaled_plate, use_interaction, use_layout_probe,
 };
-use crate::{ActiveTheme, Icon, IconName, IconSize, StyledExt};
+use crate::{ActiveTheme, Icon, IconName, IconSize, ScrollArea, StyledExt, scroll_edge_item};
 
 /// Action callback for menu items.
 pub type MenuHandler = Rc<dyn Fn(&mut Window, &mut App) + 'static>;
@@ -155,7 +155,7 @@ impl Menu {
         Self {
             id: id.into(),
             entries: Vec::new(),
-            width: px(refineui_tokens::size::component::MENU_PANEL_WIDTH),
+            width: px(refineui_foundation::size::component::MENU_PANEL_WIDTH),
             on_dismiss: None,
             native_frost: false,
         }
@@ -193,9 +193,10 @@ impl Menu {
         self
     }
 
-    /// Panel width.
+    /// Panel width, clamped to [`MENU_MIN_WIDTH`, `MENU_MAX_WIDTH`] (web
+    /// `w-/min-w-refineui-menu-panel-width`; long labels wrap inside it).
     pub fn width(mut self, width: Pixels) -> Self {
-        self.width = width;
+        self.width = clamp_menu_width(width);
         self
     }
 
@@ -234,6 +235,15 @@ pub(crate) struct SubmenuState {
 }
 
 /// Web `ContextMenuSub`: hide 150ms after the pointer leaves.
+/// Minimum panel width (web `min-w-refineui-menu-panel-width`, `menuPanelWidth` = 200).
+pub const MENU_MIN_WIDTH: f32 = refineui_foundation::size::component::MENU_PANEL_WIDTH;
+/// Maximum panel width (`foundationSize3200` = 320) — wider menus wrap instead.
+pub const MENU_MAX_WIDTH: f32 = 320.;
+
+pub(crate) fn clamp_menu_width(w: Pixels) -> Pixels {
+    w.max(px(MENU_MIN_WIDTH)).min(px(MENU_MAX_WIDTH))
+}
+
 const SUBMENU_CLOSE_DELAY: std::time::Duration = std::time::Duration::from_millis(150);
 
 pub(crate) fn submenu_state(
@@ -289,7 +299,7 @@ fn menu_row(
             d.child(
                 div()
                     .flex_none()
-                    .size(px(refineui_tokens::size::icon::X_SMALL))
+                    .size(px(refineui_foundation::size::icon::X_SMALL))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -386,210 +396,224 @@ impl RenderOnce for Menu {
                 MenuEntry::Separator => MenuEntry::Divider,
                 other => other,
             };
-            rows.push(match entry {
-                #[allow(deprecated)]
-                MenuEntry::Divider | MenuEntry::Separator => div()
-                    .flex()
-                    .items_center()
-                    .px(px(spacing::X_SMALL))
-                    .py(px(spacing::XXX_SMALL))
-                    .child(div().w_full().h(px(stroke::THIN)).bg(c.border_default))
-                    .into_any_element(),
-                MenuEntry::Label(l) => div()
-                    .px(px(spacing::X_SMALL))
-                    .py(px(spacing::XXX_SMALL))
-                    .text_style_token(role::CAPTION_LG)
-                    .text_color(c.foreground_tertiary)
-                    .child(l)
-                    .into_any_element(),
-                MenuEntry::Item(item) => {
-                    let id = ElementId::NamedChild(
-                        Box::new(parent.clone()),
-                        format!("item-{ix}").into(),
-                    );
-                    let (state, i) = use_interaction(&id, window, cx);
-                    // Hovering any plain row closes an open submenu.
-                    if i.hovered && sub_open.is_some() && !sub_hovered {
-                        close_sub = true;
-                    }
-                    let rest = if item.danger {
-                        c.foreground_error
-                    } else {
-                        c.foreground_primary
-                    };
-                    let (mut bg, mut fg) = row_plate(i, false, item.disabled, rest, cx);
-                    if item.danger && !item.disabled {
-                        fg = c.foreground_error;
-                    }
-                    if i.hovered && !item.disabled {
-                        hovered_row = Some(ix);
-                    }
-                    // The sliding plate paints the hover fill; a row keeps
-                    // only its pressed fill.
-                    if !i.pressed {
-                        bg = gpui::transparent_black();
-                    }
-                    let bg = animate(child_id(&id, "bg"), bg, Motion::FAST_EASE, window, cx);
-                    let fg = animate(child_id(&id, "fg"), fg, Motion::FAST_EASE, window, cx);
-                    let scale = press_scale(
-                        child_id(&id, "press"),
-                        i.pressed && !item.disabled,
-                        window,
-                        cx,
-                    );
-                    let handler = item.handler.clone();
-                    let dismiss = dismiss.clone();
-                    let sub_fg = if item.disabled {
-                        c.foreground_disabled
-                    } else {
-                        c.foreground_tertiary
-                    };
-                    let disabled = item.disabled;
-                    menu_row(
-                        id,
-                        &item,
-                        RowParts {
-                            bg,
-                            fg,
-                            sub_fg,
-                            scale,
-                            inset: theme.row_inset(),
-                        },
-                        false,
-                    )
-                    .child(probe(&host, Some(ix)))
-                    .when(!disabled, |d| {
-                        d.cursor_action()
-                            .track_interaction(&state)
-                            .on_click(move |_, w, cx| {
-                                if let Some(h) = &handler {
-                                    h(w, cx);
-                                }
-                                if let Some(d) = &dismiss {
-                                    d(w, cx);
-                                }
-                            })
-                    })
-                    .when(disabled, |d| d.cursor(CursorStyle::OperationNotAllowed))
-                    .into_any_element()
-                }
-                MenuEntry::Submenu(item, menu) => {
-                    let id =
-                        ElementId::NamedChild(Box::new(parent.clone()), format!("sub-{ix}").into());
-                    let (state, i) = use_interaction(&id, window, cx);
-                    if i.hovered && sub_open != Some(ix) && !item.disabled {
-                        open_sub = Some(ix);
-                    }
-                    let is_open = sub_open == Some(ix);
-                    let shown = Interaction {
-                        hovered: i.hovered || is_open,
-                        pressed: i.pressed,
-                    };
-                    let (mut bg, fg) =
-                        row_plate(shown, false, item.disabled, c.foreground_primary, cx);
-                    if i.hovered && !item.disabled {
-                        hovered_row = Some(ix);
-                    }
-                    // Open sub triggers keep their own fill (web
-                    // `:not([aria-expanded=true])`); hover is the plate's.
-                    if !is_open && !i.pressed {
-                        bg = gpui::transparent_black();
-                    }
-                    let bg = animate(child_id(&id, "bg"), bg, Motion::FAST_EASE, window, cx);
-                    let fg = animate(child_id(&id, "fg"), fg, Motion::FAST_EASE, window, cx);
-                    let row_probe = use_layout_probe(&id, window, cx);
-                    let row_bounds = row_probe.read(cx).container;
-                    let panel_id = child_id(&id, "panel");
-                    let (pstate, pi) = use_interaction(&panel_id, window, cx);
-                    if is_open {
-                        panel_hovered |= pi.hovered || (self.native_frost && sub_native_hovered);
-                        open_row_hovered |= i.hovered;
-                    }
-                    let viewport = window.viewport_size();
-                    let width = f32::from(menu.width);
-                    let sub_menu = match &dismiss {
-                        Some(d) => menu.on_dismiss(d.clone()),
-                        None => *menu,
-                    };
-                    let row = menu_row(
-                        id,
-                        &item,
-                        RowParts {
-                            bg,
-                            fg,
-                            sub_fg: c.foreground_tertiary,
-                            scale: 1.0,
-                            inset: theme.row_inset(),
-                        },
-                        true,
-                    )
-                    .child(probe(&row_probe, None))
-                    .child(probe(&host, Some(ix)))
-                    .when(!item.disabled, |d| {
-                        d.cursor_action().track_interaction(&state)
-                    });
-                    if self.native_frost {
-                        // Inside a native-frost pop-up: the submenu gets its
-                        // own pop-up window beside the row (never clipped).
-                        let bounds = row_bounds.map(|rb| {
-                            let mut left = rb.right();
-                            let screen_right = crate::vibrancy::to_screen(
-                                window,
-                                gpui::point(rb.right() + px(width), rb.top()),
-                            )
-                            .x;
-                            if let Some(display) = window.display(cx)
-                                && screen_right > display.bounds().right() - px(4.)
-                            {
-                                left = rb.left() - px(width);
-                            }
-                            gpui::Bounds::new(
-                                gpui::point(
-                                    left,
-                                    rb.top() - px(spacing::XX_SMALL + stroke::HAIRLINE),
-                                ),
-                                gpui::size(px(width), px(200.)),
-                            )
-                        });
-                        let sub_menu = sub_menu.clone();
-                        let st = sub_state.clone();
-                        crate::vibrancy::drive_native_popup(
-                            &ElementId::NamedChild(
+            rows.push(
+                scroll_edge_item(
+                    ElementId::NamedChild(Box::new(parent.clone()), format!("edge-{ix}").into()),
+                    match entry {
+                        #[allow(deprecated)]
+                        MenuEntry::Divider | MenuEntry::Separator => div()
+                            .flex()
+                            .items_center()
+                            .px(px(spacing::X_SMALL))
+                            .py(px(spacing::XXX_SMALL))
+                            .child(div().w_full().h(px(stroke::THIN)).bg(c.border_default))
+                            .into_any_element(),
+                        MenuEntry::Label(l) => div()
+                            .px(px(spacing::X_SMALL))
+                            .py(px(spacing::XXX_SMALL))
+                            .text_style_token(role::CAPTION_LG)
+                            .text_color(c.foreground_tertiary)
+                            .child(l)
+                            .into_any_element(),
+                        MenuEntry::Item(item) => {
+                            let id = ElementId::NamedChild(
                                 Box::new(parent.clone()),
-                                format!("native-sub-{ix}").into(),
-                            ),
-                            is_open,
-                            bounds,
-                            move || native_submenu_spec(sub_menu, st, ix),
-                            window,
-                            cx,
-                        );
-                    } else if let Some(rb) = row_bounds.filter(|_| is_open) {
-                        // Web `ContextMenuSubContent`: `left = rect.right`
-                        // (flip to `rect.left - width`), `top = rect.top`.
-                        let mut left = rb.right();
-                        if f32::from(left) + width > f32::from(viewport.width) - 4. {
-                            left = (rb.left() - px(width)).max(px(4.));
-                        }
-                        let panel = anchored()
-                            .position(gpui::point(left, rb.top()))
-                            .snap_to_window_with_margin(px(4.))
-                            .child(
-                                div()
-                                    .id(panel_id)
-                                    .occlude()
-                                    .track_interaction(&pstate)
-                                    .child(sub_menu),
+                                format!("item-{ix}").into(),
                             );
-                        // (Root cause of the submenu crash: this used to be a
-                        // `deferred` inside the context menu's `deferred`,
-                        // which GPUI rejects; `layer` draws in place when
-                        // nested.)
-                        sub_panel = Some(crate::layer(panel).priority(2).into_any_element());
-                    }
-                    row.into_any_element()
-                }
-            });
+                            let (state, i) = use_interaction(&id, window, cx);
+                            // Hovering any plain row closes an open submenu.
+                            if i.hovered && sub_open.is_some() && !sub_hovered {
+                                close_sub = true;
+                            }
+                            let rest = if item.danger {
+                                c.foreground_error
+                            } else {
+                                c.foreground_primary
+                            };
+                            let (mut bg, mut fg) = row_plate(i, false, item.disabled, rest, cx);
+                            if item.danger && !item.disabled {
+                                fg = c.foreground_error;
+                            }
+                            if i.hovered && !item.disabled {
+                                hovered_row = Some(ix);
+                            }
+                            // The sliding plate paints the hover fill; a row keeps
+                            // only its pressed fill.
+                            if !i.pressed {
+                                bg = gpui::transparent_black();
+                            }
+                            let bg =
+                                animate(child_id(&id, "bg"), bg, Motion::FAST_EASE, window, cx);
+                            let fg =
+                                animate(child_id(&id, "fg"), fg, Motion::FAST_EASE, window, cx);
+                            let scale = press_scale(
+                                child_id(&id, "press"),
+                                i.pressed && !item.disabled,
+                                window,
+                                cx,
+                            );
+                            let handler = item.handler.clone();
+                            let dismiss = dismiss.clone();
+                            let sub_fg = if item.disabled {
+                                c.foreground_disabled
+                            } else {
+                                c.foreground_tertiary
+                            };
+                            let disabled = item.disabled;
+                            menu_row(
+                                id,
+                                &item,
+                                RowParts {
+                                    bg,
+                                    fg,
+                                    sub_fg,
+                                    scale,
+                                    inset: theme.row_inset(),
+                                },
+                                false,
+                            )
+                            .child(probe(&host, Some(ix)))
+                            .when(!disabled, |d| {
+                                d.cursor_action().track_interaction(&state).on_click(
+                                    move |_, w, cx| {
+                                        if let Some(h) = &handler {
+                                            h(w, cx);
+                                        }
+                                        if let Some(d) = &dismiss {
+                                            d(w, cx);
+                                        }
+                                    },
+                                )
+                            })
+                            .when(disabled, |d| d.cursor(CursorStyle::OperationNotAllowed))
+                            .into_any_element()
+                        }
+                        MenuEntry::Submenu(item, menu) => {
+                            let id = ElementId::NamedChild(
+                                Box::new(parent.clone()),
+                                format!("sub-{ix}").into(),
+                            );
+                            let (state, i) = use_interaction(&id, window, cx);
+                            if i.hovered && sub_open != Some(ix) && !item.disabled {
+                                open_sub = Some(ix);
+                            }
+                            let is_open = sub_open == Some(ix);
+                            let shown = Interaction {
+                                hovered: i.hovered || is_open,
+                                pressed: i.pressed,
+                            };
+                            let (mut bg, fg) =
+                                row_plate(shown, false, item.disabled, c.foreground_primary, cx);
+                            if i.hovered && !item.disabled {
+                                hovered_row = Some(ix);
+                            }
+                            // Open sub triggers keep their own fill (web
+                            // `:not([aria-expanded=true])`); hover is the plate's.
+                            if !is_open && !i.pressed {
+                                bg = gpui::transparent_black();
+                            }
+                            let bg =
+                                animate(child_id(&id, "bg"), bg, Motion::FAST_EASE, window, cx);
+                            let fg =
+                                animate(child_id(&id, "fg"), fg, Motion::FAST_EASE, window, cx);
+                            let row_probe = use_layout_probe(&id, window, cx);
+                            let row_bounds = row_probe.read(cx).container;
+                            let panel_id = child_id(&id, "panel");
+                            let (pstate, pi) = use_interaction(&panel_id, window, cx);
+                            if is_open {
+                                panel_hovered |=
+                                    pi.hovered || (self.native_frost && sub_native_hovered);
+                                open_row_hovered |= i.hovered;
+                            }
+                            let viewport = window.viewport_size();
+                            let width = f32::from(menu.width);
+                            let sub_menu = match &dismiss {
+                                Some(d) => menu.on_dismiss(d.clone()),
+                                None => *menu,
+                            };
+                            let row = menu_row(
+                                id,
+                                &item,
+                                RowParts {
+                                    bg,
+                                    fg,
+                                    sub_fg: c.foreground_tertiary,
+                                    scale: 1.0,
+                                    inset: theme.row_inset(),
+                                },
+                                true,
+                            )
+                            .child(probe(&row_probe, None))
+                            .child(probe(&host, Some(ix)))
+                            .when(!item.disabled, |d| {
+                                d.cursor_action().track_interaction(&state)
+                            });
+                            if self.native_frost {
+                                // Inside a native-frost pop-up: the submenu gets its
+                                // own pop-up window beside the row (never clipped).
+                                let bounds = row_bounds.map(|rb| {
+                                    let mut left = rb.right();
+                                    let screen_right = crate::vibrancy::to_screen(
+                                        window,
+                                        gpui::point(rb.right() + px(width), rb.top()),
+                                    )
+                                    .x;
+                                    if let Some(display) = window.display(cx)
+                                        && screen_right > display.bounds().right() - px(4.)
+                                    {
+                                        left = rb.left() - px(width);
+                                    }
+                                    gpui::Bounds::new(
+                                        gpui::point(
+                                            left,
+                                            rb.top() - px(spacing::XX_SMALL + stroke::HAIRLINE),
+                                        ),
+                                        gpui::size(px(width), px(200.)),
+                                    )
+                                });
+                                let sub_menu = sub_menu.clone();
+                                let st = sub_state.clone();
+                                crate::vibrancy::drive_native_popup(
+                                    &ElementId::NamedChild(
+                                        Box::new(parent.clone()),
+                                        format!("native-sub-{ix}").into(),
+                                    ),
+                                    is_open,
+                                    bounds,
+                                    move || native_submenu_spec(sub_menu, st, ix),
+                                    window,
+                                    cx,
+                                );
+                            } else if let Some(rb) = row_bounds.filter(|_| is_open) {
+                                // Web `ContextMenuSubContent`: `left = rect.right`
+                                // (flip to `rect.left - width`), `top = rect.top`.
+                                let mut left = rb.right();
+                                if f32::from(left) + width > f32::from(viewport.width) - 4. {
+                                    left = (rb.left() - px(width)).max(px(4.));
+                                }
+                                let panel = anchored()
+                                    .position(gpui::point(left, rb.top()))
+                                    .snap_to_window_with_margin(px(4.))
+                                    .child(
+                                        div()
+                                            .id(panel_id)
+                                            .occlude()
+                                            .track_interaction(&pstate)
+                                            .child(sub_menu),
+                                    );
+                                // (Root cause of the submenu crash: this used to be a
+                                // `deferred` inside the context menu's `deferred`,
+                                // which GPUI rejects; `layer` draws in place when
+                                // nested.)
+                                sub_panel =
+                                    Some(crate::layer(panel).priority(2).into_any_element());
+                            }
+                            row.into_any_element()
+                        }
+                    },
+                )
+                .into_any_element(),
+            );
         }
         // Close after the pointer has been away from the row and its panel
         // for 150ms (a hovered plain row still closes it at once).
@@ -639,15 +663,29 @@ impl RenderOnce for Menu {
             .id(self.id)
             .relative()
             .w(self.width)
-            .p(px(spacing::XX_SMALL))
+            .min_w(px(MENU_MIN_WIDTH))
+            .max_w(px(MENU_MAX_WIDTH))
             .flex()
             .flex_col()
-            .gap(px(1.))
-            .when(!self.native_frost, |d| d.popover_surface(cx))
+            .when(!self.native_frost, |d| {
+                crate::material::frosted_plate(d, crate::SurfaceKind::Menu, cx)
+            })
             .font_family(theme.font_family.clone())
-            .child(probe(&host, None))
-            .child(plate)
-            .children(rows)
+            .child({
+                let max_h = (f32::from(window.viewport_size().height) - 32.).max(128.);
+                ScrollArea::new(child_id(&parent, "list"))
+                    .max_height(px(max_h))
+                    .child(
+                        div()
+                            .p(px(spacing::XX_SMALL))
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .child(probe(&host, None))
+                            .child(plate)
+                            .children(rows),
+                    )
+            })
             .children(sub_panel)
     }
 }
@@ -899,5 +937,22 @@ fn native_submenu_spec(
         close_on_deactivate: false,
         report_size: None,
         popover: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Web Menu: panel `w-/min-w-menu-panel-width` (200), xx-large radius,
+    /// xx-small padding, 1px row gap; desktop cap 320.
+    #[test]
+    fn menu_width_tokens() {
+        assert_eq!(MENU_MIN_WIDTH, 200.);
+        assert_eq!(clamp_menu_width(px(120.)), px(200.));
+        assert_eq!(clamp_menu_width(px(260.)), px(260.));
+        assert_eq!(clamp_menu_width(px(900.)), px(320.));
+        assert_eq!(radius::XX_LARGE, 16.);
+        assert_eq!(spacing::XX_SMALL, 4.);
     }
 }

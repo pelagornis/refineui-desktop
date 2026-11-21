@@ -7,7 +7,7 @@ use gpui::{
     RenderOnce, SharedString, StatefulInteractiveElement, Styled, Window, div, prelude::*, px,
 };
 
-use refineui_tokens::{spacing, stroke};
+use refineui_foundation::{spacing, stroke};
 
 use crate::motion::{
     Interaction, Motion, TrackInteraction, animate, child_id, focus_visible, is_scaled,
@@ -163,6 +163,7 @@ pub struct Button {
     tab_index: isize,
     icon_size: Option<IconSize>,
     on_click: Option<ClickHandler>,
+    glass: bool,
 }
 
 impl Button {
@@ -184,6 +185,7 @@ impl Button {
             tab_index: 0,
             icon_size: None,
             on_click: None,
+            glass: false,
         }
     }
 
@@ -247,6 +249,15 @@ impl Button {
         self
     }
 
+    /// Glass button: the plate is the Glass material (real blur, lit edges)
+    /// with a hover / press veil, for controls floating over content (HUDs,
+    /// media overlays). Only when [`crate::materials_active`]; otherwise the
+    /// variant paints as usual. Default `false`.
+    pub fn glass(mut self, glass: bool) -> Self {
+        self.glass = glass;
+        self
+    }
+
     /// Pressed / toggled-on appearance (used by toolbars and [`crate::ToggleButton`]).
     pub fn selected(mut self, selected: bool) -> Self {
         self.selected = selected;
@@ -295,6 +306,26 @@ impl Button {
     }
 }
 
+impl Button {
+    /// Overflow-menu entry: `(label, icon, disabled, click)`.
+    pub(crate) fn menu_parts(
+        &self,
+    ) -> (SharedString, Option<IconName>, bool, Option<ClickHandler>) {
+        let label = self
+            .label
+            .clone()
+            .filter(|l| !l.is_empty())
+            .or_else(|| self.tooltip.clone())
+            .unwrap_or_else(|| self.id.to_string().into());
+        (
+            label,
+            self.icon,
+            self.disabled || self.loading,
+            self.on_click.clone(),
+        )
+    }
+}
+
 impl RenderOnce for Button {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme().clone();
@@ -314,6 +345,23 @@ impl RenderOnce for Button {
             paint.bg = theme.colors.background_primary_active;
             paint.fg = theme.colors.foreground_primary;
         }
+        let glass = self.glass && crate::materials_active(cx);
+        if glass {
+            // The material is the plate; state shows as a veil above it.
+            let c = &theme.colors;
+            let veil = c.foreground_primary;
+            paint.bg = if self.selected {
+                veil.opacity(0.14)
+            } else {
+                interaction.pick(veil.opacity(0.), veil.opacity(0.07), veil.opacity(0.12))
+            };
+            paint.fg = if self.disabled {
+                c.foreground_disabled
+            } else {
+                c.foreground_primary
+            };
+            paint.border = gpui::transparent_black();
+        }
         // CSS: `transition: background-color, border-color, color var(--duration-fast) ease-out`.
         let bg = animate(child_id(&self.id, "bg"), paint.bg, Motion::FAST, window, cx);
         let fg = animate(child_id(&self.id, "fg"), paint.fg, Motion::FAST, window, cx);
@@ -330,7 +378,7 @@ impl RenderOnce for Button {
         let scale = crate::motion::press_scale_to(
             child_id(&self.id, "press"),
             interaction.pressed,
-            refineui_tokens::motion::scale::BUTTON_PRESS,
+            refineui_foundation::motion::scale::BUTTON_PRESS,
             window,
             cx,
         );
@@ -387,10 +435,28 @@ impl RenderOnce for Button {
         } else {
             (m.padding_x, m.padding_y)
         };
-        let plate = scaled_plate(scale)
-            .rounded(px(m.radius * scale))
-            .bg(bg)
-            .when(stroke, |p| p.border_1().border_color(border));
+        let plate = if glass {
+            let radius = px(m.radius * scale);
+            let layer = crate::material::backing(
+                crate::SurfaceKind::Glass,
+                radius,
+                0.,
+                bg,
+                Some(theme.colors.border_subtle),
+                Vec::new(),
+                cx,
+            )
+            .layer;
+            scaled_plate(scale)
+                .rounded(radius)
+                .children(layer)
+                .child(div().absolute().inset_0().rounded(radius).bg(bg))
+        } else {
+            scaled_plate(scale)
+                .rounded(px(m.radius * scale))
+                .bg(bg)
+                .when(stroke, |p| p.border_1().border_color(border))
+        };
 
         div()
             .id(self.id)
