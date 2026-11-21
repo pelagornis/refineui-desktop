@@ -34,7 +34,7 @@ gpui = { version = "0.2.2", features = ["runtime_shaders"] } # compile Metal sha
 smallvec = "1"
 unicode-segmentation = "1.12"
 anyhow = "1"
-png = "0.17"
+png = "0.18"
 # Icons: the user's icon repo, pinned. default-features = false drops its optional
 # zed-git `gpui` dependency so only crates.io gpui 0.2.2 is in the graph.
 refineui-system-icons = { git = "https://github.com/pelagornis/refineui-system-icons", rev = "92f5616b1dda54ea426e25db97e4a472214c920c", default-features = false }
