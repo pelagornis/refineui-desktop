@@ -395,20 +395,17 @@ impl RenderOnce for ScrollArea {
         } else {
             (0., 0.)
         };
-        let visible = animate(
-            child_id(&self.id, "vis"),
-            if root_i.hovered
+        let bar_style = self
+            .style
+            .unwrap_or_else(|| crate::platform::active(cx).scrollbar());
+        let show_bar = bar_style != crate::platform::ScrollbarStyle::Hidden
+            && (root_i.hovered
                 || dragging
                 || scrolling
-                || self
-                    .style
-                    .unwrap_or_else(|| crate::platform::active(cx).scrollbar())
-                    == crate::platform::ScrollbarStyle::Persistent
-            {
-                1.0f32
-            } else {
-                0.0
-            },
+                || bar_style == crate::platform::ScrollbarStyle::Persistent);
+        let visible = animate(
+            child_id(&self.id, "vis"),
+            if show_bar { 1.0f32 } else { 0.0 },
             Motion::FAST,
             window,
             cx,

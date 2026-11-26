@@ -53,14 +53,14 @@ panels, docks, multi-document, multi-window).
 3. **Next** — Workspace composition (Split View, Resizable Handle, Panel, Panel Group, Dock / Dock Area,
    Inspector, Tab Bar / Tab Group / Document Tab, Floating Panel, persistence).
 4. Adapt reusable components to their contracts (all 8 states, density, keyboard;
-   virtualized Table / Tree with multi-select + DnD; Empty / Error State).
+   virtualized Table / Tree with multi-select + DnD; ResultView).
 5. System components + macOS / Windows validation.
 6. Public API docs and examples.
 
 Material Engine track (docs → Architecture → Material Engine; summary in docs → Final report):
 phases 0–6 done — engine, recipes,
 components on Material (§9) and desktop components on Material (§10: chrome materials, Notification
-Center, Preferences Window, Shortcut Recorder, Empty / Error State, springs, `desktop-showcase`).
+Center, Preferences Window, Shortcut Recorder, ResultView, springs, `desktop-showcase`).
 Phase 6: generated API reference, `scripts/bench.sh`, visual regression, cross-platform notes,
 the 13 final deliverables (docs → Final report).
 

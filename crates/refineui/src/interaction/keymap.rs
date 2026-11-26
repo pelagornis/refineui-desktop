@@ -21,7 +21,7 @@
 //! (`cx.bind_keys`, actions built by name — `"workspace::Save"` — from
 //! GPUI's action registry, contexts parsed as `key_context` predicates) and
 //! keeps the manager as the app-wide [`Keymap`] global, the single source of
-//! truth for [`crate::ShortcutHint`], [`crate::Tooltip::for_action`],
+//! truth for [`crate::ShortcutHint`], [`crate::Tooltip::action`],
 //! menu-item shortcuts and the [`crate::CommandPalette`].
 
 use std::collections::HashMap;

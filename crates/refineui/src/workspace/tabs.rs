@@ -415,21 +415,22 @@ impl RenderOnce for TabBar {
                 }
                 menu = menu.item(item);
             }
-            let trigger = div()
-                .id(child_id(&self.id, "overflow-trigger"))
-                .size(px(m.tab_height - 8.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(refineui_foundation::radius::MEDIUM))
-                .cursor_action()
-                .hover(|s| s.bg(c.background_primary_hover))
-                .tooltip(Tooltip::text("Show all tabs"))
-                .child(
-                    Icon::new(IconName::ChevronDown)
-                        .size(IconSize::XSmall)
-                        .color(c.foreground_secondary),
-                );
+            let trigger = Tooltip::new(child_id(&self.id, "overflow-tip"), "Show all tabs").child(
+                div()
+                    .id(child_id(&self.id, "overflow-trigger"))
+                    .size(px(m.tab_height - 8.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(refineui_foundation::radius::MEDIUM))
+                    .cursor_action()
+                    .hover(|s| s.bg(c.background_primary_hover))
+                    .child(
+                        Icon::new(IconName::ChevronDown)
+                            .size(IconSize::XSmall)
+                            .color(c.foreground_secondary),
+                    ),
+            );
             DropdownMenu::new(child_id(&self.id, "overflow"), trigger, menu).align_end()
         });
 
@@ -653,9 +654,6 @@ impl TabBar {
             (None, true) => Some(tab.title.clone()),
             _ => None,
         };
-        if let Some(t) = tip {
-            el = el.tooltip(Tooltip::text(t));
-        }
         let drag = TabDrag {
             group: self.group.clone(),
             doc: doc.clone(),
@@ -670,6 +668,13 @@ impl TabBar {
             let v = cx.new(|_| p);
             mark_drag::<TabDrag, _>(v, cx)
         });
+        let el: AnyElement = if let Some(t) = tip {
+            Tooltip::new(child_id(&tab_id, "tip"), t)
+                .child(el)
+                .into_any_element()
+        } else {
+            el.into_any_element()
+        };
 
         let mut menu = Menu::new(child_id(&tab_id, "menu"));
         for entry in TabCommand::menu_for(tab, ix, n) {

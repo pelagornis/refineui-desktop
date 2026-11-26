@@ -5,10 +5,10 @@
 //! [`FloatingLayout`] that never overflows the viewport (after
 //! [`CollisionOptions::collision_padding`]).
 //!
-//! Popper mode opens on the preferred side (default: below) and flips to
-//! the side with more room when the panel would not fit. Item-aligned mode
-//! (Radix Select default) overlays the selected row on the trigger and
-//! scrolls the list when the full content is taller than the viewport.
+//! Popper mode (used by Select) opens on the preferred side (default:
+//! below) and flips to the side with more room when the panel would not
+//! fit, shrinking to the remaining height. The panel is anchored to the
+//! trigger and never covers it.
 
 use gpui::{Bounds, Pixels, Point, Size, point, px};
 
@@ -132,8 +132,7 @@ pub struct CollisionOptions {
     /// Minimum gap between the panel and the viewport edge (web
     /// `collisionPadding` / `--radix-select-content-available-height` inset).
     pub collision_padding: f32,
-    /// Gap between the trigger and a popper panel (ignored by item-aligned
-    /// placement, which overlays the trigger).
+    /// Gap between the trigger and a popper panel.
     pub side_offset: f32,
 }
 
@@ -223,10 +222,6 @@ pub struct FloatingLayout {
     pub transform_origin: TransformOrigin,
     /// Side the panel was placed on.
     pub side: FloatingSide,
-    /// Vertical scroll to apply so a selected row stays aligned (item-aligned
-    /// mode). Zero for popper; the caller still scrolls the selected item
-    /// into view on open.
-    pub scroll_top: f32,
 }
 
 impl FloatingLayout {
@@ -339,58 +334,6 @@ pub fn place_popper(
         trigger_height: trigger.height,
         transform_origin,
         side,
-        scroll_top: 0.,
-    }
-}
-
-/// Place a panel so `selected_mid` (the selected row's center, measured from
-/// the top of the unclipped content) sits on the trigger's vertical center,
-/// shifting and scrolling as needed to stay inside the viewport.
-///
-/// `panel_x` is the unclamped left edge (callers line up text with the
-/// trigger value). `min_width` is the panel's preferred width.
-pub fn place_item_aligned(
-    trigger: PlacementRect,
-    viewport: PlacementViewport,
-    panel_x: f32,
-    min_width: f32,
-    full_height: f32,
-    selected_mid: f32,
-    opts: CollisionOptions,
-) -> FloatingLayout {
-    let pad = opts.collision_padding;
-    let (x, width) = clamp_horizontal(panel_x, min_width, viewport, pad);
-    let max_h = (viewport.height - 2. * pad).max(0.);
-    let height = full_height.max(0.).min(max_h);
-    let desired_top = trigger.center_y() - selected_mid;
-    let min_top = pad;
-    let max_top = (viewport.height - pad - height).max(min_top);
-    let y = desired_top.clamp(min_top, max_top);
-    let available_height = (viewport.height - pad - y).max(0.).min(max_h);
-    // If clamping `y` left unused space below, grow the panel into it so we
-    // don't leave a gap when the list is long.
-    let height = full_height.max(0.).min(available_height);
-    let scroll_top = (y - desired_top).clamp(0., (full_height - height).max(0.));
-    let side = if y + height / 2. >= trigger.center_y() {
-        FloatingSide::Bottom
-    } else {
-        FloatingSide::Top
-    };
-    // Origin at the point on the panel that sits over the trigger center.
-    let transform_origin = TransformOrigin {
-        x: (trigger.center_x() - x).clamp(0., width.max(0.)),
-        y: (trigger.center_y() - y).clamp(0., height.max(0.)),
-    };
-    FloatingLayout {
-        x,
-        y,
-        width,
-        height,
-        available_height,
-        trigger_height: trigger.height,
-        transform_origin,
-        side,
-        scroll_top,
     }
 }
 
@@ -586,8 +529,45 @@ mod tests {
         assert_eq!(l.height, 200.);
         assert_eq!(l.trigger_height, 32.);
         assert!(l.available_height >= 200.);
-        assert_eq!(l.scroll_top, 0.);
         assert_eq!(l.transform_origin.y, 0.);
+        // Anchored below: the panel never covers the trigger.
+        assert!(l.y >= t.bottom() + OPTS.side_offset - 0.01);
+    }
+
+    fn overlaps_trigger(l: &FloatingLayout, t: PlacementRect) -> bool {
+        l.y < t.bottom() && l.y + l.height > t.top()
+    }
+
+    #[test]
+    fn popper_never_overlaps_the_trigger() {
+        let cases = [
+            trigger(40., 40., 200., 32.),
+            trigger(40., 500., 200., 32.),
+            trigger(40., 250., 200., 32.),
+            trigger(700., 40., 200., 32.),
+        ];
+        for t in cases {
+            let l = place_popper(t, VIEW, 200., 400., FloatingSide::Bottom, OPTS);
+            assert!(
+                !overlaps_trigger(&l, t),
+                "panel ({}, {} + {}) overlaps trigger ({}, {} + {}) side={:?}",
+                l.y,
+                l.height,
+                l.y + l.height,
+                t.y,
+                t.height,
+                t.bottom(),
+                l.side,
+            );
+            match l.side {
+                FloatingSide::Bottom => {
+                    assert!(l.y >= t.bottom() + OPTS.side_offset - 0.01);
+                }
+                FloatingSide::Top => {
+                    assert!(l.y + l.height <= t.top() - OPTS.side_offset + 0.01);
+                }
+            }
+        }
     }
 
     #[test]
@@ -650,51 +630,6 @@ mod tests {
         let l = place_popper(t, VIEW, 900., 80., FloatingSide::Bottom, OPTS);
         assert_eq!(l.width, VIEW.width - 2. * OPTS.collision_padding);
         assert_eq!(l.x, OPTS.collision_padding);
-    }
-
-    #[test]
-    fn item_aligned_overlays_the_selected_row_on_the_trigger() {
-        let t = trigger(100., 200., 180., 32.);
-        let item_h = 32.;
-        let selected = 3usize;
-        let full_h = 10. * item_h;
-        let selected_mid = selected as f32 * item_h + item_h / 2.;
-        let l = place_item_aligned(t, VIEW, 90., 190., full_h, selected_mid, OPTS);
-        // Selected row center lands on the trigger center (minus scroll).
-        let visible_mid = selected_mid - l.scroll_top;
-        assert!((l.y + visible_mid - t.center_y()).abs() < 0.5);
-        assert_eq!(l.height, full_h); // fits in the 600px viewport
-        assert_eq!(l.scroll_top, 0.);
-        assert!(l.x >= OPTS.collision_padding);
-        assert_eq!(l.trigger_height, 32.);
-        // Origin sits on the trigger midpoint.
-        assert!((l.y + l.transform_origin.y - t.center_y()).abs() < 0.5);
-    }
-
-    #[test]
-    fn item_aligned_scrolls_and_clamps_when_the_list_is_taller_than_the_viewport() {
-        let t = trigger(100., 300., 180., 32.);
-        let item_h = 32.;
-        let count = 40usize;
-        let full_h = count as f32 * item_h; // 1280, taller than 600
-        let selected = 20usize;
-        let selected_mid = selected as f32 * item_h + item_h / 2.;
-        let l = place_item_aligned(t, VIEW, 100., 180., full_h, selected_mid, OPTS);
-        assert!(l.height <= VIEW.height - 2. * OPTS.collision_padding + 0.01);
-        assert!(l.y >= OPTS.collision_padding);
-        assert!(l.y + l.height <= VIEW.height - OPTS.collision_padding + 0.01);
-        assert!(l.scroll_top > 0.);
-        let visible_mid = selected_mid - l.scroll_top;
-        assert!((l.y + visible_mid - t.center_y()).abs() < 0.5);
-        assert!(l.available_height >= l.height);
-    }
-
-    #[test]
-    fn item_aligned_clamps_horizontally() {
-        let t = trigger(700., 200., 180., 32.);
-        let l = place_item_aligned(t, VIEW, 690., 200., 100., 16., OPTS);
-        assert!(l.x + l.width <= VIEW.width - OPTS.collision_padding + 0.01);
-        assert!(l.x >= OPTS.collision_padding);
     }
 
     #[test]

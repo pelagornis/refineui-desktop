@@ -200,7 +200,7 @@ page('segmented-control','Segmented Control','actions','components/segmented_con
 }));''')
 page('link','Link','actions','components/link.rs',['Link'],'Inline text link that opens a URL or runs a handler.',
  ['With `href` the link opens the URL in the default browser via `cx.open_url`.'],
- '''Link::new("docs", "Read the docs").href("https://github.com/pelagornis/refineui-gpui");
+ '''Link::new("docs", "Read the docs").href("https://github.com/pelagornis/refineui-desktop");
 Link::new("gpui", "GPUI").href("https://gpui.rs").external(true);''')
 page('input','Input','forms','components/input.rs',['TextInput','InputEvent'],'Single-line text input with selection, clipboard, IME, placeholder, search and password modes.',
  ['`TextInput` is an entity: create it once with `cx.new(|cx| TextInput::new(cx))` and keep it in your view.','Subscribe to `InputEvent::Change` / `InputEvent::Submit` with `cx.subscribe`.','Key bindings (arrows, Home/End, ⌘A, ⌘C/⌘X/⌘V, Enter, Escape) live in the `RefineUITextInput` key context.'],
@@ -288,30 +288,22 @@ page('spin-button','Spin Button','forms','components/spin_button.rs',['SpinButto
         this.delay = *v;
         cx.notify();
     }));''')
-page('select','Select','forms','components/select.rs',['Select','SelectAppearance','SelectPosition','SelectLayout','components/positioning.rs:FloatingLayout','components/positioning.rs:FloatingSide','components/positioning.rs:CollisionOptions','components/positioning.rs:TransformOrigin'],'Pick one option from a popup list.',
- ['Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.',
-  'Placement is collision-aware: `SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow, constraining height to the available space and scrolling inside a `ScrollArea`. `SelectPosition::ItemAligned` (default, Radix) overlays the selected row on the trigger.',
-  'Tune `collision_padding` (default 10) and `side_offset` (default 4, popper only). Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.',
-  'GPUI has no CSS variables; `SelectLayout` / `FloatingLayout` exposes the same values as `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation uses that origin (a short slide from the trigger). See the `select-position` gallery story for flip, constrained scroll and item-aligned screenshots.'],
- '''Select::new("font", ["Inter", "SF Pro", "Menlo"], self.font)
-    .placeholder("Font")
-    .position(SelectPosition::Popper)
-    .width(px(180.))
+page('select','Select','forms','components/select.rs',['Select','SelectOption','SelectEntry','SelectAppearance','SelectLayout','components/positioning.rs:FloatingLayout','components/positioning.rs:FloatingSide','components/positioning.rs:CollisionOptions','components/positioning.rs:TransformOrigin'],'Pick one option from a popup list.',
+ ['Parts match web `Select`: trigger, value, content, group / label, separator, item, and a leading check item indicator. Scroll-up / scroll-down buttons exist on the web as empty stubs and are not rendered here.',
+  'Open with click, Enter, Space, ↓ or ↑; arrows move (skipping disabled items); Home / End jump; typeahead matches the first letter of `label` / `text_value`; Enter or Space picks; Escape closes.',
+  '`Select::new` still takes a flat list of labels. Add structure with `group`, `separator`, `item` or `entries` (`SelectEntry::{Item, Label, Separator}`). `SelectOption` carries `value`, `label`, `disabled` and `text_value`. `on_change` reports the item index (labels and separators are skipped).',
+  'Sizes `sm | md | lg` and appearances `filled | ghost | plain`, plus `disabled`, `placeholder` and `full_width`, match the web.',
+  'Placement is always anchored to the trigger (never covering it). The popup opens below when there is enough room after `collision_padding` (default 10) and `side_offset` (default 4), flips above when there is not, and shrinks to the remaining height with an internal `ScrollArea`. The selected item is scrolled into view. Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.',
+  'The list shell uses `rounded-xx-large`, a hairline `border-default`, `p-xx-small` and the frosted surface; items are `p-x-small`, `rounded-large`, `bodyMd`, with a 16px leading check slot. The popup is as wide as the trigger, fades in over `Motion::FROSTED` (180ms) and slides 6px from `SelectLayout::transform_origin`.'],
+ '''Select::new("tz", [] as [&str; 0], self.zone)
+    .placeholder("Timezone")
+    .group("North America", ["Eastern Standard Time", "Pacific Standard Time"])
+    .group("Europe", ["Greenwich Mean Time", "Central European Time"])
+    .width(px(280.))
     .on_change(cx.listener(|this, ix: &usize, _, cx| {
-        this.font = Some(*ix);
+        this.zone = Some(*ix);
         cx.notify();
     }));''')
-page('select-position','Select Position','forms','components/select.rs',['SelectPosition','components/positioning.rs:FloatingLayout','components/positioning.rs:CollisionOptions'],
- 'Collision-aware Select placement: popper flip, constrained height with scrolling, and item-aligned overlay.',
- ['`SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow. Height is constrained to the available space — not a fixed max-height alone — and the list scrolls in a `ScrollArea`.',
-  '`SelectPosition::ItemAligned` (Radix default) overlays the selected row on the trigger, shifting and scrolling so it stays in view.',
-  'Padding and offset are `collision_padding` (default 10) and `side_offset` (default 4). Placement is a pure function in `components::positioning` (`place_popper`, `place_item_aligned`) so Menu, Dropdown and Popover can reuse it.',
-  'GPUI has no CSS variables; `FloatingLayout` / `SelectLayout` exposes `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation slides from that origin.'],
- '''Select::new("tz", zones, Some(0))
-    .position(SelectPosition::Popper)
-    .collision_padding(10.)
-    .side_offset(4.)
-    .width(px(280.));''')
 page('text','Text','display','components/text.rs',['Text','TextRole','TextVariant','TextColor','Heading','Label'],'Typography primitives mapped to the RefineUI type scale and semantic roles.',
  ['Prefer `TextRole` (bodyLg, labelMd, captionSm, titleMd …) — the same semantic roles as the web `Text` component.','`TextVariant` mirrors the raw Foundation tokens (heading1…caption3).'],
  '''Text::new("Settings").role(TextRole::TitleMd);
@@ -371,9 +363,14 @@ page('stepper','Stepper','display','components/stepper.rs',['Stepper'],'Numbered
     }));''')
 page('skeleton','Skeleton','display','components/skeleton.rs',['Skeleton','SkeletonShape'],'Pulsing loading placeholder shapes.',[],
  '''Skeleton::new().shape(SkeletonShape::Text).width(px(240.));''')
-page('tooltip','Tooltip','display','components/tooltip.rs',['Tooltip'],'Hover hint with an optional shortcut.',
- ['Attach to any stateful element with `.tooltip(Tooltip::text("…"))`; `Button` and `Toggle` have a `.tooltip(text)` shorthand.'],
- '''div().id("save").child("Save").tooltip(Tooltip::with_shortcut("Save", "⌘S"));''')
+page('tooltip','Tooltip','display','components/tooltip.rs',['Tooltip'],'Hover hint with an optional shortcut, anchored to the trigger.',
+ ['Wrap a trigger with `Tooltip::new(id, text).child(...)`. `Button` and `Toggle` have a `.tooltip(text)` shorthand; the bubble is centered on the requested side of the control and stays put while the pointer moves inside it.',
+  'Prefer a side with `.placement(AnchorSide::Top)` (Above) / `Bottom` / `Left` / `Right`. When that side does not fit in the window, the tooltip flips.',
+  'The bubble is painted on the Tooltip layer, so an Above placement is never hidden behind its button.'],
+ '''Tooltip::new("save-tip", "Save")
+    .shortcut("⌘S")
+    .placement(AnchorSide::Top)
+    .child(Button::new("save", "Save"));''')
 page('toast','Toast','display','components/toast.rs',['Toaster','ToastData','ToastVariant','Toast'],'Transient notifications stacked at the top centre of the window.',
  ['Create one `Toaster` entity per window, render it as the last child of your root, and `push` toasts into it.','Newest toast is in front; hover the stack to fan it out. Toasts without a `duration` get a dismiss button.'],
  '''let toaster = cx.new(|_| Toaster::new());
@@ -1009,7 +1006,7 @@ cargo run -p refineui-gallery -- --story {id}
 
 {EXTRA.get(id, '')}{motion_md}## API
 
-Source: [`{src_path(file)}`](https://github.com/pelagornis/refineui-gpui/blob/main/{src_path(file)})
+Source: [`{src_path(file)}`](https://github.com/pelagornis/refineui-desktop/blob/main/{src_path(file)})
 
 {api_md(file,types)}
 '''

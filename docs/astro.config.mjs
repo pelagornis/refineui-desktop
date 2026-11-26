@@ -22,7 +22,7 @@ export default defineConfig({
         }),
       ],
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/pelagornis/refineui-gpui' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/pelagornis/refineui-desktop' },
       ],
       customCss: ['./src/styles/global.css'],
       sidebar: [

@@ -5,10 +5,16 @@
 //! called by [`crate::vibrancy`]. Compiled on macOS, and on other hosts with
 //! the `typecheck-macos-vibrancy` feature for `cargo check` only — it is
 //! never called there.
+use std::ffi::CString;
+use std::sync::OnceLock;
+
 use gpui::Window;
-use objc::runtime::{BOOL, NO, Object, YES};
+use objc::declare::ClassDecl;
+use objc::runtime::{BOOL, Class, NO, Object, Sel, YES};
 use objc::{class, msg_send, sel, sel_impl};
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+
+use crate::vibrancy::NativePopupAppearance;
 
 /// The `NSWindow` of `window` as an address (0 if unavailable).
 pub(crate) fn ns_window_of(window: &Window) -> usize {
@@ -26,9 +32,12 @@ pub(crate) fn ns_window_of(window: &Window) -> usize {
     }
 }
 
-/// `NSVisualEffectMaterial` raw values (AppKit headers).
-const MATERIAL_MENU: i64 = 5;
-const MATERIAL_POPOVER: i64 = 6;
+/// `NSVisualEffectMaterialSelection` — a colorless semantic material. Apple's
+/// `.menu` / `.popover` materials already carry a system tint, extra
+/// saturation and a wallpaper "chameleon" color; painting RefineUI's frost
+/// overlay on top of that made the plate look off (and wildly so when the
+/// window's `NSAppearance` did not match the app theme).
+const MATERIAL_SELECTION: i64 = 4;
 /// `NSVisualEffectBlendingModeBehindWindow`.
 const BLENDING_BEHIND_WINDOW: i64 = 0;
 /// `NSVisualEffectStateActive`.
@@ -71,27 +80,29 @@ pub(crate) fn debug_enabled() -> bool {
     std::env::var("REFINEUI_VIBRANCY_DEBUG").is_ok_and(|v| !v.is_empty() && v != "0")
 }
 
-/// Hide the (titled-panel) window buttons, put a rounded
-/// `NSVisualEffectView` (behind-window blending, always active) under
-/// GPUI's view, let AppKit draw the window shadow, attach the pop-up to
+/// Hide the (titled-panel) window buttons, put a rounded, colorless
+/// `NSVisualEffectView` (behind-window blending, always active, system
+/// tint/saturation stripped) under GPUI's view, apply the theme
+/// appearance, let AppKit draw the window shadow, attach the pop-up to
 /// `parent_ns` (so it follows the parent's moves) and fade its alpha in
 /// over `fade_secs`.
 ///
 /// Why not `WindowBackgroundAppearance::Blurred`: GPUI's blur view uses
-/// the `Selection` material with its tint/saturation filters stripped,
-/// and the earlier prototype rounded the corners by setting
-/// `cornerRadius` + `masksToBounds` on the *content view's* layer — the
-/// effect view's backdrop layer then sits under a masking ancestor, which
-/// makes the window server fall back to a flat translucent fill (no
-/// blur). Apple's documented way to shape vibrancy is the effect view's
-/// own `maskImage`, which is what this does; the pop-up window is opened
-/// `Transparent` so GPUI adds no second (square) effect view.
+/// the same colorless `Selection` material, but the earlier prototype
+/// rounded the corners by setting `cornerRadius` + `masksToBounds` on the
+/// *content view's* layer — the effect view's backdrop layer then sits
+/// under a masking ancestor, which makes the window server fall back to a
+/// flat translucent fill (no blur). Apple's documented way to shape
+/// vibrancy is the effect view's own `maskImage`, which is what this
+/// does; the pop-up window is opened `Transparent` so GPUI adds no second
+/// (square) effect view. The content view is left without an extra layer
+/// backing: a flattening ancestor also kills behind-window vibrancy.
 pub(crate) fn shape_popup(
     window: &Window,
     corner_radius: f32,
     parent_ns: usize,
     fade_secs: f64,
-    popover: bool,
+    appearance: NativePopupAppearance,
 ) {
     let ns_window = ns_window_of(window) as *mut Object;
     if ns_window.is_null() {
@@ -111,18 +122,14 @@ pub(crate) fn shape_popup(
             }
         }
         let _: () = msg_send![ns_window, setOpaque: NO];
+        apply_appearance(ns_window, appearance);
         let content: *mut Object = msg_send![ns_window, contentView];
         if !content.is_null() {
-            let _: () = msg_send![content, setWantsLayer: YES];
             let bounds: CGRect = msg_send![content, bounds];
-            let effect: *mut Object = msg_send![class!(NSVisualEffectView), alloc];
+            let class = frost_view_class();
+            let effect: *mut Object = msg_send![class, alloc];
             let effect: *mut Object = msg_send![effect, initWithFrame: bounds];
-            let material = if popover {
-                MATERIAL_POPOVER
-            } else {
-                MATERIAL_MENU
-            };
-            let _: () = msg_send![effect, setMaterial: material];
+            let _: () = msg_send![effect, setMaterial: MATERIAL_SELECTION];
             let _: () = msg_send![effect, setBlendingMode: BLENDING_BEHIND_WINDOW];
             let _: () = msg_send![effect, setState: STATE_ACTIVE];
             let _: () = msg_send![effect, setAutoresizingMask: AUTORESIZE_FILL];
@@ -130,6 +137,9 @@ pub(crate) fn shape_popup(
             if !mask.is_null() {
                 let _: () = msg_send![effect, setMaskImage: mask];
             }
+            // Strip once now; `updateLayer` strips again when AppKit
+            // rebuilds the effect filters.
+            strip_vibrant_tint(effect);
             let _: () = msg_send![
                 content,
                 addSubview: effect
@@ -168,6 +178,144 @@ pub(crate) fn shape_popup(
     if debug_enabled() {
         debug_dump(window, "shape_popup");
     }
+}
+
+/// Keep a live pop-up's `NSAppearance` in sync with the RefineUI theme
+/// (e.g. after the gallery toggles light / dark).
+pub(crate) fn sync_popup_appearance(window: &Window, appearance: NativePopupAppearance) {
+    let ns_window = ns_window_of(window) as *mut Object;
+    if ns_window.is_null() {
+        return;
+    }
+    // SAFETY: `ns_window` is this pop-up's live NSWindow; `-setAppearance:`
+    // is a no-side-effect style update on the main thread.
+    unsafe {
+        apply_appearance(ns_window, appearance);
+    }
+}
+
+unsafe fn apply_appearance(ns_window: *mut Object, appearance: NativePopupAppearance) {
+    // SAFETY: `appearanceNamed:` returns a system appearance (or nil);
+    // `setAppearance:` accepts nil to inherit from the parent / app.
+    unsafe {
+        let app = match appearance {
+            NativePopupAppearance::System => std::ptr::null_mut(),
+            NativePopupAppearance::Light => appearance_named("NSAppearanceNameAqua"),
+            NativePopupAppearance::Dark => appearance_named("NSAppearanceNameDarkAqua"),
+        };
+        let _: () = msg_send![ns_window, setAppearance: app];
+    }
+}
+
+unsafe fn appearance_named(name: &str) -> *mut Object {
+    // SAFETY: `name` is a documented NSAppearanceName constant.
+    unsafe {
+        let s = nsstring(name);
+        msg_send![class!(NSAppearance), appearanceNamed: s]
+    }
+}
+
+unsafe fn nsstring(s: &str) -> *mut Object {
+    let c = CString::new(s).expect("NSString");
+    // SAFETY: `c` lives for the call; the returned NSString is autoreleased.
+    unsafe { msg_send![class!(NSString), stringWithUTF8String: c.as_ptr()] }
+}
+
+static FROST_VIEW_CLASS: OnceLock<&'static Class> = OnceLock::new();
+
+fn frost_view_class() -> &'static Class {
+    FROST_VIEW_CLASS.get_or_init(|| {
+        let mut decl = ClassDecl::new("RefineUIFrostView", class!(NSVisualEffectView))
+            .expect("RefineUIFrostView already registered");
+        unsafe {
+            decl.add_method(
+                sel!(updateLayer),
+                frost_view_update_layer as extern "C" fn(&Object, Sel),
+            );
+        }
+        decl.register()
+    })
+}
+
+extern "C" fn frost_view_update_layer(this: &Object, _: Sel) {
+    // SAFETY: `this` is a RefineUIFrostView; we call through to
+    // NSVisualEffectView's `updateLayer` then strip the filters it just
+    // re-applied.
+    unsafe {
+        let _: () = msg_send![super(this, class!(NSVisualEffectView)), updateLayer];
+        strip_vibrant_tint(this as *const Object as *mut Object);
+    }
+}
+
+/// Remove the desktop-tint chameleon layer and the extra saturation
+/// filter `NSVisualEffectView` installs, so only the blur remains and
+/// RefineUI's frost overlay can carry the color.
+unsafe fn strip_vibrant_tint(view: *mut Object) {
+    if view.is_null() {
+        return;
+    }
+    // SAFETY: `view` is a live NSVisualEffectView (or a sublayer walk
+    // starting at its layer). Same technique as GPUI's `BlurredView`.
+    unsafe {
+        let layer: *mut Object = msg_send![view, layer];
+        if !layer.is_null() {
+            strip_layer_tint(layer);
+        }
+    }
+}
+
+unsafe fn strip_layer_tint(layer: *mut Object) {
+    // SAFETY: `layer` is a live CALayer in the effect view's tree.
+    unsafe {
+        let _: () = msg_send![layer, setBackgroundColor: std::ptr::null_mut::<Object>()];
+
+        let class_name: *mut Object = msg_send![layer, className];
+        let chameleon = nsstring("CAChameleonLayer");
+        let is_chameleon: BOOL = msg_send![class_name, isEqualToString: chameleon];
+        if is_chameleon != NO {
+            let _: () = msg_send![layer, setHidden: YES];
+            return;
+        }
+
+        let filters: *mut Object = msg_send![layer, filters];
+        if !filters.is_null() {
+            let test: *mut Object = nsstring("Saturat");
+            let count: u64 = msg_send![filters, count];
+            for i in 0..count {
+                let filter: *mut Object = msg_send![filters, objectAtIndex: i];
+                let description: *mut Object = msg_send![filter, description];
+                let hit: BOOL = msg_send![description, containsString: test];
+                if hit == NO {
+                    continue;
+                }
+                let all = NSRange {
+                    location: 0,
+                    length: count,
+                };
+                let indices: *mut Object = msg_send![class!(NSMutableIndexSet), indexSet];
+                let _: () = msg_send![indices, addIndexesInRange: all];
+                let _: () = msg_send![indices, removeIndex: i];
+                let filtered: *mut Object = msg_send![filters, objectsAtIndexes: indices];
+                let _: () = msg_send![layer, setFilters: filtered];
+                break;
+            }
+        }
+
+        let sublayers: *mut Object = msg_send![layer, sublayers];
+        if !sublayers.is_null() {
+            let count: u64 = msg_send![sublayers, count];
+            for i in 0..count {
+                let sub: *mut Object = msg_send![sublayers, objectAtIndex: i];
+                strip_layer_tint(sub);
+            }
+        }
+    }
+}
+
+#[repr(C)]
+struct NSRange {
+    location: u64,
+    length: u64,
 }
 
 /// A stretchable rounded-rect mask (`capInsets` = radius), the AppKit
@@ -306,10 +454,12 @@ pub(crate) fn debug_dump(window: &Window, stage: &str) {
         return;
     }
     let mut out = String::new();
-    // SAFETY: read-only queries on the live pop-up NSWindow.
+    // SAFETY: `ns_window` is a live NSWindow; every selector is a read.
     unsafe {
-        let info: *mut Object = msg_send![class!(NSProcessInfo), processInfo];
-        let os: *mut Object = msg_send![info, operatingSystemVersionString];
+        let os: *mut Object = {
+            let p: *mut Object = msg_send![class!(NSProcessInfo), processInfo];
+            msg_send![p, operatingSystemVersionString]
+        };
         let opaque: BOOL = msg_send![ns_window, isOpaque];
         let alpha: f64 = msg_send![ns_window, alphaValue];
         let level: i64 = msg_send![ns_window, level];
@@ -318,12 +468,18 @@ pub(crate) fn debug_dump(window: &Window, stage: &str) {
         let bg: *mut Object = msg_send![ns_window, backgroundColor];
         let bg_desc: *mut Object = msg_send![bg, description];
         let parent: *mut Object = msg_send![ns_window, parentWindow];
+        let appearance: *mut Object = msg_send![ns_window, effectiveAppearance];
+        let appearance_name: *mut Object = if appearance.is_null() {
+            std::ptr::null_mut()
+        } else {
+            msg_send![appearance, name]
+        };
         let reduce: BOOL = {
             let ws: *mut Object = msg_send![class!(NSWorkspace), sharedWorkspace];
             msg_send![ws, accessibilityDisplayShouldReduceTransparency]
         };
         out.push_str(&format!(
-            "[refineui vibrancy] {stage}: macOS {} window={:p} class={} opaque={} alpha={alpha:.2} level={level} styleMask={style:#x} hasShadow={} parent={:p} background={} reduceTransparency={}\n",
+            "[refineui vibrancy] {stage}: macOS {} window={:p} class={} opaque={} alpha={alpha:.2} level={level} styleMask={style:#x} hasShadow={} parent={:p} background={} appearance={} reduceTransparency={}\n",
             ns_string(os),
             ns_window,
             class_name(ns_window),
@@ -331,6 +487,7 @@ pub(crate) fn debug_dump(window: &Window, stage: &str) {
             shadow != NO,
             parent,
             ns_string(bg_desc),
+            ns_string(appearance_name),
             reduce != NO,
         ));
         let frame_view: *mut Object = {

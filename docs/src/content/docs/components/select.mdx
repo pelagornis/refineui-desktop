@@ -13,20 +13,23 @@ Pick one option from a popup list.
 
 ## Usage
 
-- Open with click, Enter, Space or ↓; navigate with arrows; Escape closes.
-- Placement is collision-aware: `SelectPosition::Popper` opens below the trigger and flips above (or to the side with more room) when it would overflow, constraining height to the available space and scrolling inside a `ScrollArea`. `SelectPosition::ItemAligned` (default, Radix) overlays the selected row on the trigger.
-- Tune `collision_padding` (default 10) and `side_offset` (default 4, popper only). Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.
-- GPUI has no CSS variables; `SelectLayout` / `FloatingLayout` exposes the same values as `--refineui-select-content-available-height`, `--refineui-select-trigger-height` and `--refineui-select-content-transform-origin` (`TransformOrigin::to_css`). The open animation uses that origin (a short slide from the trigger). See the `select-position` gallery story for flip, constrained scroll and item-aligned screenshots.
+- Parts match web `Select`: trigger, value, content, group / label, separator, item, and a leading check item indicator. Scroll-up / scroll-down buttons exist on the web as empty stubs and are not rendered here.
+- Open with click, Enter, Space, ↓ or ↑; arrows move (skipping disabled items); Home / End jump; typeahead matches the first letter of `label` / `text_value`; Enter or Space picks; Escape closes.
+- `Select::new` still takes a flat list of labels. Add structure with `group`, `separator`, `item` or `entries` (`SelectEntry::{Item, Label, Separator}`). `SelectOption` carries `value`, `label`, `disabled` and `text_value`. `on_change` reports the item index (labels and separators are skipped).
+- Sizes `sm | md | lg` and appearances `filled | ghost | plain`, plus `disabled`, `placeholder` and `full_width`, match the web.
+- Placement is always anchored to the trigger (never covering it). The popup opens below when there is enough room after `collision_padding` (default 10) and `side_offset` (default 4), flips above when there is not, and shrinks to the remaining height with an internal `ScrollArea`. The selected item is scrolled into view. Placement is recomputed every frame from the trigger and viewport bounds, so resize and ancestor scroll stay in view.
+- The list shell uses `rounded-xx-large`, a hairline `border-default`, `p-xx-small` and the frosted surface; items are `p-x-small`, `rounded-large`, `bodyMd`, with a 16px leading check slot. The popup is as wide as the trigger, fades in over `Motion::FROSTED` (180ms) and slides 6px from `SelectLayout::transform_origin`.
 
 ```rust
 use refineui::prelude::*;
 
-Select::new("font", ["Inter", "SF Pro", "Menlo"], self.font)
-    .placeholder("Font")
-    .position(SelectPosition::Popper)
-    .width(px(180.))
+Select::new("tz", [] as [&str; 0], self.zone)
+    .placeholder("Timezone")
+    .group("North America", ["Eastern Standard Time", "Pacific Standard Time"])
+    .group("Europe", ["Greenwich Mean Time", "Central European Time"])
+    .width(px(280.))
     .on_change(cx.listener(|this, ix: &usize, _, cx| {
-        this.font = Some(*ix);
+        this.zone = Some(*ix);
         cx.notify();
     }));
 ```
@@ -43,7 +46,7 @@ The popup fades in with the frosted-surface motion, sliding a few pixels out of 
 
 ## API
 
-Source: [`crates/refineui/src/components/select.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/select.rs)
+Source: [`crates/refineui/src/components/select.rs`](https://github.com/pelagornis/refineui-desktop/blob/main/crates/refineui/src/components/select.rs)
 
 ### Select
 
@@ -58,10 +61,35 @@ Single-choice dropdown.
 | `fn disabled(mut self, disabled: bool) -> Self` | Disabled. |
 | `fn width(mut self, w: gpui::Pixels) -> Self` | Fixed width (default: fill parent). |
 | `fn default_open(mut self, open: bool) -> Self` | Start with the list open (first frame only; used by the gallery screenshot of the open popup). |
-| `fn position(mut self, position: SelectPosition) -> Self` | Popup placement (default `SelectPosition::ItemAligned`). |
 | `fn collision_padding(mut self, padding: f32) -> Self` | Viewport-edge padding used when flipping and clamping the popup (web `collisionPadding`, default 10). |
-| `fn side_offset(mut self, offset: f32) -> Self` | Gap between the trigger and a `SelectPosition::Popper` popup (web `sideOffset`, default 4). Ignored for item-aligned placement. |
-| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the picked index. |
+| `fn side_offset(mut self, offset: f32) -> Self` | Gap between the trigger and the popup (web `sideOffset`, default 4). |
+| `fn on_change(mut self, f: impl Fn(&usize, &mut Window, &mut App) + 'static) -> Self` | Called with the picked item index (skipping labels and separators). |
+| `fn entries(mut self, entries: impl IntoIterator<Item = SelectEntry>) -> Self` | Replace the list with structured entries (items, group labels, separators) — web `SelectContent` children. |
+| `fn group(mut self, label: impl Into<SharedString>, options: impl IntoIterator<Item = impl Into<SelectOption>>) -> Self` | Append a group label and its items (web `SelectGroup` + `SelectLabel`). |
+| `fn separator(mut self) -> Self` | Append a divider (web `SelectSeparator`). |
+| `fn item(mut self, option: impl Into<SelectOption>) -> Self` | Append a single item (web `SelectItem`). |
+| `fn full_width(mut self, on: bool) -> Self` | Stretch to the parent's width (web `fullWidth`). Already the default when `Self::width` is not set. |
+
+### SelectOption
+
+One selectable row (web `SelectItem`).
+
+| Method | Description |
+| --- | --- |
+| `fn new(label: impl Into<SharedString>) -> Self` | An enabled option whose value and label are `label`. |
+| `fn value(mut self, value: impl Into<SharedString>) -> Self` | An option with a distinct `value` and `label`. |
+| `fn disabled(mut self, disabled: bool) -> Self` | Disabled option. |
+| `fn text_value(mut self, text: impl Into<SharedString>) -> Self` | Typeahead text (defaults to the label). |
+
+### SelectEntry
+
+A row in the Select popup: an item, a group label, or a separator (web `SelectItem` / `SelectLabel` / `SelectSeparator`).
+
+| Variant | Description |
+| --- | --- |
+| `Item(SelectOption)` | Selectable option. |
+| `Label(SharedString)` | Group heading (web `SelectLabel`). |
+| `Separator` | Visual divider (web `SelectSeparator`). |
 
 ### SelectAppearance
 
@@ -72,15 +100,6 @@ Trigger appearance.
 | `Filled` | Hairline-bordered field on `backgroundPrimary` (default). |
 | `Ghost` | Borderless; hover / open shows the `backgroundPrimaryHover` plate. |
 | `Plain` | Text and chevron only. |
-
-### SelectPosition
-
-How the popup is placed relative to the trigger (web `position`).
-
-| Variant | Description |
-| --- | --- |
-| `ItemAligned` | Radix default: the selected item overlays the trigger (macOS pop-up button style), shifting and scrolling to stay in view. |
-| `Popper` | Below the trigger (or above when there is not enough room), with `Select::side_offset` and collision flipping. |
 
 ### SelectLayout
 

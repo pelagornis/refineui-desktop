@@ -46,6 +46,7 @@ use crate::motion::{
     Motion, TrackInteraction, animate, child_id, focus_visible, presence, probe, use_interaction,
     use_layout_probe,
 };
+use crate::platform::ScrollbarStyle;
 use crate::{
     ActiveTheme, DragPreview, DropIndicator, Icon, IconName, IconSize, ScrollArea, StyledExt,
 };
@@ -1425,11 +1426,14 @@ impl RenderOnce for ActivityBar {
                 div().flex_1().min_h_0().child(
                     ScrollArea::new(child_id(&self.id, "scroll"))
                         .edge_blur(false)
+                        .scrollbar(ScrollbarStyle::Hidden)
                         .child(
                             div()
                                 .flex()
                                 .flex_col()
                                 .items_center()
+                                .w_full()
+                                .px(px(spacing::XXX_SMALL))
                                 .gap(px(self.style.gap))
                                 .pt(px(spacing::XX_SMALL))
                                 .pb(px(spacing::X_SMALL))

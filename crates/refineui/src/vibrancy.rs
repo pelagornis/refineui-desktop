@@ -46,13 +46,19 @@
 //! * **Fade-in**: the pop-up window's alpha animates 0 → 1 over
 //!   `duration-normal` (`Motion::FROSTED`) through `NSAnimationContext`.
 //!   Closing is immediate.
-//! * **Blur view**: the window is opened `Transparent` and `macos` adds its
-//!   own `NSVisualEffectView` (material `.menu` / `.popover`, blending
-//!   `behindWindow`, state `active`) below GPUI's view, rounded with a
-//!   stretchable `maskImage`. An earlier version used `Blurred` and rounded
-//!   the content view's layer (`cornerRadius` + `masksToBounds`); a masking
-//!   ancestor makes the window server fall back to a flat translucent fill,
-//!   which is the "translucent but not blurred" result seen on macOS.
+//! * **Blur view**: the window is opened `Transparent` and `macos` adds a
+//!   colorless `NSVisualEffectView` (`Selection` material, blending
+//!   `behindWindow`, state `active`, desktop tint and saturation filters
+//!   stripped) below GPUI's view, rounded with a stretchable `maskImage`.
+//!   The window's `NSAppearance` follows the RefineUI theme so the blur
+//!   (and any remaining system chrome) matches light / dark even when the
+//!   OS appearance differs. The plate is the Regular material tint — not
+//!   Apple's `.menu` / `.popover` tint, which stacked with `surfaceFrosted`
+//!   and made the colors look wrong. An earlier version used `Blurred` and
+//!   rounded the content view's layer (`cornerRadius` + `masksToBounds`);
+//!   a masking ancestor makes the window server fall back to a flat
+//!   translucent fill, which is the "translucent but not blurred" result
+//!   seen on macOS.
 //! * `REFINEUI_VIBRANCY_DEBUG=1` prints each pop-up's window, view hierarchy
 //!   and layer opacity to stderr (at open and after the first frame).
 //! * The corner mask, hidden window buttons, child-window attachment and the
@@ -109,6 +115,53 @@ pub fn native_frost_active(cx: &App) -> bool {
     native_frost_supported() && frost_mode(cx) == FrostMode::Native
 }
 
+/// How a native-frost pop-up should present to AppKit.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum NativePopupAppearance {
+    /// Inherit the OS / parent window appearance (`follow_system`).
+    #[default]
+    System,
+    /// Force `NSAppearanceNameAqua`.
+    Light,
+    /// Force `NSAppearanceNameDarkAqua`.
+    Dark,
+}
+
+/// [`NativePopupAppearance`] for the current theme: an explicit gallery
+/// / app theme wins over the OS, otherwise the pop-up inherits.
+pub(crate) fn native_popup_appearance(cx: &App) -> NativePopupAppearance {
+    let theme = cx.theme();
+    if theme.follow_system {
+        NativePopupAppearance::System
+    } else if theme.is_dark() {
+        NativePopupAppearance::Dark
+    } else {
+        NativePopupAppearance::Light
+    }
+}
+
+/// Translucent fill painted over the OS blur. This is the Regular material
+/// tint (`backgroundPrimary` at the material alpha) so a native-frost
+/// pop-up stays on-token with the in-window material plate. It is *not*
+/// the opaque [`crate::Theme::floating_fill`] (that one is pre-composited
+/// for panels that cannot blur) and it is slightly denser than the raw
+/// `surfaceFrosted` token (0.55).
+pub(crate) fn frost_overlay(theme: &crate::Theme) -> gpui::Hsla {
+    let tokens = refineui_foundation::material::MaterialRole::Regular.tokens(theme.appearance);
+    crate::theme::to_hsla(tokens.tint)
+}
+
+/// Keep a native-frost pop-up's AppKit appearance in sync with the theme.
+/// No-op on platforms without the macOS glue; still evaluates the
+/// appearance so the helper stays live in every target.
+fn sync_native_popup_appearance(window: &Window, cx: &App) {
+    let appearance = native_popup_appearance(cx);
+    #[cfg(any(target_os = "macos", feature = "typecheck-macos-vibrancy"))]
+    crate::platform::macos::sync_popup_appearance(window, appearance);
+    #[cfg(not(any(target_os = "macos", feature = "typecheck-macos-vibrancy")))]
+    let _ = (window, appearance);
+}
+
 /// Map a point in `window`'s content coordinates to screen coordinates
 /// (accounts for a standard title bar above the content).
 pub fn to_screen(window: &Window, local: Point<Pixels>) -> Point<Pixels> {
@@ -147,6 +200,10 @@ fn open_frosted_child<V: Render + 'static>(
         let _ = (parent, parent_ns, bounds, corner_radius, popover, build);
         return None;
     }
+    // `popover` used to pick NSVisualEffectMaterial.popover vs .menu. Both
+    // system materials carry their own tint, which fought the RefineUI
+    // overlay; the effect view is now a colorless blur for every pop-up.
+    let _ = popover;
     let options = WindowOptions {
         window_bounds: Some(WindowBounds::Windowed(bounds)),
         titlebar: None,
@@ -169,7 +226,7 @@ fn open_frosted_child<V: Render + 'static>(
                 corner_radius,
                 parent_ns,
                 crate::motion::Motion::FROSTED.duration.as_secs_f64(),
-                popover,
+                native_popup_appearance(cx),
             );
             #[cfg(any(target_os = "macos", feature = "typecheck-macos-vibrancy"))]
             if crate::platform::macos::debug_enabled() {
@@ -366,9 +423,9 @@ pub(crate) fn drive_native_popup(
     });
 }
 
-/// Root view of a native-frost pop-up: the raw translucent `surfaceFrosted`
-/// fill (the OS blur shows through), a hairline `borderDefault` edge, and the
-/// content. The window resizes itself to the content once measured.
+/// Root view of a native-frost pop-up: the Regular material tint over the
+/// OS blur, a hairline `borderDefault` edge, and the content. The window
+/// resizes itself to the content once measured.
 pub struct FrostedPanelWindow {
     content: PopupContent,
     radius: f32,
@@ -389,6 +446,7 @@ fn fit_window(measure: &Entity<crate::motion::LayoutProbe>, window: &mut Window,
 impl Render for FrostedPanelWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        sync_native_popup_appearance(window, cx);
         let measure = use_layout_probe(&ElementId::Name("frosted-panel".into()), window, cx);
         fit_window(&measure, window, cx);
         if let (Some(report), Some(b)) = (&self.report_size, measure.read(cx).container)
@@ -408,7 +466,7 @@ impl Render for FrostedPanelWindow {
                 div()
                     .relative()
                     .flex_none()
-                    .bg(theme.colors.surface_frosted)
+                    .bg(frost_overlay(&theme))
                     .border(px(stroke::HAIRLINE))
                     .border_color(theme.colors.border_default)
                     .rounded(px(self.radius))
@@ -418,10 +476,9 @@ impl Render for FrostedPanelWindow {
     }
 }
 
-/// The root view of a native-frost menu pop-up: the raw translucent
-/// `surfaceFrosted` fill (the OS blur shows through), a hairline
-/// `borderDefault` edge, and the [`Menu`] rows. The window resizes itself to
-/// the menu once measured.
+/// The root view of a native-frost menu pop-up: the Regular material tint
+/// over the OS blur, a hairline `borderDefault` edge, and the [`Menu`]
+/// rows. The window resizes itself to the menu once measured.
 pub struct FrostedMenuWindow {
     menu: Menu,
     on_dismiss: Rc<dyn Fn(&mut App)>,
@@ -440,6 +497,7 @@ impl FrostedMenuWindow {
 impl Render for FrostedMenuWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.theme().clone();
+        sync_native_popup_appearance(window, cx);
         let measure = use_layout_probe(&gpui::ElementId::Name("frosted-menu".into()), window, cx);
         fit_window(&measure, window, cx);
         let dismiss = self.on_dismiss.clone();
@@ -456,7 +514,7 @@ impl Render for FrostedMenuWindow {
                 div()
                     .relative()
                     .flex_none()
-                    .bg(theme.colors.surface_frosted)
+                    .bg(frost_overlay(&theme))
                     .border(px(stroke::HAIRLINE))
                     .border_color(theme.colors.border_default)
                     .rounded(px(radius::XX_LARGE))
@@ -478,6 +536,40 @@ mod tests {
             set_frost_mode(FrostMode::Native, cx);
             assert_eq!(frost_mode(cx), FrostMode::Native);
             assert_eq!(native_frost_active(cx), native_frost_supported());
+        });
+    }
+
+    #[test]
+    fn frost_overlay_is_the_regular_material_tint() {
+        use refineui_foundation::material::MaterialRole;
+        for appearance in [crate::Appearance::Light, crate::Appearance::Dark] {
+            let theme = crate::Theme::new(appearance);
+            let fill = frost_overlay(&theme);
+            let expected = crate::theme::to_hsla(MaterialRole::Regular.tokens(appearance).tint);
+            assert_eq!(fill, expected, "{appearance:?}");
+            assert!(
+                fill.a > 0.0 && fill.a < 1.0,
+                "overlay must stay translucent so the OS blur shows through ({appearance:?})"
+            );
+            assert_eq!(theme.floating_fill().a, 1.0, "{appearance:?}");
+            assert_ne!(
+                fill,
+                theme.floating_fill(),
+                "must not use the opaque pre-composited fill in a native pop-up ({appearance:?})"
+            );
+        }
+    }
+
+    #[gpui::test]
+    fn popup_appearance_tracks_an_explicit_theme(cx: &mut gpui::TestAppContext) {
+        cx.update(|cx| {
+            crate::Theme::init(cx);
+            assert!(cx.theme().follow_system);
+            assert_eq!(native_popup_appearance(cx), NativePopupAppearance::System);
+            crate::Theme::set_appearance(crate::Appearance::Dark, cx);
+            assert_eq!(native_popup_appearance(cx), NativePopupAppearance::Dark);
+            crate::Theme::set_appearance(crate::Appearance::Light, cx);
+            assert_eq!(native_popup_appearance(cx), NativePopupAppearance::Light);
         });
     }
 }

@@ -145,7 +145,8 @@ fn link(_w: &mut Window, cx: &mut App) -> AnyElement {
     row()
         .gap(gpui::px(24.))
         .child(
-            Link::new("docs", "Read the docs").href("https://github.com/pelagornis/refineui-gpui"),
+            Link::new("docs", "Read the docs")
+                .href("https://github.com/pelagornis/refineui-desktop"),
         )
         .child(
             Link::new("ext", "GPUI")

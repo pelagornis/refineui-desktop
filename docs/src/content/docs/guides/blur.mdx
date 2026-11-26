@@ -54,9 +54,10 @@ set_frost_mode(FrostMode::Native, cx); // default: FrostMode::Opaque
 
 With `Native` on macOS these surfaces open in their own pop-up window
 (`refineui::vibrancy`): **DropdownMenu**, **ContextMenu**, **Menu submenus**,
-**Select** and **Popover**. Each window has an OS-blurred background, the raw
-translucent `surfaceFrosted` fill, a hairline border, 16px corners and the
-AppKit window shadow. It resizes itself to its content once measured.
+**Select** and **Popover**. Each window has an OS-blurred background, the
+Regular material tint (`backgroundPrimary` at 0.62 light / 0.58 dark), a
+hairline border, 16px corners and the AppKit window shadow. It resizes itself
+to its content once measured.
 
 ### How the blur view is set up
 
@@ -66,9 +67,11 @@ The pop-up window is opened with `WindowBackgroundAppearance::Transparent`
 
 | Property | Value |
 | --- | --- |
-| `material` | `.menu` (menus, context menus, Select) / `.popover` (Popover) |
+| `material` | Colorless `Selection` (`NSVisualEffectMaterialSelection`), with the desktop tint and saturation filters stripped so the view is a neutral frost |
 | `blendingMode` | `.behindWindow` |
 | `state` | `.active` (non-activating panels are never key) |
+| Tint | Regular material tint: `backgroundPrimary` at 0.62 light / 0.58 dark, painted over the frost view (not Apple's `.menu` / `.popover` tint, and not the `surfaceFrosted` token) |
+| Appearance | The window's `NSAppearance` follows the RefineUI theme (`NSAppearanceNameAqua` / `DarkAqua`). When the theme `follow_system` flag is on, the pop-up inherits the OS / parent appearance |
 | Corners | `maskImage` = stretchable rounded rect (`capInsets` = radius) |
 
 ### Why it used to look translucent but not blurred
@@ -112,7 +115,7 @@ an `NSVisualEffectView` with `blendingMode=0 state=1 maskImage=true`, and
 | App / window deactivation | Deactivating the owning window (⌘-Tab, clicking another app or window) closes it (`observe_window_activation`). |
 | Fade-in | The window's `alphaValue` animates 0 → 1 over `duration-normal` through `NSAnimationContext`. Closing is immediate. |
 | Dismissal | Item activation, Escape for Context Menu and Select (focus stays in the app window — the pop-up is non-activating), or any click in the app window outside the trigger. |
-| Select | Opens item-aligned over the trigger, like in-window; ↑ / ↓ / Enter keep working from the trigger. |
+| Select | Opens below the trigger (same width) and flips above when space is tight, shrinking to the available height; the popup never covers the trigger. ↑ / ↓ / Enter keep working from the trigger. |
 | Popover | Drawn **without the beak** (the window is a rounded rectangle). Centre / end alignment needs the panel width: the first opening measures it and re-places the window once (the width is then cached). |
 
 On every other platform `Native` falls back to the opaque in-window panels, so

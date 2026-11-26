@@ -7,6 +7,8 @@ with the same component anatomy, states and motion as the web kit
 keyboard focus, hover states, menus, popovers and dialogs. An optional compact density
 is available; the default matches RefineUI web sizing.
 
+The repository lives at [pelagornis/refineui-desktop](https://github.com/pelagornis/refineui-desktop).
+
 ![Button](docs/src/assets/components/button-light.png)
 
 ## Crates
@@ -19,18 +21,20 @@ is available; the default matches RefineUI web sizing.
 | [`refineui-material`](crates/refineui-material) | Material Engine: real backdrop blur, tint, lighting, grain and elevation. |
 | [`refineui-gallery`](examples/gallery) | Gallery app and screenshot generator (not published). |
 
+`vendor/gpui` is a patched gpui 0.2.2 used when the `material` feature is on (real backdrop blur).
+
 ## Quick start
 
 ```toml
 [dependencies]
 gpui = "0.2.2"
-refineui = { git = "https://github.com/pelagornis/refineui-gpui" }
-refineui-material = { git = "https://github.com/pelagornis/refineui-gpui" } # optional
+refineui = { git = "https://github.com/pelagornis/refineui-desktop" }
+refineui-material = { git = "https://github.com/pelagornis/refineui-desktop" } # optional
 
 # Real backdrop blur needs RefineUI's small GPUI patch (still version 0.2.2).
 # Without it refineui-material does not compile; refineui alone works with stock gpui.
 [patch.crates-io]
-gpui = { git = "https://github.com/pelagornis/refineui-gpui" }
+gpui = { git = "https://github.com/pelagornis/refineui-desktop" }
 ```
 
 ```rust
@@ -49,23 +53,46 @@ refineui::root(cx).child(
 
 **Actions**: Button, Toggle Button, Segmented Control, Link.
 **Forms**: Input, Textarea, Search Field, Input OTP, Field, Checkbox, Radio and RadioGroup, Switch (web Toggle), Slider, Spin Button, Select.
-**Display**: Text, Heading, Label, Badge, Chip/Tag, Avatar and Avatars, Card, Alert, Divider, Kbd, Spinner, Progress, ProgressStepper, Stepper, Skeleton, Tooltip, Toast and Toaster.
+**Display**: Text, Heading, Label, Badge, Chip/Tag, Avatar and Avatars, Card, Alert, Divider, Kbd, Spinner, Progress, ProgressStepper, Stepper, Skeleton, Tooltip, Toast and Toaster, ResultView.
 **Navigation**: Tabs, Breadcrumb, Pagination, Sidebar, Tree, Accordion and Collapsible, Calendar.
-**Overlays**: Menu, DropdownMenu, ContextMenu, Popover, Dialog, Drawer.
+**Overlays**: Menu, DropdownMenu, ContextMenu, Popover, Dialog, Drawer, Command and Command Palette.
 **Data**: Table, Scroll Area.
 **Layout**: `h_stack`, `v_stack`, `spacer`.
+**Shell**: Window, Titlebar, Window Controls, Menu Bar, Toolbar, Status Bar, Activity Bar, Application Shell, Notification Center, Preferences, Shortcut Recorder, Shortcut Hint.
+
+### Desktop behaviour
+
+- **Select** opens below the trigger at the trigger's width, flips above when there is no room, and shrinks to the available height with a `ScrollArea`. The selected item is scrolled into view. The popup never covers the trigger.
+- **Tooltip** is collision-aware and anchored to its trigger (`place_anchored`), flipping when space is tight, with a beak aimed at the trigger.
+- **Activity Bar** supports folders. Its rail uses a hidden scrollbar so the overlay track does not cover icons or badges.
+- **Native blur** (`FrostMode::Native`, macOS) opens Dropdown, Context Menu, Menu submenus, Select and Popover in their own pop-up windows over a colorless `NSVisualEffectView`. The plate is the Regular material tint (`backgroundPrimary` at 0.62 light / 0.58 dark). The window's `NSAppearance` follows the RefineUI theme. Other platforms keep the opaque in-window fill.
 
 ## Development
 
 Requires Rust 1.88+ (see `rust-toolchain.toml`). The main target is macOS on Apple Silicon.
 
 ```sh
+cargo fmt
+cargo build --all-features
+cargo clippy --all-features -- -D warnings
+cargo clippy --no-default-features -- -D warnings
+cargo test --all-features --workspace
+
 cargo run -p refineui-gallery            # browse every component
 ./scripts/screenshots.sh                 # regenerate docs screenshots
+./scripts/visual-regression.sh           # compare gallery shots against baselines
 cd docs && bun install && bun run dev    # documentation site
+cd docs && bun run build                 # production docs build
 ```
 
 See [AGENTS.md](AGENTS.md) for the architecture, conventions and workflows.
+
+### Platform notes
+
+- **macOS** (Apple Silicon) is the primary target. Native frost (`FrostMode::Native`) is macOS-only.
+- **Linux** and **Windows** build and run the gallery; `Native` falls back to opaque in-window panels. The Material Engine's real backdrop blur is implemented on Metal (macOS) and Blade (Vulkan, Linux). DirectX (Windows) reports `backdrop_blur_supported() == false` and paints the documented fallback.
+- The `material` feature requires the vendored gpui patch in `vendor/gpui`. Without `material`, `refineui` works with stock gpui 0.2.2.
+- Visual regression on Linux is run through `scripts/visual-regression.sh` (Xvfb at 2×). A plain `cargo test` under an existing `DISPLAY` may see different window sizes.
 
 ## Documentation
 

@@ -70,6 +70,10 @@ pub enum ScrollbarStyle {
     /// Always-visible track and thumb while the content overflows
     /// (Windows).
     Persistent,
+    /// No indicator. The viewport still scrolls (wheel, trackpad,
+    /// keyboard). Use in tight rails such as the Activity Bar, where a
+    /// 10px overlay would cover tiles and badges.
+    Hidden,
 }
 
 /// OS-specific behaviour and metrics.

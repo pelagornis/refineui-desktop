@@ -9,7 +9,7 @@ sidebar:
 
 The desktop component library: theme, components, interaction, shell, workspace, platform adapters, motion and (feature `material`) the material glue.
 
-1413 public items in 105 modules. Items in private modules are reached through the re-exports in `lib.rs` (`refineui::prelude::*` for apps). Full signatures: `cargo doc -p refineui --all-features --open`.
+1420 public items in 105 modules. Items in private modules are reached through the re-exports in `lib.rs` (`refineui::prelude::*` for apps). Full signatures: `cargo doc -p refineui --all-features --open`.
 
 
 ## `crate root`
@@ -422,7 +422,6 @@ Source: `crates/refineui/src/components/command_palette.rs`
 | `CommandPage` | struct | A nested page of commands (desktop; the web Command has no pages). |
 | `CommandPage::new` | method | Page `id` titled `title`. |
 | `CommandPage::placeholder` | method | Search placeholder on this page. |
-| `PalettePage` | type | Deprecated name for `CommandPage`. |
 | `CommandPalette` | struct | The palette (an entity). See the module docs. |
 | `CommandPalette::bind_keys` | method | Bind ⇧⌘P / Ctrl+Shift+P to `ToggleCommandPalette`. |
 | `CommandPalette::new` | method | New (closed) palette over `commands`. |
@@ -779,7 +778,6 @@ Source: `crates/refineui/src/components/positioning.rs`
 | `vertical_room` | fn | Room above and below the trigger after padding and side offset, |
 | `resolve_side` | fn | Resolve which vertical side to use: fit on the preferred side, else the |
 | `place_popper` | fn | Place a panel below (or above) the trigger, flipping and shrinking so it |
-| `place_item_aligned` | fn | Place a panel so `selected_mid` (the selected row's center, measured from |
 | `AnchorSide` | enum | Placement side for a beaked floating panel (Popover / Tooltip). |
 | `AnchorSide::opposite` | method | The opposite side. |
 | `AnchorSide::vertical` | method | `true` when the panel is above or below the trigger. |
@@ -913,7 +911,12 @@ Source: `crates/refineui/src/components/select.rs`
 | Item | Kind | Summary |
 | --- | --- | --- |
 | `SelectAppearance` | enum | Trigger appearance. |
-| `SelectPosition` | enum | How the popup is placed relative to the trigger (web `position`). |
+| `SelectOption` | struct | One selectable row (web `SelectItem`). |
+| `SelectOption::new` | method | An enabled option whose value and label are `label`. |
+| `SelectOption::value` | method | An option with a distinct `value` and `label`. |
+| `SelectOption::disabled` | method | Disabled option. |
+| `SelectOption::text_value` | method | Typeahead text (defaults to the label). |
+| `SelectEntry` | enum | A row in the Select popup: an item, a group label, or a separator |
 | `SelectLayout` | type | Placement of an open Select popup. Alias of `FloatingLayout`; see that |
 | `Select` | struct | Single-choice dropdown. |
 | `Select::new` | method | New select. |
@@ -923,10 +926,14 @@ Source: `crates/refineui/src/components/select.rs`
 | `Select::disabled` | method | Disabled. |
 | `Select::width` | method | Fixed width (default: fill parent). |
 | `Select::default_open` | method | Start with the list open (first frame only; used by the gallery |
-| `Select::position` | method | Popup placement (default `SelectPosition::ItemAligned`). |
 | `Select::collision_padding` | method | Viewport-edge padding used when flipping and clamping the popup |
-| `Select::side_offset` | method | Gap between the trigger and a `SelectPosition::Popper` popup |
-| `Select::on_change` | method | Called with the picked index. |
+| `Select::side_offset` | method | Gap between the trigger and the popup (web `sideOffset`, default 4). |
+| `Select::on_change` | method | Called with the picked item index (skipping labels and separators). |
+| `Select::entries` | method | Replace the list with structured entries (items, group labels, |
+| `Select::group` | method | Append a group label and its items (web `SelectGroup` + `SelectLabel`). |
+| `Select::separator` | method | Append a divider (web `SelectSeparator`). |
+| `Select::item` | method | Append a single item (web `SelectItem`). |
+| `Select::full_width` | method | Stretch to the parent's width (web `fullWidth`). Already the default |
 
 ## `components::selection_box`
 

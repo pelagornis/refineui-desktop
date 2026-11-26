@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-use gpui::prelude::*;
 use gpui::{AnyElement, App, IntoElement, ParentElement, Styled, Window, div, px};
 use refineui::prelude::*;
 
@@ -108,8 +107,8 @@ pub(super) fn stories() -> Vec<Story> {
             id: "tooltip",
             name: "Tooltip",
             group: StoryGroup::Display,
-            summary: "Hover hint with optional shortcut. Beak is one outline with the body.",
-            shot: (720., 180.),
+            summary: "Hover hint with optional shortcut, anchored to the trigger. Beak is one outline with the body.",
+            shot: (960., 340.),
             render: tooltip,
         },
         Story {
@@ -608,49 +607,64 @@ fn skeleton(_w: &mut Window, _cx: &mut App) -> AnyElement {
         .into_any_element()
 }
 
-/// Web `TooltipDemo`: a secondary "Label" trigger; the bubble opens below,
-/// start-aligned, with the 16×8 beak (shown statically for the screenshot).
-fn tooltip(_w: &mut Window, cx: &mut App) -> AnyElement {
-    row()
-        .gap(px(32.))
-        .items_start()
+/// Web `TooltipDemo`: a secondary "Label" trigger with the beaked bubble
+/// forced open on every side so screenshots (and the Above z-order) can
+/// be checked without a pointer. "Hover me" / "Save" use a live hover tip
+/// anchored to the button, not the cursor.
+fn tooltip(_w: &mut Window, _cx: &mut App) -> AnyElement {
+    let label = |id: &'static str| Button::new(id, "Label").variant(ButtonVariant::Secondary);
+    let side_slot = |child: Tooltip| {
+        div()
+            .w(px(168.))
+            .h(px(120.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .child(child)
+    };
+    v_stack(24.)
+        .p(px(16.))
         .child(
-            v_stack(4.)
-                .items_start()
-                .child(Button::new("tt-static", "Label").variant(ButtonVariant::Secondary))
-                .child(tooltip_with_beak("Below", BeakSide::Top, cx)),
-        )
-        .child(
-            v_stack(4.)
-                .items_start()
-                .child(tooltip_with_beak("Above", BeakSide::Bottom, cx))
-                .child(Button::new("tt-above", "Label").variant(ButtonVariant::Secondary)),
+            row()
+                .gap(px(16.))
+                .items_center()
+                .child(side_slot(
+                    Tooltip::new("tt-below", "Below")
+                        .placement(AnchorSide::Bottom)
+                        .open(true)
+                        .child(label("tt-static")),
+                ))
+                .child(side_slot(
+                    Tooltip::new("tt-above", "Above")
+                        .placement(AnchorSide::Top)
+                        .open(true)
+                        .child(label("tt-above")),
+                ))
+                .child(side_slot(
+                    Tooltip::new("tt-right", "Right")
+                        .placement(AnchorSide::Right)
+                        .open(true)
+                        .child(label("tt-right")),
+                ))
+                .child(side_slot(
+                    Tooltip::new("tt-left", "Left")
+                        .placement(AnchorSide::Left)
+                        .open(true)
+                        .child(label("tt-left")),
+                )),
         )
         .child(
             row()
+                .gap(px(24.))
                 .items_center()
-                .gap(px(8.))
-                .child(Button::new("tt-right", "Label").variant(ButtonVariant::Secondary))
-                .child(tooltip_with_beak("Right", BeakSide::Left, cx)),
-        )
-        .child(
-            row()
-                .items_center()
-                .gap(px(8.))
-                .child(tooltip_with_beak("Left", BeakSide::Right, cx))
-                .child(Button::new("tt-left", "Label").variant(ButtonVariant::Secondary)),
-        )
-        .child(
-            div()
-                .id("tt-target")
-                .child(Button::new("tt-live", "Hover me").variant(ButtonVariant::Secondary))
-                .tooltip(Tooltip::text("Tooltip")),
-        )
-        .child(
-            div()
-                .id("tt-target-2")
-                .child(Button::new("save", "Save").variant(ButtonVariant::Outline))
-                .tooltip(Tooltip::with_shortcut("Save", "⌘S")),
+                .child(Tooltip::new("tt-live", "Tooltip").child(
+                    Button::new("tt-live-btn", "Hover me").variant(ButtonVariant::Secondary),
+                ))
+                .child(
+                    Tooltip::new("tt-save", "Save")
+                        .shortcut("⌘S")
+                        .child(Button::new("save", "Save").variant(ButtonVariant::Outline)),
+                ),
         )
         .into_any_element()
 }

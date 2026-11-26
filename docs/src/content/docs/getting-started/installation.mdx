@@ -13,7 +13,7 @@ RefineUI GPUI targets **macOS on Apple Silicon** and GPUI `0.2`. It needs Rust 1
 # Cargo.toml
 [dependencies]
 gpui = "0.2.2"
-refineui = { git = "https://github.com/pelagornis/refineui-gpui" }
+refineui = { git = "https://github.com/pelagornis/refineui-desktop" }
 ```
 
 The `bundled-fonts` feature (on by default) embeds Inter. Disable it with
@@ -29,10 +29,10 @@ still has exactly one gpui:
 ```toml
 [dependencies]
 gpui = "0.2.2"
-refineui = { git = "https://github.com/pelagornis/refineui-gpui", features = ["material"] }
+refineui = { git = "https://github.com/pelagornis/refineui-desktop", features = ["material"] }
 
 [patch.crates-io]
-gpui = { git = "https://github.com/pelagornis/refineui-gpui" }
+gpui = { git = "https://github.com/pelagornis/refineui-desktop" }
 ```
 
 Without the feature everything works on stock gpui and frosted surfaces use
@@ -74,7 +74,7 @@ Tab / Shift-Tab focus traversal.
 ## Run the gallery
 
 ```sh
-git clone https://github.com/pelagornis/refineui-gpui
-cd refineui-gpui
+git clone https://github.com/pelagornis/refineui-desktop
+cd refineui-desktop
 cargo run -p refineui-gallery
 ```

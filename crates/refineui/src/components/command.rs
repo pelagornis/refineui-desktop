@@ -1057,6 +1057,5 @@ mod tests {
 #[path = "command_palette.rs"]
 mod palette;
 pub use palette::{
-    COMMAND_PALETTE_WIDTH, CommandPage, CommandPalette, PalettePage, RECENT_LIMIT,
-    ToggleCommandPalette,
+    COMMAND_PALETTE_WIDTH, CommandPage, CommandPalette, RECENT_LIMIT, ToggleCommandPalette,
 };

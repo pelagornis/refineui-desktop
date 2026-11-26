@@ -71,9 +71,6 @@ impl CommandPage {
     }
 }
 
-/// Deprecated name for [`CommandPage`].
-pub type PalettePage = CommandPage;
-
 fn item(c: &CommandItem, cx: &App) -> CommandItem {
     let mut item = c.clone();
     if !item.keywords.iter().any(|k| k == &item.value) {

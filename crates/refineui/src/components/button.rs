@@ -14,7 +14,8 @@ use crate::motion::{
     scaled_plate, use_interaction,
 };
 use crate::{
-    ActiveTheme, ControlSize, Icon, IconName, IconSize, Spinner, SpinnerSize, StyledExt, Tooltip,
+    ActiveTheme, AnchorSide, ControlSize, Icon, IconName, IconSize, Spinner, SpinnerSize,
+    StyledExt, Tooltip,
 };
 
 /// Click callback shared by interactive components.
@@ -160,6 +161,7 @@ pub struct Button {
     full_width: bool,
     tooltip: Option<SharedString>,
     tooltip_action: Option<SharedString>,
+    tooltip_placement: Option<AnchorSide>,
     tab_index: isize,
     icon_size: Option<IconSize>,
     on_click: Option<ClickHandler>,
@@ -182,6 +184,7 @@ impl Button {
             full_width: false,
             tooltip: None,
             tooltip_action: None,
+            tooltip_placement: None,
             tab_index: 0,
             icon_size: None,
             on_click: None,
@@ -278,9 +281,16 @@ impl Button {
         self
     }
 
-    /// Hover tooltip.
+    /// Hover tooltip, anchored to this button (not the pointer).
     pub fn tooltip(mut self, tooltip: impl Into<SharedString>) -> Self {
         self.tooltip = Some(tooltip.into());
+        self
+    }
+
+    /// Preferred side for [`Self::tooltip`]. Defaults to
+    /// [`AnchorSide::Bottom`]; flips when that side does not fit.
+    pub fn tooltip_placement(mut self, side: AnchorSide) -> Self {
+        self.tooltip_placement = Some(side);
         self
     }
 
@@ -419,6 +429,8 @@ impl RenderOnce for Button {
         let on_click = self.on_click.clone();
         let tooltip = self.tooltip.clone();
         let tooltip_action = self.tooltip_action.clone();
+        let tooltip_placement = self.tooltip_placement;
+        let tip_id = child_id(&self.id, "tip-host");
         // Icon layout on filled variants drops the stroke (`border-0`).
         let stroke = !(icon_only && variant != ButtonVariant::Outline);
 
@@ -458,7 +470,7 @@ impl RenderOnce for Button {
                 .when(stroke, |p| p.border_1().border_color(border))
         };
 
-        div()
+        let button = div()
             .id(self.id)
             .relative()
             .flex()
@@ -487,10 +499,6 @@ impl RenderOnce for Button {
             .when(inactive, |this| {
                 this.cursor(CursorStyle::OperationNotAllowed)
             })
-            .when_some(tooltip, |this, text| match tooltip_action {
-                Some(a) => this.tooltip(Tooltip::for_action(text, a)),
-                None => this.tooltip(Tooltip::text(text)),
-            })
             .child(plate)
             .map(|this| {
                 if scaled {
@@ -517,6 +525,19 @@ impl RenderOnce for Button {
                 } else {
                     this.children(content(1.0))
                 }
-            })
+            });
+
+        if let Some(text) = tooltip {
+            let mut tip = Tooltip::new(tip_id, text);
+            if let Some(action) = tooltip_action {
+                tip = tip.action(action);
+            }
+            if let Some(side) = tooltip_placement {
+                tip = tip.placement(side);
+            }
+            tip.child(button).into_any_element()
+        } else {
+            button.into_any_element()
+        }
     }
 }

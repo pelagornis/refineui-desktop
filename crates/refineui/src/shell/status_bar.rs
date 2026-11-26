@@ -26,7 +26,7 @@ use gpui::{
 };
 use refineui_foundation::{radius, spacing, stroke, typography::role};
 
-use crate::motion::{TrackInteraction, use_interaction};
+use crate::motion::{TrackInteraction, child_id, use_interaction};
 use crate::{ActiveTheme, Icon, IconName, IconSize, StyledExt, Tooltip};
 
 /// Semantic tint of a status item.
@@ -205,6 +205,7 @@ fn render_item(
         tint.unwrap_or(fg)
     };
     let id = ElementId::NamedChild(Box::new(bar.clone()), item.id.clone());
+    let tip_id = child_id(&id, "tip");
     let content = div()
         .flex()
         .items_center()
@@ -273,10 +274,13 @@ fn render_item(
         }
     };
     match item.tooltip {
-        Some((text, Some(action))) => el
-            .tooltip(Tooltip::for_action(text, action))
-            .into_any_element(),
-        Some((text, None)) => el.tooltip(Tooltip::text(text)).into_any_element(),
+        Some((text, action)) => {
+            let mut tip = Tooltip::new(tip_id, text);
+            if let Some(action) = action {
+                tip = tip.action(action);
+            }
+            tip.child(el).into_any_element()
+        }
         None => el.into_any_element(),
     }
 }

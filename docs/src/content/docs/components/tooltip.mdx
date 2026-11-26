@@ -1,24 +1,29 @@
 ---
 title: Tooltip
-description: "Hover hint with an optional shortcut."
+description: "Hover hint with an optional shortcut, anchored to the trigger."
 sidebar:
   order: 36
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 
-Hover hint with an optional shortcut.
+Hover hint with an optional shortcut, anchored to the trigger (not the pointer).
 
 <Screenshot id="tooltip" alt="Tooltip variants and states" />
 
 ## Usage
 
-- Attach to any stateful element with `.tooltip(Tooltip::text("…"))`; `Button` and `Toggle` have a `.tooltip(text)` shorthand.
+- Wrap a trigger with `Tooltip::new(id, text).child(...)`. `Button` and `Toggle` still have a `.tooltip(text)` shorthand; the bubble is centered on the requested side of the control and stays put while the pointer moves inside it.
+- Prefer a side with `.placement(AnchorSide::Top)` (Above) / `Bottom` / `Left` / `Right`. When that side does not fit in the window, the tooltip flips. `.tooltip_placement(...)` sets the same preference on a `Button`.
+- The bubble is painted on the Tooltip layer, so an Above placement is never hidden behind its button.
 
 ```rust
 use refineui::prelude::*;
 
-div().id("save").child("Save").tooltip(Tooltip::with_shortcut("Save", "⌘S"));
+Tooltip::new("save-tip", "Save")
+    .shortcut("⌘S")
+    .placement(AnchorSide::Top)
+    .child(Button::new("save", "Save"));
 ```
 
 Open the live, interactive version in the gallery:
@@ -29,20 +34,25 @@ cargo run -p refineui-gallery -- --story tooltip
 
 ## Motion
 
-Fades in and slides 6px away from the pointer over `duration-fast` (emphasized); the beak is part of the bubble outline.
+Fades in and slides 6px away from the trigger over `duration-fast` (emphasized); the beak is part of the bubble outline and stays aimed at the trigger center.
 
 ## API
 
-Source: [`crates/refineui/src/components/tooltip.rs`](https://github.com/pelagornis/refineui-gpui/blob/main/crates/refineui/src/components/tooltip.rs)
+Source: [`crates/refineui/src/components/tooltip.rs`](https://github.com/pelagornis/refineui-desktop/blob/main/crates/refineui/src/components/tooltip.rs)
 
 ### Tooltip
 
-Tooltip content view.
+Hover tooltip anchored to a trigger child.
 
 | Method | Description |
 | --- | --- |
-| `fn text(text: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Builder usable directly with `.tooltip(...)` on any stateful element. |
-| `fn with_shortcut(text: impl Into<SharedString>, shortcut: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Tooltip with a keyboard shortcut hint, e.g. `Tooltip::with_shortcut("Save", "⌘S")`. |
-| `fn for_action(text: impl Into<SharedString>, action: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static` | Tooltip for a control bound to a GPUI action: the shortcut comes from the installed `crate::interaction::keymap::Keymap` in the platform's notation (`⇧⌘P` / `Ctrl+Shift+P`); no hint when unbound. |
+| `fn new(id: impl Into<ElementId>, text: impl Into<SharedString>) -> Self` | Attach a hover tooltip to a following `child`. Default placement is below, centered. |
+| `fn shortcut(self, shortcut: impl Into<SharedString>) -> Self` | Keyboard shortcut hint, e.g. `.shortcut("⌘S")`. |
+| `fn action(self, action: impl Into<SharedString>) -> Self` | Resolve the shortcut from the installed keymap (`⇧⌘P` / `Ctrl+Shift+P`); no hint when unbound. |
+| `fn placement(self, side: AnchorSide) -> Self` | Preferred side; flips when that side does not fit. |
+| `fn align(self, align: AnchorAlign) -> Self` | Alignment along the facing edge (default `Center`). |
+| `fn side_offset(self, offset: f32) -> Self` | Gap between the trigger and the panel. |
+| `fn delay(self, delay: Duration) -> Self` | Hover delay before the tooltip appears (web default 120ms). |
+| `fn open(self, open: bool) -> Self` | Force the tooltip open or closed, skipping hover. Used by docs / screenshots. |
+| `fn child(self, trigger: impl IntoElement) -> Self` | The control the tooltip is anchored to. |
 | `fn bubble(text: impl Into<SharedString>, cx: &App) -> gpui::Div` | Render a static tooltip bubble (used by docs / screenshots). |
-
