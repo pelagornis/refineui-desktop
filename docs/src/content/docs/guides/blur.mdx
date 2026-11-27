@@ -115,7 +115,7 @@ an `NSVisualEffectView` with `blendingMode=0 state=1 maskImage=true`, and
 | App / window deactivation | Deactivating the owning window (⌘-Tab, clicking another app or window) closes it (`observe_window_activation`). |
 | Fade-in | The window's `alphaValue` animates 0 → 1 over `duration-normal` through `NSAnimationContext`. Closing is immediate. |
 | Dismissal | Item activation, Escape for Context Menu and Select (focus stays in the app window — the pop-up is non-activating), or any click in the app window outside the trigger. |
-| Select | Opens below the trigger (same width) and flips above when space is tight, shrinking to the available height; the popup never covers the trigger. ↑ / ↓ / Enter keep working from the trigger. |
+| Select | Same item-aligned geometry as the in-window popup: the pop-up window covers the trigger with the selected row on the value, shifts and shrinks to stay in the window, and scrolls the list to keep the row aligned. Scrolling a short pop-up grows the window toward the screen edge it is anchored to, keeping that edge in place. ↑ / ↓ / Enter keep working from the trigger. |
 | Popover | Drawn **without the beak** (the window is a rounded rectangle). Centre / end alignment needs the panel width: the first opening measures it and re-places the window once (the width is then cached). |
 
 On every other platform `Native` falls back to the opaque in-window panels, so

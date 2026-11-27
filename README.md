@@ -62,7 +62,7 @@ refineui::root(cx).child(
 
 ### Desktop behaviour
 
-- **Select** opens below the trigger at the trigger's width, flips above when there is no room, and shrinks to the available height with a `ScrollArea`. The selected item is scrolled into view. The popup never covers the trigger.
+- **Select** matches the web (Radix item-aligned): the popup covers the trigger with the selected row exactly over the value. Near a window edge it shifts to stay inside the 10px collision padding, and when the list is too tall it shrinks and scrolls its `ScrollArea` so the selected row still lands on the trigger. Scrolling a popup that opened short grows it toward the window edge first, as on the web.
 - **Tooltip** is collision-aware and anchored to its trigger (`place_anchored`), flipping when space is tight, with a beak aimed at the trigger.
 - **Activity Bar** supports folders. Its rail uses a hidden scrollbar so the overlay track does not cover icons or badges.
 - **Native blur** (`FrostMode::Native`, macOS) opens Dropdown, Context Menu, Menu submenus, Select and Popover in their own pop-up windows over a colorless `NSVisualEffectView`. The plate is the Regular material tint (`backgroundPrimary` at 0.62 light / 0.58 dark). The window's `NSAppearance` follows the RefineUI theme. Other platforms keep the opaque in-window fill.

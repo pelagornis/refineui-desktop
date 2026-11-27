@@ -353,6 +353,7 @@ impl RenderOnce for Popover {
                     }),
                     close_on_deactivate: true,
                     report_size: Some(size),
+                    grow_up: None,
                     popover: true,
                 },
                 window,

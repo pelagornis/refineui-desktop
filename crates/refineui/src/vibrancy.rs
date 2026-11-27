@@ -311,6 +311,11 @@ pub(crate) struct NativePopupSpec {
     pub report_size: Option<Entity<Option<Size<Pixels>>>>,
     /// `NSVisualEffectMaterial.popover` instead of `.menu` (macOS).
     pub popover: bool,
+    /// Which edge stays put when the pop-up resizes to its content: `None`
+    /// keeps the platform default, `Some(f)` keeps the bottom edge while
+    /// `f` returns `true` (the pop-up grows up) and the top edge otherwise
+    /// (it grows down). Used by Select's scroll expansion.
+    pub grow_up: Option<Rc<dyn Fn(&App) -> bool>>,
 }
 
 /// Open / close the native-frost pop-up of an owner element. Call every
@@ -389,6 +394,7 @@ pub(crate) fn drive_native_popup(
         content,
         report_size,
         popover,
+        grow_up,
         ..
     } = spec;
     cx.defer(move |cx| {
@@ -404,6 +410,7 @@ pub(crate) fn drive_native_popup(
                     content,
                     radius,
                     report_size,
+                    grow_up,
                 })
             },
         );
@@ -430,14 +437,39 @@ pub struct FrostedPanelWindow {
     content: PopupContent,
     radius: f32,
     report_size: Option<Entity<Option<Size<Pixels>>>>,
+    grow_up: Option<Rc<dyn Fn(&App) -> bool>>,
 }
 
 fn fit_window(measure: &Entity<crate::motion::LayoutProbe>, window: &mut Window, cx: &App) {
+    fit_window_anchored(measure, None, window, cx);
+}
+
+/// Resize the pop-up to its measured content. `keep_bottom`: `None` =
+/// platform default (`Window::resize`), `Some(true)` keeps the bottom edge
+/// (grows up), `Some(false)` keeps the top edge (grows down).
+fn fit_window_anchored(
+    measure: &Entity<crate::motion::LayoutProbe>,
+    keep_bottom: Option<bool>,
+    window: &mut Window,
+    cx: &App,
+) {
     if let Some(b) = measure.read(cx).container {
         let want: Size<Pixels> = b.size;
         if (window.viewport_size().height - want.height).abs() > px(0.5)
             || (window.viewport_size().width - want.width).abs() > px(0.5)
         {
+            #[cfg(any(target_os = "macos", feature = "typecheck-macos-vibrancy"))]
+            if let Some(keep_bottom) = keep_bottom {
+                crate::platform::macos::resize_popup(
+                    window,
+                    f32::from(want.width),
+                    f32::from(want.height),
+                    keep_bottom,
+                    cx,
+                );
+                return;
+            }
+            let _ = keep_bottom;
             window.resize(want);
         }
     }
@@ -448,7 +480,8 @@ impl Render for FrostedPanelWindow {
         let theme = cx.theme().clone();
         sync_native_popup_appearance(window, cx);
         let measure = use_layout_probe(&ElementId::Name("frosted-panel".into()), window, cx);
-        fit_window(&measure, window, cx);
+        let keep_bottom = self.grow_up.as_ref().map(|f| f(cx));
+        fit_window_anchored(&measure, keep_bottom, window, cx);
         if let (Some(report), Some(b)) = (&self.report_size, measure.read(cx).container)
             && *report.read(cx) != Some(b.size)
         {

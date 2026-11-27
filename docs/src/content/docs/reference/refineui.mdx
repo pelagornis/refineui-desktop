@@ -9,7 +9,7 @@ sidebar:
 
 The desktop component library: theme, components, interaction, shell, workspace, platform adapters, motion and (feature `material`) the material glue.
 
-1420 public items in 105 modules. Items in private modules are reached through the re-exports in `lib.rs` (`refineui::prelude::*` for apps). Full signatures: `cargo doc -p refineui --all-features --open`.
+1424 public items in 105 modules. Items in private modules are reached through the re-exports in `lib.rs` (`refineui::prelude::*` for apps). Full signatures: `cargo doc -p refineui --all-features --open`.
 
 
 ## `crate root`
@@ -765,7 +765,7 @@ Source: `crates/refineui/src/components/positioning.rs`
 | `PlacementViewport` | struct | Viewport size the panel must stay inside. |
 | `PlacementViewport::new` | method | New viewport. |
 | `PlacementViewport::from_size` | method | From a GPUI size (usually `window.viewport_size()`). |
-| `FloatingSide` | enum | Preferred (and resolved) vertical side of a popper panel. |
+| `FloatingSide` | enum | Preferred (and resolved) vertical side of a floating panel. For an |
 | `FloatingSide::opposite` | method | The opposite side. |
 | `CollisionOptions` | struct | Padding from the viewport edge and gap from the trigger. |
 | `CollisionOptions::new` | method | Defaults (`collision_padding` 10, `side_offset` 4). |
@@ -778,6 +778,10 @@ Source: `crates/refineui/src/components/positioning.rs`
 | `vertical_room` | fn | Room above and below the trigger after padding and side offset, |
 | `resolve_side` | fn | Resolve which vertical side to use: fit on the preferred side, else the |
 | `place_popper` | fn | Place a panel below (or above) the trigger, flipping and shrinking so it |
+| `ItemAlignedMetrics` | struct | Measurements of an item-aligned list, all in the panel's local space |
+| `place_item_aligned` | fn | Place a panel over the trigger so the selected row sits exactly on the |
+| `expand_on_scroll` | fn | Radix `SelectViewport` scroll expansion for an item-aligned panel. |
+| `grow_item_aligned` | fn | `base` grown by `grow` px the way `expand_on_scroll` grows it (down |
 | `AnchorSide` | enum | Placement side for a beaked floating panel (Popover / Tooltip). |
 | `AnchorSide::opposite` | method | The opposite side. |
 | `AnchorSide::vertical` | method | `true` when the panel is above or below the trigger. |
@@ -884,7 +888,8 @@ Source: `crates/refineui/src/components/scroll_area.rs`
 | `ScrollArea::scrollbar` | method | Scrollbar behaviour; defaults to the platform's |
 | `ScrollArea::edge_blur` | method | Edge softening of `ScrollEdgeItem` rows on / off (default on). |
 | `ScrollArea::max_height` | method | Cap the height. |
-| `ScrollArea::handle` | method | The `ScrollHandle` a `ScrollArea` with this `id` tracks. Same |
+| `ScrollArea::track_scroll` | method | Track an external `ScrollHandle` instead of the area's own keyed |
+| `ScrollArea::handle` | method | A persistent `ScrollHandle` keyed by `id` in the caller's element |
 | `ScrollEdgeItem` | struct | A row that softens at a `ScrollArea` edge (web `data-scroll-edge-item`). |
 | `ScrollEdgeItem::new` | method | Wrap `child`; `id` must be unique within the scroll area. |
 | `scroll_edge_item` | fn | Shorthand for `ScrollEdgeItem::new`. |
@@ -926,8 +931,7 @@ Source: `crates/refineui/src/components/select.rs`
 | `Select::disabled` | method | Disabled. |
 | `Select::width` | method | Fixed width (default: fill parent). |
 | `Select::default_open` | method | Start with the list open (first frame only; used by the gallery |
-| `Select::collision_padding` | method | Viewport-edge padding used when flipping and clamping the popup |
-| `Select::side_offset` | method | Gap between the trigger and the popup (web `sideOffset`, default 4). |
+| `Select::collision_padding` | method | Window-edge padding the popup is kept inside when it shifts or |
 | `Select::on_change` | method | Called with the picked item index (skipping labels and separators). |
 | `Select::entries` | method | Replace the list with structured entries (items, group labels, |
 | `Select::group` | method | Append a group label and its items (web `SelectGroup` + `SelectLabel`). |

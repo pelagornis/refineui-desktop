@@ -180,6 +180,59 @@ pub(crate) fn shape_popup(
     }
 }
 
+/// Resize a pop-up's content to `width` × `height`, keeping its bottom edge
+/// (`keep_bottom`, it grows up) or its top edge (it grows down) in place.
+/// `-[NSWindow setContentSize:]` (GPUI's `Window::resize`) always keeps the
+/// bottom-left corner, so a top-anchored pop-up would grow the wrong way.
+/// Runs on the next main-loop turn, like GPUI's own resize, so AppKit's
+/// resize callbacks never re-enter a GPUI update.
+pub(crate) fn resize_popup(
+    window: &Window,
+    width: f32,
+    height: f32,
+    keep_bottom: bool,
+    cx: &gpui::App,
+) {
+    let ns_window = ns_window_of(window);
+    if ns_window == 0 {
+        return;
+    }
+    cx.foreground_executor()
+        .spawn(async move {
+            let ns_window = ns_window as *mut Object;
+            // SAFETY: `ns_window` is the live NSWindow of the pop-up being
+            // rendered (closing it goes through GPUI on this same thread,
+            // after this task); `frame`, `contentRectForFrameRect:`,
+            // `frameRectForContentRect:`, `setFrame:display:` and
+            // `invalidateShadow` are NSWindow API called on the main thread.
+            unsafe {
+                let frame: CGRect = msg_send![ns_window, frame];
+                let content: CGRect = msg_send![ns_window, contentRectForFrameRect: frame];
+                let (w, h) = (width as f64, height as f64);
+                // AppKit screen space grows upward: the top edge is y + h.
+                let y = if keep_bottom {
+                    content.origin.y
+                } else {
+                    content.origin.y + content.size.height - h
+                };
+                let next = CGRect {
+                    origin: CGPoint {
+                        x: content.origin.x,
+                        y,
+                    },
+                    size: CGSize {
+                        width: w,
+                        height: h,
+                    },
+                };
+                let next: CGRect = msg_send![ns_window, frameRectForContentRect: next];
+                let _: () = msg_send![ns_window, setFrame: next display: YES];
+                let _: () = msg_send![ns_window, invalidateShadow];
+            }
+        })
+        .detach();
+}
+
 /// Keep a live pop-up's `NSAppearance` in sync with the RefineUI theme
 /// (e.g. after the gallery toggles light / dark).
 pub(crate) fn sync_popup_appearance(window: &Window, appearance: NativePopupAppearance) {

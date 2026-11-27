@@ -37,6 +37,7 @@ pub struct ScrollArea {
     max_height: Option<Pixels>,
     edge_blur: bool,
     style: Option<crate::platform::ScrollbarStyle>,
+    handle: Option<ScrollHandle>,
 }
 
 impl ScrollArea {
@@ -48,7 +49,17 @@ impl ScrollArea {
             max_height: None,
             edge_blur: true,
             style: None,
+            handle: None,
         }
+    }
+
+    /// Track an external [`ScrollHandle`] instead of the area's own keyed
+    /// one, so the owner can read the viewport and `set_offset` (e.g. a
+    /// Select aligning or revealing a row). Keep the same handle across
+    /// frames, for example in `window.use_keyed_state`.
+    pub fn track_scroll(mut self, handle: ScrollHandle) -> Self {
+        self.handle = Some(handle);
+        self
     }
 
     /// Scrollbar behaviour; defaults to the platform's
@@ -71,8 +82,10 @@ impl ScrollArea {
         self
     }
 
-    /// The [`ScrollHandle`] a [`ScrollArea`] with this `id` tracks. Same
-    /// key the area itself uses, so callers can `set_offset` / scroll an
+    /// A persistent [`ScrollHandle`] keyed by `id` in the caller's element
+    /// scope. Keyed state is scoped to the element-id stack, so this is not
+    /// the handle of a `ScrollArea` rendered deeper in the tree; pass it to
+    /// [`Self::track_scroll`] to share it, then `set_offset` / scroll an
     /// item into view (e.g. a Select moving the highlighted row).
     pub fn handle(id: impl Into<ElementId>, window: &mut Window, cx: &mut App) -> ScrollHandle {
         window
@@ -338,10 +351,13 @@ impl RenderOnce for ScrollEdgeItem {
 
 impl RenderOnce for ScrollArea {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let handle = window
-            .use_keyed_state(child_id(&self.id, "scroll"), cx, |_, _| ScrollHandle::new())
-            .read(cx)
-            .clone();
+        let handle = match self.handle.clone() {
+            Some(h) => h,
+            None => window
+                .use_keyed_state(child_id(&self.id, "scroll"), cx, |_, _| ScrollHandle::new())
+                .read(cx)
+                .clone(),
+        };
         let drag = window.use_keyed_state(child_id(&self.id, "drag"), cx, |_, _| Drag::default());
         let dragging = drag.read(cx).start_y.is_some();
         let c = cx.theme().colors;

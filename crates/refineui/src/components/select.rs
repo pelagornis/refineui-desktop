@@ -4,11 +4,11 @@
 //! Keyboard: Space/Enter/↓/↑ opens, ↑/↓ move (skipping disabled items),
 //! Home/End jump, typeahead by first letter, Enter/Space picks, Escape closes.
 //!
-//! Placement is always anchored to the trigger: open below when there is
-//! room (after `collision_padding` and `side_offset`), flip above when
-//! there is not, and shrink the panel to the remaining space with an
-//! internal [`ScrollArea`] (the selected item is scrolled into view). The
-//! popup never covers the trigger.
+//! Placement mirrors the web default (Radix item-aligned): the popup
+//! covers the trigger and the selected row sits exactly over the trigger
+//! value. Near a window edge it shifts to stay inside `collision_padding`,
+//! and when the list is taller than the room it shrinks and scrolls its
+//! internal [`ScrollArea`] so the selected row still lands on the trigger.
 
 use std::rc::Rc;
 
@@ -27,8 +27,8 @@ use crate::motion::{
 };
 use crate::{
     ActiveTheme, CollisionOptions, ControlSize, FloatingLayout, FloatingSide, Icon, IconName,
-    IconSize, PlacementRect, PlacementViewport, ScrollArea, StyledExt, place_popper,
-    scroll_edge_item,
+    IconSize, ItemAlignedMetrics, PlacementRect, PlacementViewport, ScrollArea, StyledExt,
+    place_item_aligned, scroll_edge_item,
 };
 
 /// Trigger appearance.
@@ -56,6 +56,72 @@ struct SelectState {
     /// Last highlighted index we scrolled into view, so arrow keys move the
     /// viewport without fighting a later pointer scroll.
     last_scrolled_hl: Option<usize>,
+    /// Px the open panel has grown by scrolling (web / Radix
+    /// `shouldExpandOnScroll`); reset when the list opens.
+    grow: f32,
+    /// List offset seen on the previous frame (Radix `prevScrollTopRef`).
+    prev_scroll: f32,
+    /// Scroll expansion is live (set one frame after the aligned scroll is
+    /// applied, so the initial offset is not taken for a gesture).
+    expand_armed: bool,
+    /// What the scroll expansion needs, refreshed by the owner every frame.
+    grow_ctx: Option<GrowCtx>,
+}
+
+/// Inputs of [`track_growth`] (shared with the native pop-up window).
+#[derive(Clone, Copy)]
+struct GrowCtx {
+    /// Aligned panel before any growth.
+    base: SelectLayout,
+    /// Full list height.
+    content_height: f32,
+    viewport: PlacementViewport,
+    collision_padding: f32,
+}
+
+/// Web / Radix `SelectViewport` `onScroll`: a panel opened shorter than the
+/// window grows by the scrolled distance (wheel, trackpad, scrollbar drag or
+/// arrow-key reveal) until it reaches the padded window height. Runs in
+/// whichever window shows the list, before that frame's panel size is used.
+fn track_growth(state: &gpui::Entity<SelectState>, scroll: &gpui::ScrollHandle, cx: &mut App) {
+    let (ctx, grow, prev, armed) = {
+        let s = state.read(cx);
+        (s.grow_ctx, s.grow, s.prev_scroll, s.expand_armed)
+    };
+    let Some(ctx) = ctx else {
+        return;
+    };
+    let now = -f32::from(scroll.offset().y);
+    if !armed {
+        state.update(cx, |s, _| {
+            s.expand_armed = true;
+            s.prev_scroll = now;
+        });
+        return;
+    }
+    if (now - prev).abs() < 0.01 {
+        return;
+    }
+    let shown = crate::grow_item_aligned(ctx.base, grow);
+    let (next, offset) = crate::expand_on_scroll(
+        shown,
+        ctx.content_height,
+        ctx.viewport,
+        CollisionOptions::new().collision_padding(ctx.collision_padding),
+        prev,
+        now,
+    );
+    if (offset - now).abs() > 0.01 {
+        scroll.set_offset(gpui::point(px(0.), px(-offset)));
+    }
+    let next_grow = (next.height - ctx.base.height).max(0.);
+    state.update(cx, |s, cx| {
+        s.prev_scroll = offset;
+        if (next_grow - s.grow).abs() > 0.01 {
+            s.grow = next_grow;
+            cx.notify();
+        }
+    });
 }
 
 /// One selectable row (web `SelectItem`).
@@ -157,6 +223,18 @@ const LABEL_HEIGHT: f32 = spacing::XXX_SMALL * 2. + 16.;
 const SEPARATOR_HEIGHT: f32 = spacing::X_SMALL * 2. + 1.;
 /// Content shell inset: hairline border + `p-xx-small`.
 const SHELL_INSET: f32 = stroke::HAIRLINE + spacing::XX_SMALL;
+/// Panel edge → item text: shell inset + row `p-x-small` + check
+/// indicator + `gap-x-small` (web `[data-refineui-select-item-text]`).
+const ITEM_TEXT_INSET: f32 = SHELL_INSET + spacing::X_SMALL + icon::X_SMALL + spacing::X_SMALL;
+
+/// Trigger edge → value text (web `[data-refineui-select-trigger-value]`).
+fn value_inset(appearance: SelectAppearance) -> f32 {
+    match appearance {
+        SelectAppearance::Filled => stroke::HAIRLINE + spacing::MEDIUM,
+        SelectAppearance::Ghost => spacing::X_SMALL,
+        SelectAppearance::Plain => 0.,
+    }
+}
 fn entry_height(entry: &SelectEntry) -> f32 {
     match entry {
         SelectEntry::Item(_) => ITEM_HEIGHT,
@@ -278,24 +356,48 @@ fn typeahead(entries: &[SelectEntry], from: Option<usize>, key: &str) -> Option<
 
 /// Collision-aware placement for an open Select, in window coordinates.
 ///
-/// Always [`place_popper`] with preferred side [`FloatingSide::Bottom`]:
-/// detect room below the trigger, flip above when that room is short, and
-/// shrink to the remaining space. The panel never covers the trigger.
+/// Always [`place_item_aligned`] (web / Radix item-aligned): the panel
+/// covers the trigger with the selected row (or the first enabled row when
+/// nothing is selected) over the trigger value, shifted and shrunk to stay
+/// inside the window.
 fn select_layout(
     trigger: gpui::Bounds<gpui::Pixels>,
     entries: &[SelectEntry],
+    selected: Option<usize>,
+    appearance: SelectAppearance,
     viewport: gpui::Size<gpui::Pixels>,
-    opts: CollisionOptions,
+    collision_padding: f32,
 ) -> SelectLayout {
     let trigger = PlacementRect::from_bounds(trigger);
     let viewport = PlacementViewport::from_size(viewport);
-    place_popper(
+    let count = item_count(entries);
+    let aligned = selected
+        .filter(|ix| *ix < count)
+        .or_else(|| first_enabled(entries))
+        .unwrap_or(0);
+    // First / last row of the list (labels and separators count as rows).
+    let row_of = entries
+        .iter()
+        .enumerate()
+        .filter(|(_, e)| matches!(e, SelectEntry::Item(_)))
+        .nth(aligned)
+        .map(|(row, _)| row);
+    let rows = entries.len();
+    place_item_aligned(
         trigger,
         viewport,
-        trigger.width,
-        list_full_height(entries),
-        FloatingSide::Bottom,
-        opts,
+        ItemAlignedMetrics {
+            trigger_value_inset: value_inset(appearance),
+            item_text_inset: ITEM_TEXT_INSET,
+            content_height: list_full_height(entries),
+            item_top: item_offset_top(entries, aligned),
+            item_height: ITEM_HEIGHT,
+            border: stroke::HAIRLINE,
+            padding: spacing::XX_SMALL,
+            is_first: row_of.is_none_or(|r| r == 0),
+            is_last: row_of.is_none_or(|r| r + 1 == rows),
+        },
+        CollisionOptions::new().collision_padding(collision_padding),
     )
 }
 
@@ -341,7 +443,6 @@ pub struct Select {
     /// element's own open state takes over.
     default_open: bool,
     collision_padding: f32,
-    side_offset: f32,
 }
 
 impl Select {
@@ -366,7 +467,6 @@ impl Select {
             on_change: None,
             default_open: false,
             collision_padding: CONTENT_MARGIN,
-            side_offset: crate::DEFAULT_SIDE_OFFSET,
         }
     }
 
@@ -407,16 +507,10 @@ impl Select {
         self
     }
 
-    /// Viewport-edge padding used when flipping and clamping the popup
-    /// (web `collisionPadding`, default 10).
+    /// Window-edge padding the popup is kept inside when it shifts or
+    /// shrinks (web `CONTENT_MARGIN` / `collisionPadding`, default 10).
     pub fn collision_padding(mut self, padding: f32) -> Self {
         self.collision_padding = padding.max(0.);
-        self
-    }
-
-    /// Gap between the trigger and the popup (web `sideOffset`, default 4).
-    pub fn side_offset(mut self, offset: f32) -> Self {
-        self.side_offset = offset.max(0.);
         self
     }
 
@@ -552,14 +646,54 @@ impl RenderOnce for Select {
         };
         let list_id = child_id(&self.id, "list");
         let scroll = ScrollArea::handle(list_id.clone(), window, cx);
-        let collision = CollisionOptions {
-            collision_padding: self.collision_padding,
-            side_offset: self.side_offset,
-        };
-        let geometry = probe_state
-            .read(cx)
-            .container
-            .map(|t| select_layout(t, &self.entries, window.viewport_size(), collision));
+        let base = probe_state.read(cx).container.map(|t| {
+            select_layout(
+                t,
+                &self.entries,
+                self.selected,
+                self.appearance,
+                window.viewport_size(),
+                self.collision_padding,
+            )
+        });
+        if p.open
+            && let Some(base) = base
+        {
+            let ctx = GrowCtx {
+                base,
+                content_height: list_full_height(&self.entries),
+                viewport: PlacementViewport::from_size(window.viewport_size()),
+                collision_padding: self.collision_padding,
+            };
+            state.update(cx, |s, _| s.grow_ctx = Some(ctx));
+        }
+        if p.mounted && !crate::vibrancy::native_frost_active(cx) {
+            if state.read(cx).align_scroll
+                && let Some(layout) = base
+            {
+                // Scroll so the aligned row lands on the trigger.
+                scroll.set_offset(gpui::point(px(0.), px(-layout.scroll_top)));
+                state.update(cx, |s, _| {
+                    s.align_scroll = false;
+                    s.last_scrolled_hl = highlighted.or(self.selected);
+                    s.grow = 0.;
+                    s.expand_armed = false;
+                });
+            } else if p.open {
+                if let Some(ix) = highlighted
+                    && state.read(cx).last_scrolled_hl != Some(ix)
+                {
+                    let vh = f32::from(scroll.bounds().size.height);
+                    if vh > 0. {
+                        ensure_item_visible(&scroll, &self.entries, ix, vh);
+                        state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
+                    }
+                }
+                track_growth(&state, &scroll, cx);
+            }
+        }
+        let grow = state.read(cx).grow;
+        let geometry = base.map(|b| crate::grow_item_aligned(b, grow));
         // Freeze the panel geometry during the exit so picking an item does not
         // re-align (move) the fading panel to the new selection.
         let geometry = if p.open {
@@ -570,31 +704,6 @@ impl RenderOnce for Select {
         } else {
             state.read(cx).frozen.or(geometry)
         };
-        if p.mounted && !crate::vibrancy::native_frost_active(cx) {
-            if state.read(cx).align_scroll
-                && let Some(_layout) = geometry
-            {
-                if let Some(ix) = self.selected.or(highlighted) {
-                    let vh = f32::from(scroll.bounds().size.height);
-                    if vh > 0. {
-                        ensure_item_visible(&scroll, &self.entries, ix, vh);
-                    }
-                }
-                state.update(cx, |s, _| {
-                    s.align_scroll = false;
-                    s.last_scrolled_hl = highlighted.or(self.selected);
-                });
-            } else if p.open
-                && let Some(ix) = highlighted
-                && state.read(cx).last_scrolled_hl != Some(ix)
-            {
-                let vh = f32::from(scroll.bounds().size.height);
-                if vh > 0. {
-                    ensure_item_visible(&scroll, &self.entries, ix, vh);
-                    state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
-                }
-            }
-        }
         let fg = animate(child_id(&self.id, "fg"), fg, Motion::FAST, window, cx);
         let chevron = animate(
             child_id(&self.id, "chevron"),
@@ -632,8 +741,14 @@ impl RenderOnce for Select {
             (Vec::new(), None)
         };
         if native {
-            let bounds = geometry
+            // The un-grown origin: a moved origin reopens the pop-up, and the
+            // pop-up window grows itself (see `NativePopupSpec::grow_up`).
+            let bounds = base
+                .filter(|_| p.open)
+                .or(geometry)
                 .map(|l| gpui::Bounds::new(l.origin(), gpui::size(px(l.width), px(l.height))));
+            let native_scroll = ScrollArea::handle(child_id(&self.id, "native-list"), window, cx);
+            let grow_state = state.clone();
             let list = self.entries.clone();
             let list_state = state.clone();
             let still = state.clone();
@@ -656,24 +771,13 @@ impl RenderOnce for Select {
                     }),
                     still_open: Rc::new(move |cx| still.read(cx).open),
                     content: Rc::new(move |window, cx| {
-                        let layout = geometry.unwrap_or(SelectLayout {
-                            x: 0.,
-                            y: 0.,
-                            width: 0.,
-                            height: 0.,
-                            available_height: 0.,
-                            trigger_height: 0.,
-                            transform_origin: crate::TransformOrigin { x: 0., y: 0. },
-                            side: FloatingSide::Bottom,
-                        });
                         native_select_list(
                             &parent,
                             list.clone(),
                             selected,
                             &list_state,
+                            &native_scroll,
                             on_change.clone(),
-                            layout.width,
-                            layout.height,
                             window,
                             cx,
                         )
@@ -681,6 +785,12 @@ impl RenderOnce for Select {
                     close_on_deactivate: true,
                     report_size: None,
                     popover: false,
+                    grow_up: Some(Rc::new(move |cx| {
+                        grow_state
+                            .read(cx)
+                            .grow_ctx
+                            .is_some_and(|c| c.base.side == FloatingSide::Bottom)
+                    })),
                 },
                 window,
                 cx,
@@ -876,17 +986,9 @@ impl RenderOnce for Select {
                     crate::layer(
                         anchored()
                             .when_some(geometry, |a, layout| {
-                                // Slide a few px out of the trigger as the
-                                // popup enters, along `transform_origin`.
-                                let mut y = layout.y;
-                                if p.progress < 0.999 {
-                                    let slide = (1.0 - p.progress) * 6.0;
-                                    y += match layout.side {
-                                        FloatingSide::Bottom => -slide,
-                                        FloatingSide::Top => slide,
-                                    };
-                                }
-                                a.position(gpui::point(px(layout.x), px(y)))
+                                // Fades in place over the trigger (no slide):
+                                // the selected row must stay on the value.
+                                a.position(layout.origin())
                             })
                             .child(
                                 // Outer box: the frosted plate (a material
@@ -915,7 +1017,7 @@ impl RenderOnce for Select {
                                     cx,
                                 )
                                 .child(
-                                    ScrollArea::new(list_id).child(
+                                    ScrollArea::new(list_id).track_scroll(scroll.clone()).child(
                                         div()
                                             .p(px(spacing::XX_SMALL))
                                             .flex()
@@ -1114,36 +1216,44 @@ fn native_select_list(
     entries: Vec<SelectEntry>,
     selected: Option<usize>,
     state: &gpui::Entity<SelectState>,
+    scroll: &gpui::ScrollHandle,
     on_change: Option<OnChange>,
-    min_width: f32,
-    height: f32,
     window: &mut Window,
     cx: &mut App,
 ) -> gpui::AnyElement {
     let theme = cx.theme().clone();
     let list_id = child_id(parent, "native-list");
-    let scroll = ScrollArea::handle(list_id.clone(), window, cx);
     let highlighted = state.read(cx).highlighted;
+    let Some(ctx) = state.read(cx).grow_ctx else {
+        return div().into_any_element();
+    };
     if state.read(cx).align_scroll {
-        if let Some(ix) = selected.or(highlighted) {
-            let vh = f32::from(scroll.bounds().size.height);
-            if vh > 0. {
-                ensure_item_visible(&scroll, &entries, ix, vh);
-            }
-        }
+        // Same item-aligned scroll as the in-window panel.
+        scroll.set_offset(gpui::point(px(0.), px(-ctx.base.scroll_top)));
+        state.update(cx, |s, _| {
+            s.grow = 0.;
+            s.expand_armed = false;
+        });
         state.update(cx, |s, _| {
             s.align_scroll = false;
             s.last_scrolled_hl = highlighted.or(selected);
         });
-    } else if let Some(ix) = highlighted
-        && state.read(cx).last_scrolled_hl != Some(ix)
-    {
-        let vh = f32::from(scroll.bounds().size.height);
-        if vh > 0. {
-            ensure_item_visible(&scroll, &entries, ix, vh);
-            state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
+    } else {
+        if let Some(ix) = highlighted
+            && state.read(cx).last_scrolled_hl != Some(ix)
+        {
+            let vh = f32::from(scroll.bounds().size.height);
+            if vh > 0. {
+                ensure_item_visible(scroll, &entries, ix, vh);
+                state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
+            }
         }
+        // The pop-up window scrolls without re-rendering the owner, so the
+        // expansion is tracked here; the window then grows to the content.
+        track_growth(state, scroll, cx);
     }
+    let layout = crate::grow_item_aligned(ctx.base, state.read(cx).grow);
+    let (min_width, height) = (layout.width, layout.height);
     let (rows, plate) = select_rows(
         parent,
         entries,
@@ -1157,6 +1267,7 @@ fn native_select_list(
     let host = use_layout_probe(&child_id(parent, "highlight"), window, cx);
     let list_h = height - 2. * stroke::HAIRLINE;
     ScrollArea::new(list_id)
+        .track_scroll(scroll.clone())
         .max_height(px(list_h))
         .child(
             div()
@@ -1254,11 +1365,13 @@ mod tests {
         assert!((tokyo_top - expect_top).abs() < 0.01);
     }
 
+    const VIEW: (f32, f32) = (800., 600.);
+
     fn layout_of(
         trigger: (f32, f32, f32, f32),
         viewport: (f32, f32),
         entries: &[SelectEntry],
-        opts: CollisionOptions,
+        selected: Option<usize>,
     ) -> SelectLayout {
         select_layout(
             gpui::Bounds::new(
@@ -1266,73 +1379,166 @@ mod tests {
                 gpui::size(px(trigger.2), px(trigger.3)),
             ),
             entries,
+            selected,
+            SelectAppearance::Filled,
             gpui::size(px(viewport.0), px(viewport.1)),
-            opts,
+            CONTENT_MARGIN,
         )
     }
 
-    fn overlaps_trigger(l: &SelectLayout, y: f32, h: f32) -> bool {
-        let t_top = y;
-        let t_bottom = y + h;
-        let p_top = l.y;
-        let p_bottom = l.y + l.height;
-        p_top < t_bottom && p_bottom > t_top
+    /// Window-space middle of item `ix` in an open layout.
+    fn item_mid(l: &SelectLayout, entries: &[SelectEntry], ix: usize) -> f32 {
+        l.y + item_offset_top(entries, ix) + ITEM_HEIGHT / 2. - l.scroll_top
+    }
+
+    fn covers(l: &SelectLayout, t: (f32, f32, f32, f32)) -> bool {
+        l.y <= t.1 && l.y + l.height >= t.1 + t.3 && l.x <= t.0 && l.x + l.width >= t.0 + t.2
+    }
+
+    fn inside(l: &SelectLayout, viewport: (f32, f32)) -> bool {
+        let pad = CONTENT_MARGIN - 0.01;
+        l.x >= pad
+            && l.y >= pad
+            && l.x + l.width <= viewport.0 - pad
+            && l.y + l.height <= viewport.1 - pad
     }
 
     #[test]
-    fn layout_opens_below_the_trigger_and_never_covers_it() {
+    fn layout_covers_the_trigger_with_the_selected_row_on_the_value() {
         let e = sample();
-        let opts = CollisionOptions::default();
-        let l = layout_of((40., 40., 200., 32.), (800., 600.), &e, opts);
-        assert_eq!(l.side, FloatingSide::Bottom);
-        assert_eq!(l.x, 40.);
-        assert_eq!(l.width, 200.);
-        assert_eq!(l.y, 40. + 32. + opts.side_offset);
-        assert!(!overlaps_trigger(&l, 40., 32.));
+        let t = (200., 250., 200., 32.);
+        for ix in 0..item_count(&e) {
+            let l = layout_of(t, VIEW, &e, Some(ix));
+            assert!(covers(&l, t), "row {ix}: {l:?}");
+            assert!(inside(&l, VIEW), "row {ix}: {l:?}");
+            assert!(
+                (item_mid(&l, &e, ix) - (t.1 + t.3 / 2.)).abs() < 0.01,
+                "row {ix} not on the trigger: {l:?}"
+            );
+        }
     }
 
     #[test]
-    fn layout_flips_above_when_there_is_no_room_below() {
+    fn layout_aligns_item_text_with_the_trigger_value_and_is_trigger_wide() {
         let e = sample();
-        let opts = CollisionOptions::default();
-        // Trigger near the bottom of an 600px viewport; the full list cannot fit below.
-        let l = layout_of((40., 500., 200., 32.), (800., 600.), &e, opts);
+        let t = (200., 250., 200., 32.);
+        let l = layout_of(t, VIEW, &e, Some(2));
+        let value_x = t.0 + value_inset(SelectAppearance::Filled);
+        assert!((l.x + ITEM_TEXT_INSET - value_x).abs() < 0.01);
+        assert!(l.width >= t.2);
+    }
+
+    #[test]
+    fn no_selection_aligns_the_first_enabled_item() {
+        let e = sample();
+        let t = (200., 250., 200., 32.);
+        let l = layout_of(t, VIEW, &e, None);
+        assert!((item_mid(&l, &e, 0) - (t.1 + t.3 / 2.)).abs() < 0.01);
+    }
+
+    #[test]
+    fn near_the_top_the_list_starts_at_the_edge_and_scrolls_to_keep_alignment() {
+        // A late item selected with the trigger near the top: the rows above
+        // it do not fit, so the panel starts at the edge and scrolls.
+        let e: Vec<SelectEntry> = (0..20)
+            .map(|i| SelectEntry::Item(SelectOption::new(format!("Item {i}"))))
+            .collect();
+        let t = (40., 30., 200., 32.);
+        let l = layout_of(t, VIEW, &e, Some(12));
         assert_eq!(l.side, FloatingSide::Top);
-        assert!(l.y + l.height <= 500. - opts.side_offset + 0.01);
-        assert!(!overlaps_trigger(&l, 500., 32.));
-        assert!(l.y >= opts.collision_padding);
+        assert_eq!(l.y, CONTENT_MARGIN);
+        assert!(l.scroll_top > 0.);
+        assert!(covers(&l, t) && inside(&l, VIEW), "{l:?}");
+        assert!((item_mid(&l, &e, 12) - (t.1 + t.3 / 2.)).abs() < 0.01);
     }
 
     #[test]
-    fn layout_height_shrinks_to_the_available_space() {
+    fn near_the_top_a_short_list_still_covers_the_trigger_and_shows_the_row() {
+        // Radix min height (five rows) wins over exact alignment: the panel
+        // stays in the window, covers the trigger and shows the selection.
         let e = sample();
-        let opts = CollisionOptions::default();
-        // Short viewport so the full grouped list cannot fit above or below.
-        let trigger = PlacementRect::new(40., 140., 200., 32.);
-        let viewport = PlacementViewport::new(800., 300.);
-        let (above, below) = crate::vertical_room(trigger, viewport, opts);
-        assert!(
-            list_full_height(&e) > above && list_full_height(&e) > below,
-            "full={} above={} below={}",
+        let t = (40., 30., 200., 32.);
+        let l = layout_of(t, VIEW, &e, Some(4));
+        assert!(covers(&l, t) && inside(&l, VIEW), "{l:?}");
+        let mid = item_mid(&l, &e, 4);
+        assert!(mid > l.y && mid < l.y + l.height, "{l:?}");
+    }
+
+    #[test]
+    fn near_the_bottom_the_panel_shifts_up_and_stays_in_the_window() {
+        let e = sample();
+        let t = (40., 600. - 10. - 34., 200., 32.);
+        let l = layout_of(t, VIEW, &e, Some(0));
+        assert!(inside(&l, VIEW), "{l:?}");
+        assert!(covers(&l, t), "{l:?}");
+        // At least five rows (the whole list here) stay visible.
+        assert!(l.height >= (ITEM_HEIGHT * 5.).min(list_full_height(&e)) - 0.01);
+    }
+
+    #[test]
+    fn long_lists_shrink_to_the_window_and_scroll_internally() {
+        let e: Vec<SelectEntry> = (0..60)
+            .map(|i| SelectEntry::Item(SelectOption::new(format!("Item {i}"))))
+            .collect();
+        let view = (800., 400.);
+        let t = (40., 180., 200., 32.);
+        for ix in [0, 10, 30, 59] {
+            let l = layout_of(t, view, &e, Some(ix));
+            assert!(inside(&l, view), "row {ix}: {l:?}");
+            assert!(l.height < list_full_height(&e));
+            assert!(l.height <= view.1 - 2. * CONTENT_MARGIN + 0.01);
+            assert!(covers(&l, t), "row {ix}: {l:?}");
+            assert!(
+                (item_mid(&l, &e, ix) - (t.1 + t.3 / 2.)).abs() < 0.01,
+                "row {ix}: {l:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn scrolling_a_short_panel_grows_it_to_the_window_before_scrolling() {
+        // Trigger near the top, a late row selected: the panel starts at the
+        // top edge, shorter than the window. Scrolling grows it downward.
+        let e: Vec<SelectEntry> = (0..40)
+            .map(|i| SelectEntry::Item(SelectOption::new(format!("Item {i}"))))
+            .collect();
+        let t = (40., 30., 200., 32.);
+        let base = layout_of(t, VIEW, &e, Some(35));
+        assert_eq!(base.side, FloatingSide::Top);
+        assert!(base.height < VIEW.1 - 2. * CONTENT_MARGIN);
+        let (grown, scroll) = crate::expand_on_scroll(
+            base,
             list_full_height(&e),
-            above,
-            below
+            PlacementViewport::new(VIEW.0, VIEW.1),
+            CollisionOptions::new(),
+            base.scroll_top,
+            base.scroll_top - 64.,
         );
-        let l = layout_of((40., 140., 200., 32.), (800., 300.), &e, opts);
-        let expected_side = if below >= above {
-            FloatingSide::Bottom
-        } else {
-            FloatingSide::Top
-        };
-        let expected_h = if expected_side == FloatingSide::Bottom {
-            below
-        } else {
-            above
-        };
-        assert_eq!(l.side, expected_side);
-        assert_eq!(l.available_height, expected_h);
-        assert_eq!(l.height, expected_h);
-        assert!(l.height < list_full_height(&e));
-        assert!(!overlaps_trigger(&l, 140., 32.));
+        assert_eq!(grown.y, base.y);
+        assert!((grown.height - (base.height + 64.)).abs() < 0.01);
+        assert_eq!(scroll, base.scroll_top - 64.);
+        assert!(covers(&grown, t) && inside(&grown, VIEW), "{grown:?}");
+    }
+
+    #[test]
+    fn scrolling_a_bottom_anchored_panel_grows_it_upward() {
+        let e: Vec<SelectEntry> = (0..40)
+            .map(|i| SelectEntry::Item(SelectOption::new(format!("Item {i}"))))
+            .collect();
+        let t = (40., 300., 200., 32.);
+        let base = layout_of(t, VIEW, &e, Some(0));
+        assert_eq!(base.side, FloatingSide::Bottom);
+        let (grown, scroll) = crate::expand_on_scroll(
+            base,
+            list_full_height(&e),
+            PlacementViewport::new(VIEW.0, VIEW.1),
+            CollisionOptions::new(),
+            0.,
+            48.,
+        );
+        assert!((grown.y + grown.height - (base.y + base.height)).abs() < 0.01);
+        assert!((grown.y - (base.y - 48.)).abs() < 0.01);
+        assert_eq!(scroll, 0.);
+        assert!(inside(&grown, VIEW), "{grown:?}");
     }
 }

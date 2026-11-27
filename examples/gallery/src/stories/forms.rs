@@ -89,7 +89,7 @@ pub(super) fn stories() -> Vec<Story> {
             id: "select",
             name: "Select",
             group: StoryGroup::Forms,
-            summary: "Pick one option from a grouped popup list (web Select). Opens below the trigger and flips above when space is tight.",
+            summary: "Pick one option from a grouped popup list (web Select). The popup covers the trigger with the selected row on the value, shifting and scrolling to stay in the window.",
             shot: (720., 560.),
             render: select,
         },
@@ -492,8 +492,9 @@ fn select(w: &mut Window, cx: &mut App) -> AnyElement {
                 .gap(px(16.))
                 .child(
                     // Web docs preview: grouped timezones, placeholder, no
-                    // default value. The popup opens below the trigger (never
-                    // covering it) and shrinks / scrolls when space is tight.
+                    // default value. The popup covers the trigger with the
+                    // aligned row on the value (web item-aligned) and
+                    // shifts / shrinks / scrolls when space is tight.
                     timezone_select("open", None)
                         .width(px(280.))
                         .default_open(true),

@@ -5,10 +5,15 @@
 //! [`FloatingLayout`] that never overflows the viewport (after
 //! [`CollisionOptions::collision_padding`]).
 //!
-//! Popper mode (used by Select) opens on the preferred side (default:
-//! below) and flips to the side with more room when the panel would not
-//! fit, shrinking to the remaining height. The panel is anchored to the
-//! trigger and never covers it.
+//! Item-aligned mode ([`place_item_aligned`], used by Select) mirrors Radix
+//! `SelectItemAlignedPosition`: the panel covers the trigger with the
+//! selected row laid exactly over the trigger value, shifting inside the
+//! padded viewport and shrinking (with a scroll offset) when it can't.
+//!
+//! Popper mode ([`place_popper`]) opens on the preferred side
+//! (default: below) and flips to the side with more room when the panel
+//! would not fit, shrinking to the remaining height. The panel is anchored
+//! to the trigger and never covers it.
 
 use gpui::{Bounds, Pixels, Point, Size, point, px};
 
@@ -106,7 +111,9 @@ impl PlacementViewport {
     }
 }
 
-/// Preferred (and resolved) vertical side of a popper panel.
+/// Preferred (and resolved) vertical side of a floating panel. For an
+/// item-aligned panel it is the edge the panel grows from: `Bottom` when it
+/// aligns without top overflow, `Top` when it starts at the top edge.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum FloatingSide {
     /// Below the trigger.
@@ -222,6 +229,9 @@ pub struct FloatingLayout {
     pub transform_origin: TransformOrigin,
     /// Side the panel was placed on.
     pub side: FloatingSide,
+    /// Initial vertical scroll of the panel's list so an aligned row sits
+    /// over the trigger (item-aligned only; `0` for popper).
+    pub scroll_top: f32,
 }
 
 impl FloatingLayout {
@@ -334,7 +344,162 @@ pub fn place_popper(
         trigger_height: trigger.height,
         transform_origin,
         side,
+        scroll_top: 0.,
     }
+}
+
+/// Measurements of an item-aligned list, all in the panel's local space
+/// (`0` = the panel's outer top / left edge, including its border).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ItemAlignedMetrics {
+    /// Distance from the trigger's left edge to its value text.
+    pub trigger_value_inset: f32,
+    /// Distance from the panel's left edge to an item's text.
+    pub item_text_inset: f32,
+    /// Full (unclipped) panel height: border + padding + every row.
+    pub content_height: f32,
+    /// Top of the aligned (selected) row.
+    pub item_top: f32,
+    /// Height of the aligned row.
+    pub item_height: f32,
+    /// Panel border (top / bottom) width.
+    pub border: f32,
+    /// List padding (top / bottom) inside the border.
+    pub padding: f32,
+    /// The aligned row is the first row of the list.
+    pub is_first: bool,
+    /// The aligned row is the last row of the list.
+    pub is_last: bool,
+}
+
+/// Place a panel over the trigger so the selected row sits exactly on the
+/// trigger value (Radix `SelectItemAlignedPosition`).
+///
+/// - Horizontal: the row text lines up with the trigger value; the panel is
+///   at least as wide as the trigger (plus the text offset) and is clamped
+///   inside the viewport.
+/// - Vertical: when the rows above the selected one fit between the top
+///   edge and the trigger middle, the panel grows down from the aligned top
+///   to the bottom edge ([`FloatingSide::Bottom`]); otherwise it starts at
+///   the top edge and the list is scrolled ([`FloatingLayout::scroll_top`])
+///   so the row still lands on the trigger ([`FloatingSide::Top`]).
+/// - Collision: everything stays inside `collision_padding`; the panel is
+///   at least five rows tall (or the whole list), at most the padded
+///   viewport, and shifts instead of overflowing.
+pub fn place_item_aligned(
+    trigger: PlacementRect,
+    viewport: PlacementViewport,
+    m: ItemAlignedMetrics,
+    opts: CollisionOptions,
+) -> FloatingLayout {
+    let pad = opts.collision_padding;
+    // Horizontal: align texts, at least trigger-wide.
+    let left = trigger.x + m.trigger_value_inset - m.item_text_inset;
+    let min_width = trigger.width + (trigger.x - left);
+    let (x, width) = clamp_horizontal(left, min_width, viewport, pad);
+
+    // Vertical (Radix item-aligned).
+    let full = m.content_height.max(0.);
+    let half = m.item_height / 2.;
+    let available_height = (viewport.height - pad * 2.).max(0.);
+    let min_height = (m.item_height * 5.).min(full).min(available_height);
+    let top_edge_to_trigger_middle = trigger.center_y() - pad;
+    let trigger_middle_to_bottom_edge = available_height - top_edge_to_trigger_middle;
+    let content_top_to_item_middle = m.item_top + half;
+    let item_middle_to_content_bottom = full - content_top_to_item_middle;
+    let aligns_without_top_overflow = content_top_to_item_middle <= top_edge_to_trigger_middle;
+
+    let (y, height, scroll_top, side) = if aligns_without_top_overflow {
+        // Wrapper anchored to the bottom edge, growing up to the aligned top.
+        let bottom_need = half + if m.is_last { m.padding } else { 0. } + m.border;
+        let wrapper = (content_top_to_item_middle + trigger_middle_to_bottom_edge.max(bottom_need))
+            .max(min_height)
+            .min(available_height);
+        let y = viewport.height - pad - wrapper;
+        (y, full.min(wrapper), 0., FloatingSide::Bottom)
+    } else {
+        // Wrapper anchored to the top edge; scroll the row onto the trigger.
+        let top_need = m.border + if m.is_first { m.padding } else { 0. } + half;
+        let wrapper = (top_edge_to_trigger_middle.max(top_need) + item_middle_to_content_bottom)
+            .max(min_height)
+            .min(available_height);
+        let height = full.min(wrapper);
+        let scroll = (content_top_to_item_middle - top_edge_to_trigger_middle)
+            .clamp(0., (full - height).max(0.));
+        (pad, height, scroll, FloatingSide::Top)
+    };
+    let transform_origin = TransformOrigin {
+        x: (trigger.center_x() - x).clamp(0., width.max(0.)),
+        y: (trigger.center_y() - y).clamp(0., height.max(0.)),
+    };
+    FloatingLayout {
+        x,
+        y,
+        width,
+        height,
+        available_height,
+        trigger_height: trigger.height,
+        transform_origin,
+        side,
+        scroll_top,
+    }
+}
+
+/// Radix `SelectViewport` scroll expansion for an item-aligned panel.
+///
+/// An item-aligned panel opened shorter than the window (it was cut at the
+/// trigger side) grows by the scrolled distance before the list really
+/// scrolls, until it reaches the padded window height (or the whole list):
+///
+/// - [`FloatingSide::Top`] (anchored at the top edge): the panel grows
+///   down; the list keeps its scroll, so rows move with the gesture and
+///   more rows appear below.
+/// - [`FloatingSide::Bottom`] (anchored at the bottom edge): the panel
+///   grows up and the growth is taken back out of the scroll, so the rows
+///   move exactly as far as the gesture while the top edge rises.
+///
+/// `layout` is the panel as currently shown (already grown), `prev_scroll`
+/// / `scroll` the list offset before and after the gesture. Returns the
+/// new panel and the list offset to apply.
+pub fn expand_on_scroll(
+    layout: FloatingLayout,
+    content_height: f32,
+    viewport: PlacementViewport,
+    opts: CollisionOptions,
+    prev_scroll: f32,
+    scroll: f32,
+) -> (FloatingLayout, f32) {
+    let scrolled_by = (scroll - prev_scroll).abs();
+    let max_height = (viewport.height - 2. * opts.collision_padding)
+        .max(0.)
+        .min(content_height.max(0.));
+    if scrolled_by <= 0. || layout.height >= max_height {
+        return (layout, scroll);
+    }
+    let next = (layout.height + scrolled_by).min(max_height);
+    let grown = next - layout.height;
+    let mut out = layout;
+    out.height = next;
+    let scroll = match layout.side {
+        FloatingSide::Top => scroll.min((content_height - next).max(0.)),
+        FloatingSide::Bottom => {
+            out.y -= grown;
+            (scroll - grown).max(0.)
+        }
+    };
+    (out, scroll)
+}
+
+/// `base` grown by `grow` px the way [`expand_on_scroll`] grows it (down
+/// from a top-anchored panel, up from a bottom-anchored one).
+pub fn grow_item_aligned(base: FloatingLayout, grow: f32) -> FloatingLayout {
+    let grow = grow.max(0.);
+    let mut out = base;
+    out.height += grow;
+    if base.side == FloatingSide::Bottom {
+        out.y -= grow;
+    }
+    out
 }
 
 /// Placement side for a beaked floating panel (Popover / Tooltip).
@@ -649,6 +814,119 @@ mod tests {
     fn transform_origin_css_matches_the_web_variable_format() {
         let o = TransformOrigin { x: 160., y: 0. };
         assert_eq!(o.to_css(), "160px 0px");
+    }
+
+    fn metrics(item_top: f32, content_height: f32) -> ItemAlignedMetrics {
+        ItemAlignedMetrics {
+            trigger_value_inset: 13.,
+            item_text_inset: 33.,
+            content_height,
+            item_top,
+            item_height: 32.,
+            border: 1.,
+            padding: 4.,
+            is_first: false,
+            is_last: false,
+        }
+    }
+
+    #[test]
+    fn item_aligned_puts_the_row_over_the_trigger_middle() {
+        let t = trigger(200., 250., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(70., 200.), OPTS);
+        assert_eq!(l.side, FloatingSide::Bottom);
+        assert_eq!(l.scroll_top, 0.);
+        assert!((l.y + 70. + 16. - t.center_y()).abs() < 0.01);
+        assert_eq!(l.height, 200.);
+        // Row text over the trigger value; at least trigger wide.
+        assert!((l.x + 33. - (t.x + 13.)).abs() < 0.01);
+        assert!((l.width - (t.width + 20.)).abs() < 0.01);
+        assert!(l.y <= t.top() && l.y + l.height >= t.bottom());
+    }
+
+    #[test]
+    fn item_aligned_top_overflow_anchors_to_the_edge_and_scrolls() {
+        let t = trigger(200., 40., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(300., 800.), OPTS);
+        assert_eq!(l.side, FloatingSide::Top);
+        assert_eq!(l.y, OPTS.collision_padding);
+        assert!(l.scroll_top > 0.);
+        assert!((l.y + 300. + 16. - l.scroll_top - t.center_y()).abs() < 0.01);
+        assert!(l.y + l.height <= VIEW.height - OPTS.collision_padding + 0.01);
+    }
+
+    #[test]
+    fn item_aligned_stays_inside_the_padded_viewport() {
+        for y in [0., 10., 200., 540., 580.] {
+            for x in [-40., 0., 300., 700.] {
+                let t = trigger(x, y, 200., 32.);
+                for top in [5., 100., 400., 900.] {
+                    let l = place_item_aligned(t, VIEW, metrics(top, 1000.), OPTS);
+                    let p = OPTS.collision_padding - 0.01;
+                    assert!(l.x >= p && l.x + l.width <= VIEW.width - p, "{l:?}");
+                    assert!(l.y >= p && l.y + l.height <= VIEW.height - p, "{l:?}");
+                    assert!(l.scroll_top >= 0. && l.scroll_top <= 1000. - l.height);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn item_aligned_keeps_a_five_row_minimum_near_the_bottom() {
+        let t = trigger(40., 556., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(5., 400.), OPTS);
+        assert!(l.height >= 160. - 0.01);
+        assert!(l.y + l.height <= VIEW.height - OPTS.collision_padding + 0.01);
+        assert!(l.y <= t.top() && l.y + l.height >= t.bottom());
+    }
+
+    #[test]
+    fn expand_on_scroll_grows_a_top_anchored_panel_down() {
+        let t = trigger(200., 40., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(300., 800.), OPTS);
+        assert_eq!(l.side, FloatingSide::Top);
+        let s0 = l.scroll_top;
+        // Scroll up by 30: the panel grows 30 down, the scroll is kept.
+        let (g, s) = expand_on_scroll(l, 800., VIEW, OPTS, s0, s0 - 30.);
+        assert_eq!(g.y, l.y);
+        assert!((g.height - (l.height + 30.)).abs() < 0.01);
+        assert_eq!(s, s0 - 30.);
+        // Grows until the padded window height, then just scrolls.
+        let (g, _) = expand_on_scroll(g, 800., VIEW, OPTS, 0., 2000.);
+        assert!((g.height - (VIEW.height - 2. * OPTS.collision_padding)).abs() < 0.01);
+        let (g2, s2) = expand_on_scroll(g, 800., VIEW, OPTS, 0., 50.);
+        assert_eq!(g2, g);
+        assert_eq!(s2, 50.);
+    }
+
+    #[test]
+    fn expand_on_scroll_grows_a_bottom_anchored_panel_up_and_keeps_rows_moving() {
+        let t = trigger(200., 250., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(70., 900.), OPTS);
+        assert_eq!(l.side, FloatingSide::Bottom);
+        assert_eq!(l.scroll_top, 0.);
+        let bottom = l.y + l.height;
+        // Scroll down by 40: the panel grows 40 up and the list stays at 0,
+        // so the first row moves up 40 on screen, as a real scroll would.
+        let (g, s) = expand_on_scroll(l, 900., VIEW, OPTS, 0., 40.);
+        assert!((g.y + g.height - bottom).abs() < 0.01);
+        assert!((g.height - (l.height + 40.)).abs() < 0.01);
+        assert_eq!(s, 0.);
+        assert!(((g.y - s) - (l.y - 40.)).abs() < 0.01);
+        // Past the window height the remainder becomes a real scroll.
+        let room = VIEW.height - 2. * OPTS.collision_padding - g.height;
+        let (g2, s2) = expand_on_scroll(g, 900., VIEW, OPTS, 0., room + 25.);
+        assert!((g2.y - OPTS.collision_padding).abs() < 0.01);
+        assert!((s2 - 25.).abs() < 0.01);
+    }
+
+    #[test]
+    fn expand_on_scroll_never_exceeds_the_list() {
+        let t = trigger(200., 40., 200., 32.);
+        let l = place_item_aligned(t, VIEW, metrics(300., 420.), OPTS);
+        let (g, _) = expand_on_scroll(l, 420., VIEW, OPTS, l.scroll_top, 0.);
+        assert!(g.height <= 420. + 0.01);
+        assert_eq!(grow_item_aligned(l, g.height - l.height), g);
     }
 
     #[test]

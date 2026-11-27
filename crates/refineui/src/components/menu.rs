@@ -895,6 +895,7 @@ pub(crate) fn native_menu_spec(
         }),
         close_on_deactivate,
         report_size: None,
+        grow_up: None,
         popover: false,
     }
 }
@@ -936,6 +937,7 @@ fn native_submenu_spec(
         }),
         close_on_deactivate: false,
         report_size: None,
+        grow_up: None,
         popover: false,
     }
 }
