@@ -4406,7 +4406,7 @@ dependencies = [
  "anyhow",
  "gpui",
  "objc2",
- "png 0.17.16",
+ "png 0.18.1",
  "raw-window-handle",
  "refineui",
  "refineui-material",
