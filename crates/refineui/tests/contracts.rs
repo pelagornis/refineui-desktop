@@ -15,7 +15,7 @@ use refineui::{ControlSize, Density};
 use serde_json::Value;
 
 /// Not components: infrastructure views.
-const NOT_COMPONENTS: &[&str] = &["FrostedPanelWindow", "FrostedMenuWindow"];
+const NOT_COMPONENTS: &[&str] = &[];
 
 fn contracts() -> Vec<Value> {
     contracts::ALL

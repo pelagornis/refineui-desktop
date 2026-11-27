@@ -1,13 +1,15 @@
 ---
-title: Blur (backdrop frost)
-description: Why in-window panels cannot blur in GPUI 0.2.2, and the opt-in native blur mode.
+title: Blur
+description: Why in-window panels cannot blur in stock GPUI 0.2.2, and how RefineUI blurs them.
 ---
 
 The web RefineUI frosted surfaces (Menu, Dropdown, Context Menu, Select,
 Popover, Tooltip) use `backdrop-filter: blur()`. RefineUI for GPUI paints
 those panels with an **opaque** fill instead — the frost colour
-pre-composited over the page (`Theme::floating_fill`). This page explains why
-and what the opt-in alternative does.
+pre-composited over the page (`Theme::floating_fill`) unless the `material`
+feature is on, where the vendored GPUI's backdrop-blur primitive draws a real
+blur (see [Material Engine](/architecture/material/)). This page explains why
+stock GPUI cannot do it.
 
 ## Why an element cannot blur what is behind it
 
@@ -41,102 +43,10 @@ platform to blur what is behind the **window**:
 - **X11**: only toggles transparency; there is no blur.
 
 `WindowKind::PopUp` opens a borderless, non-activating `NSPanel` at
-`NSPopUpWindowLevel` on macOS. Combining the two gives a **real** blur for a
-floating surface, as long as the surface is its own window.
-
-## Native blur: `FrostMode::Native`
-
-```rust
-use refineui::{FrostMode, set_frost_mode};
-
-set_frost_mode(FrostMode::Native, cx); // default: FrostMode::Opaque
-```
-
-With `Native` on macOS these surfaces open in their own pop-up window
-(`refineui::vibrancy`): **DropdownMenu**, **ContextMenu**, **Menu submenus**,
-**Select** and **Popover**. Each window has an OS-blurred background, the
-Regular material tint (`backgroundPrimary` at 0.62 light / 0.58 dark), a
-hairline border, 16px corners and the AppKit window shadow. It resizes itself
-to its content once measured.
-
-### How the blur view is set up
-
-The pop-up window is opened with `WindowBackgroundAppearance::Transparent`
-(non-opaque window, transparent Metal layer) and RefineUI adds its **own**
-`NSVisualEffectView` below GPUI's view:
-
-| Property | Value |
-| --- | --- |
-| `material` | Colorless `Selection` (`NSVisualEffectMaterialSelection`), with the desktop tint and saturation filters stripped so the view is a neutral frost |
-| `blendingMode` | `.behindWindow` |
-| `state` | `.active` (non-activating panels are never key) |
-| Tint | Regular material tint: `backgroundPrimary` at 0.62 light / 0.58 dark, painted over the frost view (not Apple's `.menu` / `.popover` tint, and not the `surfaceFrosted` token) |
-| Appearance | The window's `NSAppearance` follows the RefineUI theme (`NSAppearanceNameAqua` / `DarkAqua`). When the theme `follow_system` flag is on, the pop-up inherits the OS / parent appearance |
-| Corners | `maskImage` = stretchable rounded rect (`capInsets` = radius) |
-
-### Why it used to look translucent but not blurred
-
-The first prototype used `WindowBackgroundAppearance::Blurred` (GPUI inserts a
-`Selection`-material effect view with its tint and saturation filters
-removed) and rounded the corners by setting `cornerRadius` +
-`masksToBounds` on the **content view's layer**, the effect view's ancestor.
-Behind-window vibrancy is composited by the window server through a backdrop
-layer. When an ancestor layer masks it, AppKit falls back to a flat
-translucent fill. That matches what you saw: the panel was see-through
-(the 55% `surfaceFrosted` fill over a transparent window) but nothing behind
-it was blurred. Apple's supported way to shape vibrancy is the effect view's
-own `maskImage`, which the current code uses. No ancestor layer is masked.
-
-Two system settings also turn vibrancy into a flat fill:
-**System Settings → Accessibility → Display → Reduce transparency**, and
-low-power or remote-desktop sessions.
-
-### Debugging on a Mac
-
-```sh
-REFINEUI_VIBRANCY_DEBUG=1 cargo run -p refineui-gallery
-```
-
-Then open the **Dropdown** story, turn on **Native blur (pop-up window)** and open a dropdown. Each
-pop-up prints two dumps to stderr, one at `shape_popup` and one at
-`first-frame`. A dump contains the macOS version, the window (class,
-`isOpaque`, `alphaValue`, level, style mask, shadow, parent, background
-colour), `reduceTransparency`, and the view tree. For each view it shows the
-frame, `wantsLayer`, layer class, `isOpaque`, `opacity`, `cornerRadius` and
-`masksToBounds`. Effect views also show `material`, `blendingMode`, `state`
-and whether a `maskImage` is set. A healthy pop-up shows a non-opaque window,
-an `NSVisualEffectView` with `blendingMode=0 state=1 maskImage=true`, and
-**no** `masksToBounds=true` above it.
-
-| Behaviour | How |
-| --- | --- |
-| Submenus | Each open submenu gets its **own** pop-up window beside its row (flipping left at the screen edge), so it is never clipped. Hovering the submenu window keeps it open; leaving both for 150ms closes it, as in-window. Closing a pop-up closes every pop-up opened from it. |
-| Parent window moves | The pop-up is attached with `-[NSWindow addChildWindow:ordered:]`, so AppKit moves it together with the window. A **resize** of the parent window closes it. |
-| App / window deactivation | Deactivating the owning window (⌘-Tab, clicking another app or window) closes it (`observe_window_activation`). |
-| Fade-in | The window's `alphaValue` animates 0 → 1 over `duration-normal` through `NSAnimationContext`. Closing is immediate. |
-| Dismissal | Item activation, Escape for Context Menu and Select (focus stays in the app window — the pop-up is non-activating), or any click in the app window outside the trigger. |
-| Select | Same item-aligned geometry as the in-window popup: the pop-up window covers the trigger with the selected row on the value, shifts and shrinks to stay in the window, and scrolls the list to keep the row aligned. Scrolling a short pop-up grows the window toward the screen edge it is anchored to, keeping that edge in place. ↑ / ↓ / Enter keep working from the trigger. |
-| Popover | Drawn **without the beak** (the window is a rounded rectangle). Centre / end alignment needs the panel width: the first opening measures it and re-places the window once (the width is then cached). |
-
-On every other platform `Native` falls back to the opaque in-window panels, so
-nothing changes there. All AppKit code lives in `platform::macos` (window
-lookup, `NSVisualEffectView` shaping, `REFINEUI_FROST_DEBUG` dump) behind
-`cfg(target_os = "macos")`; `refineui::vibrancy` is the public API on top;
-the `typecheck-macos-vibrancy` feature compiles it on other hosts for
-`cargo check` / `clippy` only.
-
-Remaining limits:
-
-- **Tooltip** still renders in-window: GPUI owns tooltip placement (it shows
-  the view next to the pointer inside the window), so a pop-up window per
-  tooltip would mean re-implementing hover timing and placement.
-- Pop-ups are non-activating panels, so they do not take keyboard focus:
-  text inputs inside a native-frost Popover cannot be typed into. Keep such
-  popovers on `Opaque`.
-- Callbacks run from a pop-up (menu items, select `on_change`, popover
-  content) receive the **pop-up's** `Window`.
-- If the owning element disappears while its pop-up is open, the pop-up stays
-  until the next close trigger (deactivation / resize).
+`NSPopUpWindowLevel` on macOS. Combining the two would give a blur for a
+floating surface only if that surface were its own window, which brings window
+management, focus and positioning problems. RefineUI does not do this; the
+Floating Panel is the only surface that uses a blurred OS window.
 
 ## Options compared
 
@@ -144,6 +54,6 @@ Remaining limits:
 | --- | --- | --- |
 | Opaque pre-composited fill (default) | No (looks like frost over a plain page) | None |
 | Window `Blurred` background | Yes, behind the whole window | Whole-window effect only |
-| Floating surface as a blurred pop-up window (`FrostMode::Native`) | Yes, per surface, macOS | Window management, positioning, focus |
+| Floating surface as a blurred pop-up window | Yes, per surface, macOS | Window management, positioning, focus (not used) |
 | CPU blur of a screenshot | Possible in theory | No framebuffer read-back API; one frame late, slow |
-| Patch / fork GPUI | Yes, everywhere | New offscreen + blur passes in Metal and Blade, a new primitive and element API |
+| Patch / fork GPUI (used: vendored `paint_backdrop_blur`, `material` feature) | Yes, in-window | New offscreen + blur passes in Metal and Blade, a new primitive and element API |

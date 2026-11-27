@@ -3,7 +3,7 @@
   "id": "sortable-list",
   "name": "Sortable List",
   "layer": "interaction",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Drag and Drop (lists)",

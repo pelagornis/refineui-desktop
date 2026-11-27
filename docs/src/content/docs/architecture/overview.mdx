@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: RefineUI Desktop architecture — layers, crates, dependency rules and the phase plan.
+description: RefineUI Desktop architecture — layers, crates, modules, cargo features and design rules.
 sidebar:
   order: 1
 ---
@@ -9,7 +9,7 @@ RefineUI Desktop is a **desktop-native** design system for GPUI. It keeps the
 RefineUI visual identity (see [Visual identity](/architecture/identity/)) and
 adds what desktop applications need: keyboard-first interaction, resizable
 multi-panel workspaces, an application shell and platform adapters. It is
-**not** a port of the React components. Web-oriented patterns are optional.
+**not** a port of the React components, and web-oriented patterns are optional.
 
 ## Layers
 
@@ -22,7 +22,7 @@ multi-panel workspaces, an application shell and platform adapters. It is
  Components    Button · Input · Menu · Dialog · Table ·    refineui::components
                Tree · …
  Interaction   Focus · Keymap · Selection · Drag & Drop    refineui::interaction
- Foundation    Tokens · Theme · Density · Elevation ·      refineui_tokens (data)
+ Foundation    Tokens · Theme · Density · Elevation ·      refineui-foundation (data)
                Motion · Blur · Layers · Cursor             refineui::foundation (GPUI)
 ```
 
@@ -36,26 +36,30 @@ trait (`PlatformAdapter`). OS code stays behind `cfg` inside the adapter.
 | --- | --- | --- |
 | `refineui-foundation` | **No** | Palette, semantic colors, typography, spacing, radius, stroke, opacity, elevation, motion, blur, **material roles** (`MaterialRole`, `MaterialTokens`), z-index, sizes, **density** (`Density`, `DesktopMetrics`), **window metrics**, **component contracts** (`contracts/*.json` + schema) |
 | `refineui-tokens` | **No** | Compatibility re-export of `refineui-foundation` |
-| `refineui-material` | Yes (gpui + foundation only) | Material Engine: `Material`, real backdrop blur, saturation, tint, lighting, grain, elevation shadows, `MaterialSurface` — see [Material Engine](/architecture/material/) |
+| `refineui-material` | Yes (gpui + foundation only) | Material Engine: `Material`, real backdrop blur, saturation, tint, lighting, grain, elevation shadows, `MaterialSurface`, recipes — see [Material Engine](/architecture/material/) |
 | `vendor/gpui` | — | gpui 0.2.2 + the `BackdropBlur` primitive, applied with `[patch.crates-io]` |
-| `refineui::foundation` | Yes | `Theme`, density access, focus ring, `LayerOrder`, `CursorRole`, frost (`vibrancy`) |
-| `refineui::interaction` | Logic only (GPUI-free state machines) | `keymap` (contexts, conflicts), `selection`, `focus` (roving), `dnd` (drop geometry) |
-| `refineui::components` | Yes | The component set |
-| `refineui::workspace` | Logic only (`serde` with the `serde` feature) | `layout`: the persisted workspace layout model |
-| `refineui::shell` | Logic now; GPUI views in Phase 2 | Shell regions and chrome metrics per platform / density |
-| `refineui::platform` | Logic + `cfg` glue | `PlatformAdapter`, `MacOsAdapter`, `WindowsAdapter`, `LinuxAdapter` |
+| `refineui::foundation` | Yes | Theme and density access, `LayerOrder`, `CursorRole`, re-exported blur / window / z-index tokens |
+| `refineui::interaction` | State machines (GPUI-free) | `keymap` (contexts, conflicts, `KeybindingManager`), `selection` (`SelectionModel`), `focus` (roving focus, regions), `dnd` (drop geometry) |
+| `refineui::components` | Yes | The component set (re-exported at the crate root) |
+| `refineui::shell` | Yes | Window presets and state, Titlebar, Window Controls, Window Frame, Menu Bar, Activity Bar, Status Bar, Application Shell, Floating Panel, Notification Center, Preferences Window, session restore |
+| `refineui::workspace` | Yes (`layout` is plain data) | Split View, Panel, Panel Group, Dock, Dock Area, Tab Bar, Tab Group, Inspector; `layout` is the persisted workspace model (`serde` feature) |
+| `refineui::platform` | Logic + `cfg` glue | `PlatformAdapter`, `MacOsAdapter`, `WindowsAdapter`, `LinuxAdapter`, `Os`, `ScrollbarStyle`; `platform::windows` backdrop types |
+| `refineui::material` | Yes | `SurfaceKind`, `materials_active` — the glue between components and the Material Engine |
+| `refineui::motion` | Yes | Tweens, springs and `ReducedMotion` |
 
-Crates follow the three layers of the material brief: **Foundation**
-(`refineui-foundation`, GPUI-free), **Desktop** (`refineui`: components,
-interaction, workspace, shell, platform) and **Material**
-(`refineui-material`). Material depends only on GPUI and the foundation,
-never on components; components adopt materials in Phase 4. Inside
-`refineui` the sub-layers stay modules — separate crates would add version
-and re-export overhead without stronger guarantees (brief principle 7).
-Shared contracts (`refineui-foundation`) never depend on GPUI.
+Crates follow three layers: **Foundation** (`refineui-foundation`,
+GPUI-free), **Desktop** (`refineui`: components, interaction, workspace,
+shell, platform) and **Material** (`refineui-material`). Material depends only
+on GPUI and the foundation, never on components; `refineui` uses it behind the
+`material` feature. Inside `refineui` the sub-layers stay modules, because
+separate crates would add version and re-export overhead without stronger
+guarantees. Shared contracts never depend on GPUI.
 
-`use refineui::prelude::*` re-exports components, the theme, density,
-`LayerOrder`, `CursorRole`, `SelectionModel` and `PlatformAdapter`.
+`use refineui::prelude::*` re-exports the components, the theme, density,
+`LayerOrder`, `CursorRole`, `KeybindingManager`, `SelectionModel`, motion,
+`PlatformAdapter`, and the shell and workspace types.
+`refineui::init(cx)` registers the bundled fonts, the theme global and the
+default key bindings.
 
 ## Cargo features
 
@@ -63,12 +67,11 @@ Shared contracts (`refineui-foundation`) never depend on GPUI.
 | --- | --- | --- |
 | `bundled-fonts` | yes | Embed Inter. |
 | `syntax-highlight` | yes | CodeBlock colours (syntect). |
-| `web-extras` | no | The web page `container()` (outside Desktop Core). `Link` and `Carousel` are core; `Footer` and `NavigationMenu` were removed. |
+| `web-extras` | no | The web page `container()` / `container_with()` (outside Desktop Core). |
 | `serde` | no | `Serialize` / `Deserialize` for `workspace::layout`. |
 | `material` | no | Components on the Material Engine (real backdrop blur for Popover, Tooltip, Menu, the dialog scrim, `Surface`, opt-in glass Button / Input / Toast / Dialog). Needs the vendored gpui patch (see Installation). |
-| `typecheck-macos-vibrancy` | no | Type-check the AppKit glue on non-macOS hosts (CI only). |
 
-## Rules (brief §8)
+## Rules
 
 1. GPUI-native primitives and lifecycle: `RenderOnce` for stateless
    pieces, entities for stateful views, element state for transient state.
@@ -83,36 +86,3 @@ Shared contracts (`refineui-foundation`) never depend on GPUI.
 8. No literal colors or sizes where a semantic token exists.
 9. Every public component has a machine-readable
    [contract](/architecture/contracts/); a test enforces it.
-
-## Phase plan
-
-| Phase | Brief §9 steps | Scope | Status |
-| --- | --- | --- | --- |
-| 1 | 1–5 | Inspect, inventory, contracts, layer architecture, shell design. Skeleton modules plus tests. `web-extras` split. | **Done** |
-| 2 | 6 | Foundation and interaction in GPUI: density everywhere (Spacious), focus regions (F6), keymap → GPUI bindings and Shortcut Hint, drag handle / preview / drop zone, selection box, cursor roles; Command Palette; shell chrome (Window, Titlebar, Window Controls, Menu Bar, Toolbar, Status Bar, Activity Bar / Navigation Rail, Application Shell) | **Done** |
-| 3 | 7 | Workspace composition on `workspace::layout`: Split View, Resizable Handle, Panel, Panel Group, Dock, Dock Area, Inspector, Tab Bar, Tab Group, Document Tab, Floating Panel, persistence | Next |
-| 4 | 8 | Adapt reusable components to their contracts (all 8 states, density, keyboard). Virtualized Table and Tree with multi-select and DnD. ResultView | |
-| 5 | 9 | System components (Notification Center, Preferences, pickers, Shortcut Recorder, Progress Dialog, Window Switcher); macOS and Windows validation | |
-| 6 | 10 | Public API docs and examples (IDE, creative app, AI app) | |
-
-### Phase 3 plan (workspace composition)
-
-1. **Split View + Resizable Handle** on `workspace::layout` splits: ratio and
-   minimum sizes, collapse, keyboard resize, double-click reset, density hit
-   areas (`splitter_hit`).
-2. **Panel / Panel Group** — panel header (title, actions, overflow), tabs
-   of panels inside a dock, collapse / expand, focus by shortcut.
-3. **Dock / Dock Area** — `ShellDock` becomes resizable and persisted;
-   left / right / bottom docks; drag a panel between docks with
-   `DropZone`; zoom (maximize) a dock.
-4. **Tab Bar / Tab Group / Document Tab** — reorder with
-   `DropIndicator::between_tabs`, dirty / pinned / preview tabs, context
-   menu (close others, split), overflow, drag a tab onto a pane edge to
-   split (`dock_zone`) → layout mutations.
-5. **Inspector** (property grid for the right dock) and **Floating Panel**
-   (a detached GPUI window with frost).
-6. **Persistence** — `workspace::layout` (serde) saved with `WindowState`;
-   session restore per window; multiple windows.
-7. Toolbar overflow menu; the shell demo grows split editors, draggable
-   tabs and resizable docks.
-8. Platform track alongside: Windows Mica / Acrylic in `platform::windows`.

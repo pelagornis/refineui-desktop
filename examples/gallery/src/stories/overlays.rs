@@ -25,17 +25,9 @@ pub(super) fn stories() -> Vec<Story> {
             id: "popover",
             name: "Popover",
             group: StoryGroup::Overlays,
-            summary: "Anchored floating panel with rich content.",
-            shot: (520., 300.),
+            summary: "Anchored floating panel with rich content, and its four placements.",
+            shot: (760., 560.),
             render: popover,
-        },
-        Story {
-            id: "popover-sides",
-            name: "Popover Sides",
-            group: StoryGroup::Overlays,
-            summary: "Popover beak on each side, continuous with the panel.",
-            shot: (1100., 500.),
-            render: popover_sides,
         },
         Story {
             id: "dialog",
@@ -110,7 +102,9 @@ fn context_menu(_w: &mut Window, _cx: &mut App) -> AnyElement {
 }
 
 /// Web `PopOverDemo`: secondary "Open" trigger, "Dimensions" form content,
-/// centered below the trigger with the beak.
+/// centered below the trigger with the beak. Below it, the panel for each
+/// `placement` (static `popover_panel_at`, so the beak side is visible
+/// without a trigger): the beak faces the trigger on every side.
 fn popover(w: &mut Window, cx: &mut App) -> AnyElement {
     let shot = state("popover-shot", w, cx, || true);
     let width = w.use_keyed_state("pop-width", cx, |_, cx| {
@@ -162,19 +156,11 @@ fn popover(w: &mut Window, cx: &mut App) -> AnyElement {
                 .into_any_element()
         },
     );
-    div()
-        .w(px(472.))
-        .flex()
-        .justify_center()
-        .child(if *shot.read(cx) { p.force_open() } else { p })
-        .into_any_element()
-}
-
-fn popover_sides(_w: &mut Window, cx: &mut App) -> AnyElement {
-    let cell = |side: AnchorSide, label: &'static str, cx: &App| {
+    let side = |side: AnchorSide, label: &'static str, cx: &App| {
         let body = Text::new(label).role(TextRole::BodyMd).into_any_element();
+        // Padding leaves room for the 12px beak on the trigger side.
         div()
-            .p(px(16.))
+            .p(px(14.))
             .child(popover_panel_at(
                 None,
                 body,
@@ -186,23 +172,35 @@ fn popover_sides(_w: &mut Window, cx: &mut App) -> AnyElement {
             ))
             .into_any_element()
     };
-    div()
-        .w(px(1040.))
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .child(cell(AnchorSide::Top, "Top", cx))
+    v_stack(24.)
         .child(
+            // Room for the forced-open panel below the trigger.
             div()
+                .w(px(720.))
+                .h(px(268.))
                 .flex()
-                .items_center()
-                .gap(px(12.))
-                .child(cell(AnchorSide::Left, "Left", cx))
-                .child(Button::new("pop-sides-target", "Trigger").variant(ButtonVariant::Secondary))
-                .child(cell(AnchorSide::Right, "Right", cx)),
+                .justify_center()
+                .child(if *shot.read(cx) { p.force_open() } else { p }),
         )
-        .child(cell(AnchorSide::Bottom, "Bottom", cx))
+        .child(super::section(
+            "Placement",
+            v_stack(0.)
+                .child(
+                    row()
+                        .gap(px(8.))
+                        .items_start()
+                        .child(side(AnchorSide::Top, "Top", cx))
+                        .child(side(AnchorSide::Bottom, "Bottom", cx)),
+                )
+                .child(
+                    row()
+                        .gap(px(8.))
+                        .items_start()
+                        .child(side(AnchorSide::Left, "Left", cx))
+                        .child(side(AnchorSide::Right, "Right", cx)),
+                ),
+            cx,
+        ))
         .into_any_element()
 }
 

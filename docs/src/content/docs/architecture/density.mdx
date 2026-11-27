@@ -7,8 +7,8 @@ sidebar:
 
 `Theme::density` picks one of three modes. **Comfortable** is the default
 and matches RefineUI web pixel-for-pixel. Every number below comes from
-`refineui_tokens::size::Density` and is exported to
-`crates/refineui-tokens/contracts/density.json`; a test keeps the file in
+`refineui_foundation::size::Density` and is exported to
+`crates/refineui-foundation/contracts/density.json`; a test keeps the file in
 sync. Padding, gap and radius values are always spacing / radius / icon
 tokens.
 
@@ -57,7 +57,7 @@ mode. Only the hit area grows.
 | Windows | 32 | 40 | 48 |
 | Linux (CSD) | 38 | 38 | 46 |
 
-## Applying density to components (Phase 2)
+## Applying density to components
 
 `Theme::set_density` re-renders everything; components read
 `cx.theme().density`:

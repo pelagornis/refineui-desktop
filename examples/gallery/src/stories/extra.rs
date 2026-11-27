@@ -2,9 +2,11 @@
 //! Group, Command, Date / Time Input, conversation primitives, Chart,
 //! Carousel, layout primitives…).
 
-use gpui::{AnyElement, App, Focusable, IntoElement, ParentElement, Styled, Window, div, px};
+use gpui::{
+    AnyElement, App, InteractiveElement, IntoElement, ParentElement, Styled, Window, div, px,
+};
+use refineui::Axis;
 use refineui::prelude::*;
-use refineui::{Axis, FrostMode, frost_mode, set_frost_mode};
 
 fn eid(s: String) -> gpui::ElementId {
     gpui::ElementId::Name(s.into())
@@ -35,7 +37,7 @@ pub(super) fn stories() -> Vec<Story> {
             name: "Date Input",
             group: StoryGroup::Forms,
             summary: "Field that opens a Calendar popover (single date or range).",
-            shot: (760., 160.),
+            shot: (760., 360.),
             render: date_input,
         },
         Story {
@@ -242,7 +244,11 @@ fn toolbar(w: &mut Window, cx: &mut App) -> AnyElement {
         .into_any_element()
 }
 
+/// Web `DateInputDemo`: a 325px `lg` field (the Input demo width), here in
+/// a labelled `Field`; every field in a row shares that width and its label
+/// sits on the same line.
 fn date_input(w: &mut Window, cx: &mut App) -> AnyElement {
+    const WIDTH: f32 = 325.;
     let d = state("di-date", w, cx, || Some(Date::new(2026, 11, 10)));
     let r = state("di-range", w, cx, || {
         (Some(Date::new(2026, 11, 3)), Some(Date::new(2026, 11, 12)))
@@ -250,38 +256,66 @@ fn date_input(w: &mut Window, cx: &mut App) -> AnyElement {
     let d2 = d.clone();
     let r2 = r.clone();
     let (rs, re) = *r.read(cx);
-    row()
-        .items_start()
-        .gap(px(16.))
+    let field = |f: Field| div().w(px(WIDTH)).flex_none().child(f);
+    let fields = || div().flex().items_start().gap(px(24.));
+    v_stack(20.)
         .child(
-            div().w(px(220.)).child(
-                DateInput::new("di", *d.read(cx))
-                    .full_width(true)
-                    .on_change(move |v, _, cx| {
-                        d2.update(cx, |s, cx| {
-                            *s = Some(*v);
-                            cx.notify();
-                        })
-                    }),
-            ),
+            fields()
+                .child(section(
+                    "Single",
+                    field(
+                        Field::new().label("Date").control(
+                            DateInput::new("di", *d.read(cx))
+                                .full_width(true)
+                                .on_change(move |v, _, cx| {
+                                    d2.update(cx, |s, cx| {
+                                        *s = Some(*v);
+                                        cx.notify();
+                                    })
+                                }),
+                        ),
+                    ),
+                    cx,
+                ))
+                .child(section(
+                    "Range",
+                    field(
+                        Field::new().label("Trip dates").control(
+                            DateInput::range("di-r", rs, re)
+                                .full_width(true)
+                                .on_range_change(move |a, b, _, cx| {
+                                    r2.update(cx, |s, cx| {
+                                        *s = (a, b);
+                                        cx.notify();
+                                    })
+                                }),
+                        ),
+                    ),
+                    cx,
+                )),
         )
-        .child(
-            div().w(px(280.)).child(
-                DateInput::range("di-r", rs, re)
-                    .full_width(true)
-                    .on_range_change(move |a, b, _, cx| {
-                        r2.update(cx, |s, cx| {
-                            *s = (a, b);
-                            cx.notify();
-                        })
-                    }),
-            ),
-        )
-        .child(
-            div()
-                .w(px(160.))
-                .child(DateInput::new("di-e", None).full_width(true).error(true)),
-        )
+        .child(section(
+            "States",
+            fields()
+                .child(field(
+                    Field::new()
+                        .label("Due date")
+                        .required(true)
+                        .error("Select a date to continue.")
+                        .control(DateInput::new("di-e", None).full_width(true).error(true)),
+                ))
+                .child(field(
+                    Field::new()
+                        .label("Start date")
+                        .hint("Set by your administrator.")
+                        .control(
+                            DateInput::new("di-d", Some(Date::new(2026, 12, 1)))
+                                .full_width(true)
+                                .disabled(true),
+                        ),
+                )),
+            cx,
+        ))
         .into_any_element()
 }
 
@@ -582,23 +616,40 @@ fn command(w: &mut Window, cx: &mut App) -> AnyElement {
                     .item(CommandItem::new("Keyboard shortcuts").icon(IconName::Keyboard)),
             )
     });
+    // CommandDialog as a desktop command palette: the demo actions (with
+    // their keymap shortcuts), opened by the button or ⇧⌘P / Ctrl+Shift+P.
+    crate::demo::install(cx);
     let open = state("command-dialog-open", w, cx, || false);
     let is_open = *open.read(cx);
     let dialog_cmd = w.use_keyed_state("command-dialog-story", cx, |window, cx| {
-        Command::new(window, cx).group(
-            CommandGroup::new("Suggestions")
-                .item(CommandItem::new("Calendar").icon(IconName::Calendar))
-                .item(
-                    CommandItem::new("Search files")
-                        .icon(IconName::Search)
-                        .shortcut("⌘P"),
-                ),
-        )
+        // Same Command as above; CommandDialog renders it at `lg` (web default).
+        let mut cmd = Command::new(window, cx).empty_text("No matching commands.");
+        cmd.set_groups(crate::demo::commands(), cx);
+        cmd
     });
+    // Running a command closes the dialog (the action is dispatched first).
+    let close_on_select = open.clone();
+    w.use_keyed_state("command-dialog-close", cx, |_, cx| {
+        cx.subscribe(&dialog_cmd, move |_, _, e: &CommandEvent, cx| {
+            if matches!(e, CommandEvent::Select(_)) {
+                close_on_select.update(cx, |o, cx| {
+                    *o = false;
+                    cx.notify();
+                });
+            }
+        })
+    });
+    let show = open.clone();
     let empty_cmd = w.use_keyed_state("command-empty-story", cx, |window, cx| {
         Command::new(window, cx).empty_text("No results found")
     });
     v_stack(12.)
+        .on_action(move |_: &crate::demo::ShowCommands, _, cx| {
+            show.update(cx, |o, cx| {
+                *o = true;
+                cx.notify();
+            })
+        })
         .child(div().w(px(440.)).child(cmd))
         .child(
             v_stack(4.)
@@ -615,14 +666,11 @@ fn command(w: &mut Window, cx: &mut App) -> AnyElement {
                 .size(ControlSize::Small)
                 .on_click({
                     let open = open.clone();
-                    let dialog_cmd = dialog_cmd.clone();
-                    move |_, window, cx| {
+                    move |_, _, cx| {
                         open.update(cx, |o, cx| {
                             *o = true;
                             cx.notify();
-                        });
-                        let search = dialog_cmd.read(cx).search().clone();
-                        window.focus(&search.focus_handle(cx));
+                        })
                     }
                 }),
         )
@@ -648,7 +696,6 @@ fn dropdown_items(menu: Menu) -> Menu {
 }
 
 fn dropdown(_w: &mut Window, cx: &mut App) -> AnyElement {
-    let native = frost_mode(cx) == FrostMode::Native;
     v_stack(16.)
         .child(section(
             "Dropdown",
@@ -670,26 +717,6 @@ fn dropdown(_w: &mut Window, cx: &mut App) -> AnyElement {
                     )
                     .align_end(),
                 ),
-            cx,
-        ))
-        .child(section(
-            "Backdrop (prototype)",
-            Switch::new("frost", native)
-                .label(if refineui::vibrancy::native_frost_supported() {
-                    "Native blur (pop-up window)"
-                } else {
-                    "Native blur — macOS only (opaque here)"
-                })
-                .on_change(|on, _, cx| {
-                    set_frost_mode(
-                        if *on {
-                            FrostMode::Native
-                        } else {
-                            FrostMode::Opaque
-                        },
-                        cx,
-                    )
-                }),
             cx,
         ))
         .into_any_element()

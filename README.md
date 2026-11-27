@@ -51,25 +51,25 @@ refineui::root(cx).child(
 
 ## Components
 
-**Actions**: Button, Toggle Button, Segmented Control, Link.
-**Forms**: Input, Textarea, Search Field, Input OTP, Field, Checkbox, Radio and RadioGroup, Switch (web Toggle), Slider, Spin Button, Select.
-**Display**: Text, Heading, Label, Badge, Chip/Tag, Avatar and Avatars, Card, Alert, Divider, Kbd, Spinner, Progress, ProgressStepper, Stepper, Skeleton, Tooltip, Toast and Toaster, ResultView.
+**Foundations**: Colors, Typography, Elevation, Icon, Materials, Material Effects, Material Recipes, Material Components, Layout (`h_stack`, `v_stack`, `grid`, `spacer`, `token_box`).
+**Actions**: Button, Toggle Button, Segmented Control, Link, Button Group, Toolbar.
+**Forms**: Input, Textarea, Search Field, Input OTP, Field, Checkbox, Radio and RadioGroup, Switch (web Toggle), Slider, Spin Button, Select, Date Input, Time Input, Label.
+**Display**: Text, Badge, Chip, Tag, Avatar and Avatars, Card, Alert, Divider, Kbd, Spinner, Progress, Progress Stepper, Stepper, Skeleton, Tooltip, Toast and Toaster, ResultView, Message, Bubble, Marker, Code Block, Chart, Carousel.
 **Navigation**: Tabs, Breadcrumb, Pagination, Sidebar, Tree, Accordion and Collapsible, Calendar.
-**Overlays**: Menu, DropdownMenu, ContextMenu, Popover, Dialog, Drawer, Command and Command Palette.
-**Data**: Table, Scroll Area.
-**Layout**: `h_stack`, `v_stack`, `spacer`.
-**Shell**: Window, Titlebar, Window Controls, Menu Bar, Toolbar, Status Bar, Activity Bar, Application Shell, Notification Center, Preferences, Shortcut Recorder, Shortcut Hint.
+**Overlays**: Menu, Context Menu, Popover, Dialog, Drawer, Command and CommandDialog, Dropdown.
+**Data**: Table, Scroll Area, Resizable.
+**Shell**: Application Shell, Titlebar, Window Controls, Menu Bar, Status Bar, Activity Bar, Shortcut Hint, Drag and Drop, Sortable List, Selection Box, Notification Center, Preferences Window, Shortcut Recorder.
+**Workspace**: Split View, Tab Group, Panel Group, Dock Area, Inspector, Floating Panel.
 
 ### Desktop behaviour
 
 - **Select** matches the web (Radix item-aligned): the popup covers the trigger with the selected row exactly over the value. Near a window edge it shifts to stay inside the 10px collision padding, and when the list is too tall it shrinks and scrolls its `ScrollArea` so the selected row still lands on the trigger. Scrolling a popup that opened short grows it toward the window edge first, as on the web.
 - **Tooltip** is collision-aware and anchored to its trigger (`place_anchored`), flipping when space is tight, with a beak aimed at the trigger.
-- **Activity Bar** supports folders. Its rail uses a hidden scrollbar so the overlay track does not cover icons or badges.
-- **Native blur** (`FrostMode::Native`, macOS) opens Dropdown, Context Menu, Menu submenus, Select and Popover in their own pop-up windows over a colorless `NSVisualEffectView`. The plate is the Regular material tint (`backgroundPrimary` at 0.62 light / 0.58 dark). The window's `NSAppearance` follows the RefineUI theme. Other platforms keep the opaque in-window fill.
+- **Activity Bar** is icon-only, captioned, expanded or horizontal, with sections, pinned footer items, folders and badges that stay inside the item. Its list uses a hidden scrollbar so the overlay track does not cover icons or badges.
 
 ## Development
 
-Requires Rust 1.88+ (see `rust-toolchain.toml`). The main target is macOS on Apple Silicon.
+Requires Rust 1.98+ (`rust-version` in `Cargo.toml`; required by the icons crate). The main target is macOS on Apple Silicon.
 
 ```sh
 cargo fmt
@@ -79,6 +79,7 @@ cargo clippy --no-default-features -- -D warnings
 cargo test --all-features --workspace
 
 cargo run -p refineui-gallery            # browse every component
+python3 scripts/gen_docs.py              # regenerate the generated docs pages
 ./scripts/screenshots.sh                 # regenerate docs screenshots
 ./scripts/visual-regression.sh           # compare gallery shots against baselines
 cd docs && bun install && bun run dev    # documentation site
@@ -89,8 +90,8 @@ See [AGENTS.md](AGENTS.md) for the architecture, conventions and workflows.
 
 ### Platform notes
 
-- **macOS** (Apple Silicon) is the primary target. Native frost (`FrostMode::Native`) is macOS-only.
-- **Linux** and **Windows** build and run the gallery; `Native` falls back to opaque in-window panels. The Material Engine's real backdrop blur is implemented on Metal (macOS) and Blade (Vulkan, Linux). DirectX (Windows) reports `backdrop_blur_supported() == false` and paints the documented fallback.
+- **macOS** (Apple Silicon) is the primary target.
+- **Linux** and **Windows** build and run the gallery. The Material Engine's real backdrop blur is implemented on Metal (macOS) and Blade (Vulkan, Linux). DirectX (Windows) reports `backdrop_blur_supported() == false` and paints the documented fallback.
 - The `material` feature requires the vendored gpui patch in `vendor/gpui`. Without `material`, `refineui` works with stock gpui 0.2.2.
 - Visual regression on Linux is run through `scripts/visual-regression.sh` (Xvfb at 2×). A plain `cargo test` under an existing `DISPLAY` may see different window sizes.
 

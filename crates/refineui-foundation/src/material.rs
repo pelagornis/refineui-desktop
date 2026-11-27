@@ -19,7 +19,7 @@ use crate::{Color, Mode, blur, palette, semantic::SemanticColors, shadow::Elevat
 pub enum MaterialRole {
     /// Light frosting for small transient surfaces (tooltips, peeks).
     Thin,
-    /// Default frosted surface (menus, popovers, command palette).
+    /// Default frosted surface (menus, popovers, command dialog).
     Regular,
     /// Heavy frosting; content behind is only a soft color field (sheets).
     Thick,

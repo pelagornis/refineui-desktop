@@ -74,10 +74,6 @@ pub const ALL: &[ContractFile] = &[
         json: include_str!("components/command.json"),
     },
     ContractFile {
-        id: "command-palette",
-        json: include_str!("components/command-palette.json"),
-    },
-    ContractFile {
         id: "context-menu",
         json: include_str!("components/context-menu.json"),
     },

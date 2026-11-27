@@ -10,7 +10,6 @@ sidebar:
 | Renderer | Metal | Blade (Vulkan) | DirectX 11 |
 | Backdrop blur | yes (MSL kernels) | yes (WGSL kernels) | no: documented fallback fill |
 | Blur cache | yes | yes | — |
-| Native frost pop-ups | NSVisualEffectView (`vibrancy`), turns in-app blur off | — | — |
 | Window chrome | traffic-light inset, global menu bar | client-side decorations, in-window menu bar | caption buttons, in-window menu bar |
 | Shortcut labels | `⇧⌘P`, one keycap per stroke | `Ctrl+Shift+P` | `Ctrl+Shift+P` |
 | Scrollbars | overlay | overlay | persistent |
@@ -24,7 +23,7 @@ How it was validated:
   `scripts/macos-check/check.sh` (`cargo check --target aarch64-apple-darwin`
   with stubbed system tools, plus a syntax check of the MSL shim).
 - On the Mac itself, each phase was delivered, and the full suite and docs
-  build passed there (Phase 5: 128 tests, 103 pages).
+  build passed there (latest, 2026-11-27: 175 tests, 116 docs pages).
 - The gallery ran on Metal with no shader compile error or panic:
   material stories, `desktop-showcase`, `notification-center`, `select`.
 
@@ -36,8 +35,6 @@ Still to confirm on the Mac:
 - Create and commit the macOS visual baselines
   (`scripts/visual-regression.sh --update`). The terminal needs the Screen
   Recording permission.
-- Native frost on: chrome and popovers fall back to opaque with no
-  double tint.
 - Reduced motion (`ReducedMotion`) and reduced transparency.
 
 ## Linux
@@ -46,7 +43,7 @@ Every check runs here (the development box): X11 through Xvfb, Vulkan on
 lavapipe (software). This covers:
 
 - The full suite.
-- All 172 screenshots.
+- All 180 screenshots.
 - Visual regression against committed baselines.
 - Benchmarks.
 

@@ -190,10 +190,13 @@ pub(crate) fn picker_popup(
                                 .opacity(if measured { p.progress } else { 0. })
                                 .mt(gap + slide)
                                 .when(p.open, |d| {
-                                    d.on_mouse_down_out(move |_, _, cx| {
-                                        close_out.update(cx, |o, cx| {
-                                            *o = false;
-                                            cx.notify();
+                                    d.on_mouse_down_out(move |_, w, cx| {
+                                        let close_out = close_out.clone();
+                                        crate::layer::close_on_outside_press(w, cx, move |_, cx| {
+                                            close_out.update(cx, |o, cx| {
+                                                *o = false;
+                                                cx.notify();
+                                            })
                                         })
                                     })
                                 })

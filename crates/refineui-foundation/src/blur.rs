@@ -1,8 +1,7 @@
 //! Backdrop blur radii — `global/blurs.ts` + `semantic/blur.ts`.
 //!
 //! Radii are Gaussian σ in px (CSS `blur()` semantics). `refineui-material`
-//! draws them as real in-window backdrop blur (patched GPUI renderer); the
-//! macOS vibrancy prototype uses them for the OS compositor frost.
+//! draws them as real in-window backdrop blur (patched GPUI renderer).
 
 /// `blurNone`
 pub const NONE: f32 = 0.0;

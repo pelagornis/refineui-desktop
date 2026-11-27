@@ -1,6 +1,6 @@
 //! Desktop shell chrome and interaction stories (Phase 2): titlebar, window
 //! controls, menu bar, status bar, activity bar, application shell,
-//! shortcut hints, drag and drop, selection box and the command palette.
+//! shortcut hints, drag and drop and selection box.
 
 use gpui::{
     AnyElement, App, AppContext, IntoElement, ParentElement, SharedString, Styled, Window, div,
@@ -59,8 +59,8 @@ pub(super) fn stories() -> Vec<Story> {
             id: "activity-bar",
             name: "Activity Bar",
             group: StoryGroup::Desktop,
-            summary: "Vertical navigation rail: shape, size, indicator, colours, labels, header / footer slots, custom faces, drag-to-reorder.",
-            shot: (980., 560.),
+            summary: "Top-level destinations: icon-only with tooltips, expanded with sections and folders, captions, horizontal bars, badges, disabled items, drag-to-reorder.",
+            shot: (980., 600.),
             render: activity_bar,
         },
         Story {
@@ -94,14 +94,6 @@ pub(super) fn stories() -> Vec<Story> {
             summary: "Rubber-band marquee plus click, ⌘/Ctrl-click, Shift-click and keyboard selection.",
             shot: (760., 380.),
             render: selection_box,
-        },
-        Story {
-            id: "command-palette",
-            name: "Command Palette",
-            group: StoryGroup::Desktop,
-            summary: "⇧⌘P / Ctrl+Shift+P action search with groups, icons and keymap shortcuts.",
-            shot: (760., 520.),
-            render: command_palette,
         },
         Story {
             id: "notification-center",
@@ -481,16 +473,20 @@ fn activity_bar(w: &mut Window, cx: &mut App) -> AnyElement {
     let order = state("ab-order", w, cx, || {
         vec!["explorer", "search", "git", "debug", "extensions"]
     });
-    let rail_sel = state("ab-rail-sel", w, cx, || SharedString::from("refineui"));
+    let wide_sel = state("ab-wide-sel", w, cx, || SharedString::from("inbox"));
+    let wide = state("ab-wide", w, cx, || true);
+    let rail_sel = state("ab-rail-sel", w, cx, || SharedString::from("home"));
+    let top_sel = state("ab-top-sel", w, cx, || SharedString::from("files"));
     let c = cx.theme().colors;
     let item = |id: &str| match id {
-        "explorer" => ActivityItem::icon("explorer", "Explorer", IconName::Document),
+        "explorer" => ActivityItem::icon("explorer", "Explorer", IconName::Document)
+            .action("workspace::ToggleExplorer"),
         "search" => ActivityItem::icon("search", "Search", IconName::Search),
         "git" => ActivityItem::icon("git", "Source Control", IconName::Git).badge(4),
         "debug" => ActivityItem::icon("debug", "Run and Debug", IconName::Bug),
         _ => ActivityItem::icon("extensions", "Extensions", IconName::Cube).dot(),
     };
-    let frame = |title: &str, bar: AnyElement| {
+    let frame = |title: &str, h: f32, bar: AnyElement| {
         v_stack(8.)
             .items_start()
             .child(
@@ -500,18 +496,25 @@ fn activity_bar(w: &mut Window, cx: &mut App) -> AnyElement {
             )
             .child(
                 div()
-                    .h(px(440.))
+                    .h(px(h))
                     .flex()
                     .rounded(px(10.))
                     .overflow_hidden()
                     .border(px(0.5))
-                    .border_color(c.border_subtle)
+                    .border_color(c.border_default)
                     .child(bar),
             )
     };
     let ids: Vec<&'static str> = order.read(cx).clone();
-    let refine = ActivityBar::new("ab-refine")
+    let icon_only = ActivityBar::new("ab-icons")
         .items(ids.iter().map(|i| item(i)))
+        .divider()
+        .item(
+            ActivityItem::icon("issues", "Issues", IconName::ErrorCircle)
+                .badge(128)
+                .badge_variant(BadgeVariant::Danger),
+        )
+        .item(ActivityItem::icon("deploy", "Deploy (offline)", IconName::Cloud).disabled(true))
         .footer_item(ActivityItem::image(
             "me",
             "Pelagornis Official",
@@ -537,52 +540,154 @@ fn activity_bar(w: &mut Window, cx: &mut App) -> AnyElement {
                 })
             }
         });
-    let community = ActivityBar::new("ab-community")
-        .item(ActivityItem::icon("home", "Direct Messages", IconName::Mail).badge(2))
-        .divider()
-        .item(ActivityItem::image("refineui", "RefineUI", super::display::portrait()).unread(true))
-        .item(ActivityItem::icon("rust", "Rust Korea", IconName::Code).badge(12))
-        .item(ActivityItem::folder(
-            "pinned",
-            "Pinned",
-            [
-                ActivityItem::icon("star", "Starred", IconName::Star),
-                ActivityItem::icon("photo", "Photos", IconName::Grid),
-                ActivityItem::icon("music", "Music", IconName::Play),
-                ActivityItem::icon("code", "Code", IconName::Code),
-                ActivityItem::icon("docs", "Docs", IconName::Document),
-            ],
-        ))
+    let is_wide = *wide.read(cx);
+    let toggle = {
+        let wide = wide.clone();
+        Button::icon_only("ab-toggle", IconName::PanelLeft)
+            .variant(ButtonVariant::Ghost)
+            .size(ControlSize::Small)
+            .tooltip(if is_wide { "Collapse" } else { "Expand" })
+            .on_click(move |_, _, cx| {
+                wide.update(cx, |v, cx| {
+                    *v = !*v;
+                    cx.notify();
+                })
+            })
+    };
+    let expanded = ActivityBar::new("ab-wide")
+        .expanded(is_wide)
+        .header(toggle)
+        .section("Mail")
+        .item(ActivityItem::icon("inbox", "Inbox", IconName::Mail).badge(12))
+        .item(ActivityItem::icon("starred", "Starred", IconName::Star))
+        .item(ActivityItem::icon("drafts", "Drafts", IconName::Edit).unread(true))
+        .section("Projects")
         .item(
             ActivityItem::folder(
-                "games",
-                "Game Night",
+                "work",
+                "Work",
                 [
-                    ActivityItem::icon("lol", "League Club", IconName::Play),
-                    ActivityItem::icon("mc", "Minecraft Hub", IconName::Cube),
+                    ActivityItem::icon("board", "Roadmap", IconName::Board),
+                    ActivityItem::icon("chat", "Design review", IconName::Chat).badge(3),
+                    ActivityItem::icon("db", "Data", IconName::Database),
                 ],
             )
             .default_open(true),
         )
-        .item(ActivityItem::icon(
-            "design",
-            "Design Systems",
-            IconName::Grid,
+        .item(
+            ActivityItem::folder(
+                "personal",
+                "Personal",
+                [
+                    ActivityItem::icon("ideas", "Ideas", IconName::Lightbulb).dot(),
+                    ActivityItem::icon("trips", "Trips", IconName::Pin),
+                ],
+            )
+            .folder_icon(IconName::Heart),
+        )
+        .footer_item(ActivityItem::icon(
+            "wide-settings",
+            "Settings",
+            IconName::Settings,
         ))
-        .footer_item(ActivityItem::icon("add", "Add", IconName::Add))
+        .selected(wide_sel.read(cx).clone())
+        .on_select(setter(&wide_sel));
+    let captions = ActivityBar::new("ab-rail")
+        .labels(ActivityLabels::Below)
+        .item(ActivityItem::icon("home", "Home", IconName::Home))
+        .item(ActivityItem::icon("chat", "Chat", IconName::Chat).badge(2))
+        .item(ActivityItem::icon(
+            "calendar",
+            "Calendar",
+            IconName::Calendar,
+        ))
+        .item(ActivityItem::icon("files", "Files", IconName::Folder).dot())
+        .footer_item(ActivityItem::icon("help", "Help", IconName::QuestionCircle))
         .selected(rail_sel.read(cx).clone())
         .on_select(setter(&rail_sel));
-    h_stack(20.)
+    let top = |id: &'static str, indicator: ActiveIndicator| {
+        ActivityBar::new(id)
+            .side(BarSide::Top)
+            .indicator(indicator)
+            .item(ActivityItem::icon("files", "Files", IconName::Document))
+            .item(ActivityItem::icon(
+                "outline",
+                "Outline",
+                IconName::Navigation,
+            ))
+            .item(ActivityItem::icon("changes", "Changes", IconName::Git).badge(7))
+            .divider()
+            .item(ActivityItem::icon("problems", "Problems", IconName::Warning).dot())
+            .footer_item(ActivityItem::icon("more", "More", IconName::MoreHorizontal))
+            .selected(top_sel.read(cx).clone())
+            .on_select(setter(&top_sel))
+    };
+    // Badge counts 1 / 9 / 42 / 128 in each label mode: corner badges cap at
+    // `9+` (tooltip has the count), expanded rows spell out up to `99+`.
+    let counts = |id: &'static str, labels: ActivityLabels| {
+        ActivityBar::new(id)
+            .labels(labels)
+            .item(ActivityItem::icon("one", "Mentions", IconName::Mail).badge(1))
+            .item(ActivityItem::icon("nine", "Reviews", IconName::Chat).badge(9))
+            .item(ActivityItem::icon("many", "Changes", IconName::Git).badge(42))
+            .item(
+                ActivityItem::icon("lots", "Issues", IconName::ErrorCircle)
+                    .badge(128)
+                    .badge_variant(BadgeVariant::Danger),
+            )
+            .selected("one")
+    };
+    let badge_row = h_stack(16.)
         .items_start()
         .child(frame(
-            "Activity Bar (drag to reorder)",
-            refine.into_any_element(),
+            "Badges, icon only",
+            180.,
+            counts("ab-count-icons", ActivityLabels::Tooltip).into_any_element(),
         ))
         .child(frame(
-            "Closed and open folders",
-            community.into_any_element(),
+            "Badges, captions",
+            264.,
+            counts("ab-count-rail", ActivityLabels::Below).into_any_element(),
         ))
-        .into_any_element()
+        .child(frame(
+            "Badges, expanded",
+            180.,
+            counts("ab-count-wide", ActivityLabels::Beside).into_any_element(),
+        ));
+    let main_row = h_stack(20.)
+        .items_start()
+        .child(frame(
+            "Icon only (drag to reorder)",
+            440.,
+            icon_only.into_any_element(),
+        ))
+        .child(frame(
+            "Expanded, sections, folders",
+            440.,
+            expanded.into_any_element(),
+        ))
+        .child(frame("Captions", 440., captions.into_any_element()))
+        .child(
+            v_stack(24.)
+                .child(frame(
+                    "Horizontal (top), edge indicator",
+                    48.,
+                    div()
+                        .w(px(300.))
+                        .child(top("ab-top", ActiveIndicator::Edge))
+                        .into_any_element(),
+                ))
+                .child(frame(
+                    "Horizontal, plate indicator",
+                    48.,
+                    div()
+                        .w(px(300.))
+                        .child(top("ab-top-plate", ActiveIndicator::Plate))
+                        .into_any_element(),
+                ))
+                .child(badge_row),
+        );
+    main_row.into_any_element()
 }
 
 fn shortcut_hint(_w: &mut Window, cx: &mut App) -> AnyElement {
@@ -951,93 +1056,6 @@ fn selection_box(w: &mut Window, cx: &mut App) -> AnyElement {
         .into_any_element()
 }
 
-fn command_palette(w: &mut Window, cx: &mut App) -> AnyElement {
-    demo::install(cx);
-    let palette = w.use_keyed_state("story-palette", cx, |window, cx| {
-        let mut cmds = demo::commands();
-        cmds.push(
-            CommandItem::page("Color Theme…", "theme")
-                .group("Preferences")
-                .icon(IconName::Moon)
-                .subtitle("Light, dark or follow the system"),
-        );
-        CommandPalette::new(cmds, window, cx).page(CommandPage::new(
-            "theme",
-            "Color Theme",
-            vec![
-                CommandItem::new("Light")
-                    .action("demo::ToggleAppearance")
-                    .icon(IconName::WeatherSunny),
-                CommandItem::new("Dark")
-                    .action("demo::ToggleAppearance")
-                    .icon(IconName::Moon),
-            ],
-        ))
-    });
-    // Inline preview of the palette body (the real one is a window-level
-    // overlay opened with the button or ⇧⌘P / Ctrl+Shift+P).
-    let preview_cmd = w.use_keyed_state("story-palette-preview", cx, |window, cx| {
-        let mut cmd = Command::new(window, cx);
-        let groups = vec![
-            CommandGroup::new("File")
-                .item(
-                    CommandItem::new("Save").icon(IconName::Save).shortcut(
-                        ShortcutHint::keys("secondary-s")
-                            .label(cx)
-                            .unwrap_or_default(),
-                    ),
-                )
-                .item(
-                    CommandItem::new("Open…")
-                        .icon(IconName::FolderOpen)
-                        .shortcut(
-                            ShortcutHint::keys("secondary-o")
-                                .label(cx)
-                                .unwrap_or_default(),
-                        ),
-                ),
-            CommandGroup::new("View")
-                .item(
-                    CommandItem::new("Toggle Sidebar")
-                        .icon(IconName::PanelLeft)
-                        .shortcut(
-                            ShortcutHint::keys("secondary-b")
-                                .label(cx)
-                                .unwrap_or_default(),
-                        ),
-                )
-                .item(CommandItem::new("Toggle Light / Dark").icon(IconName::Moon)),
-            CommandGroup::new("Run").item(
-                CommandItem::new("Run")
-                    .icon(IconName::Play)
-                    .shortcut(ShortcutHint::keys("f5").label(cx).unwrap_or_default()),
-            ),
-        ];
-        cmd.set_groups(groups, cx);
-        cmd.hints(true)
-    });
-    v_stack(16.)
-        .child(
-            row()
-                .child(
-                    Button::new("open-palette", "Open Command Palette")
-                        .icon(IconName::Search)
-                        .variant(ButtonVariant::Outline)
-                        .size(ControlSize::Small)
-                        .on_click({
-                            let palette = palette.clone();
-                            move |_, window, cx| palette.update(cx, |p, cx| p.toggle(window, cx))
-                        }),
-                )
-                .child(ShortcutHint::action(
-                    "command_palette::ToggleCommandPalette",
-                )),
-        )
-        .child(div().w(px(600.)).child(preview_cmd))
-        .child(palette)
-        .into_any_element()
-}
-
 /// Soft desktop wallpaper for material stories: two-tone gradient and a few
 /// large colour fields the chrome materials blur.
 fn wallpaper(cx: &App) -> gpui::Div {
@@ -1229,7 +1247,7 @@ fn preferences_window_body(w: &mut Window, cx: &mut App) -> PreferencesWindow {
     let recorder = w.use_keyed_state("prefs-recorder", cx, |_, cx| {
         ShortcutRecorder::new(cx)
             .with_keys("secondary-shift-p")
-            .action("command_palette::ToggleCommandPalette")
+            .action("demo::ShowCommands")
     });
     let toggle = |e: &gpui::Entity<bool>, id: &'static str, cx: &App| {
         let e2 = e.clone();
@@ -1335,7 +1353,7 @@ fn shortcut_recorder(w: &mut Window, cx: &mut App) -> AnyElement {
     let set = w.use_keyed_state("sr-set", cx, |_, cx| {
         ShortcutRecorder::new(cx)
             .with_keys("secondary-shift-p")
-            .action("command_palette::ToggleCommandPalette")
+            .action("demo::ShowCommands")
     });
     let conflict = w.use_keyed_state("sr-conflict", cx, |_, cx| {
         ShortcutRecorder::new(cx)

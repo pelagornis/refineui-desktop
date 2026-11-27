@@ -70,11 +70,11 @@ of decoration. Desktop keeps all of this and changes only *layout* and
   for panels) with emphasized / standard easings.
 - Honor reduced motion. State feedback is never motion-only.
 
-## Blur / frost
+## Blur
 
 - Blur and tint are separate tokens: `surfaceFrost` (16px) pairs with the
   translucent `surfaceFrosted` fill on floating panels (Menu family,
   SidebarPeek). Docked sidebars stay **opaque** `backgroundPrimary`.
-- GPUI cannot blur in-window, so frost is either pre-composited (opaque,
-  the default) or native OS vibrancy in a pop-up window (macOS; see the
-  [Blur guide](/guides/blur/)).
+- Stock GPUI cannot blur in-window, so a frosted surface is either the
+  frost colour pre-composited over the page (opaque, the default) or a real backdrop blur with the `material` feature
+  (see the [Blur guide](/guides/blur/)).

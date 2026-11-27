@@ -20,9 +20,6 @@ syntax-highlight = ["dep:syntect"]
 web-extras = []
 # `serde` derives for workspace layout state (persistence).
 serde = ["dep:serde", "dep:serde_json"]
-# Compile the macOS vibrancy AppKit glue on any host, for `cargo check`
-# only (CI on Linux). Never enable it in a build that runs.
-typecheck-macos-vibrancy = ["dep:objc"]
 # Components on the Material Engine (`refineui-material`): real backdrop blur
 # for popovers, tooltips, menus, the dialog scrim, `Surface` and opt-in glass
 # buttons / inputs / toasts. Needs the vendored gpui (`[patch.crates-io]`,
@@ -38,12 +35,8 @@ smallvec.workspace = true
 unicode-segmentation.workspace = true
 raw-window-handle = "0.6"
 syntect = { version = "5.3", default-features = false, features = ["default-syntaxes", "regex-fancy", "parsing"], optional = true }
-objc = { version = "0.2", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
-
-[target.'cfg(target_os = "macos")'.dependencies]
-objc = "0.2"
 
 [lints]
 workspace = true

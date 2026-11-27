@@ -17,7 +17,6 @@ pub(crate) fn bind_keys(cx: &mut App) {
     ]);
     crate::shell::ApplicationShell::bind_keys(cx);
     crate::shell::MenuBar::bind_keys(cx);
-    crate::CommandPalette::bind_keys(cx);
 }
 
 pub(crate) fn set_focus_visible(visible: bool, window: &mut gpui::Window, cx: &mut App) {

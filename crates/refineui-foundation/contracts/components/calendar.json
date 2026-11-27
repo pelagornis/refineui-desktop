@@ -18,19 +18,19 @@
     },
     "hovered": {
       "status": "implemented",
-      "visual": "row plate backgroundPrimaryHover (pointer)"
+      "visual": "day plate backgroundPrimaryHover / foregroundPrimaryHover (pointer)"
     },
     "pressed": {
       "status": "implemented",
-      "visual": "row plate backgroundPrimaryActive"
+      "visual": "day plate backgroundPrimaryActive, scale 0.96"
     },
     "focused": {
       "status": "implemented",
-      "visual": "keyboard cursor row plate + focusRing on the container"
+      "visual": "focusRing on the focused day (keyboard focus only)"
     },
     "disabled": {
-      "status": "implemented",
-      "visual": "row foregroundDisabled, skipped by arrows"
+      "status": "planned",
+      "visual": "day foregroundDisabled, not clickable"
     },
     "loading": {
       "status": "planned",
@@ -38,7 +38,7 @@
     },
     "selected": {
       "status": "implemented",
-      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+      "visual": "backgroundBrand + foregroundInversed (range: endpoint band and middle days backgroundPrimaryHover)"
     },
     "dragging": {
       "status": "planned",
@@ -79,32 +79,12 @@
   },
   "keyboard": [
     {
-      "keys": "left",
-      "action": "previous day"
-    },
-    {
-      "keys": "right",
-      "action": "next day"
-    },
-    {
-      "keys": "up",
-      "action": "previous week"
-    },
-    {
-      "keys": "down",
-      "action": "next week"
-    },
-    {
-      "keys": "pageup",
-      "action": "previous month"
-    },
-    {
-      "keys": "pagedown",
-      "action": "next month"
-    },
-    {
       "keys": "enter",
-      "action": "choose day"
+      "action": "choose the focused day"
+    },
+    {
+      "keys": "space",
+      "action": "choose the focused day"
     }
   ],
   "focus": {

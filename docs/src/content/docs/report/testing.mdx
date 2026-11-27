@@ -21,11 +21,11 @@ sidebar:
 | macOS type-check from Linux | `scripts/macos-check/check.sh` (Rust and the MSL shim) |
 | Visual regression | `scripts/visual-regression.sh` |
 
-## Latest results (2026-11-20, Linux)
+## Latest results (2026-11-27, Linux)
 
 | Target | Tests |
 | --- | --- |
-| `refineui` unit tests (motion, springs, keymap, selection, dnd, layout, platform, materials glue, shortcut keys…) | 99 |
+| `refineui` unit tests (motion, springs, keymap, selection, dnd, layout, platform, materials glue, calendar, date / time input, select, tooltip placement…) | 144 |
 | `refineui` contracts (schema, density sizes, every public component has a contract) | 3 |
 | `refineui` nested layers (deferred / layer nesting draws without panicking) | 2 |
 | `refineui-foundation` | 9 |
@@ -34,14 +34,13 @@ sidebar:
 | Gallery: every story renders in a debug build, light and dark; story ids unique | 1 + 1 |
 | Gallery: visual regression (compare and pixel diff) | 2 |
 | Doc tests | 1 |
-| **Total** | **130 passed, 0 failed** |
-| gpui patch tests (`BackdropBlur` ordering, cache, …) | 6 passed |
+| **Total** | **175 passed, 0 failed** |
 
-Every other check in the table above passes as well: fmt, clippy (both
-feature sets), the build without default features, the docs site
-(102 pages plus the API reference), one gpui, and the macOS type-check.
-On the Mac (Phase 5 build), the suite passes with 128 tests and 103 docs
-pages, and the gallery runs on Metal.
+Every other check in the table above passes as well: fmt, clippy (default,
+all features, and `refineui` alone with and without default features), the
+build without default features, the docs site (116 pages, including the API
+reference), one gpui, and `gen_docs.py --check`. The same suite passes on the
+Mac (175 tests; the visual test skips there until macOS baselines exist).
 
 ## Visual regression
 
@@ -53,8 +52,10 @@ light and dark with the `refineui-screenshots` binary:
 - material-recipes
 - material-components
 - application-shell
+- preferences-window
 - notification-center
 - result
+- activity-bar
 - desktop-showcase
 
 It compares each PNG with `tests/visual/baselines/<os>/`:
@@ -88,6 +89,6 @@ The test **skips** with a note on stderr, and passes, when it cannot render:
 - The renderer times out.
 
 With `--strict` (`REFINEUI_VISUAL_STRICT=1`), these skips fail instead; use
-this on CI machines that have a display. The latest Linux run: all 16
-images within 0.005% (the button's focus-ring edge); every other image was
-identical.
+this on CI machines that have a display. The latest Linux run (strict): all
+20 images within 0.05% (button focus-ring edge, material grain); the other 16 round to
+0.000%.

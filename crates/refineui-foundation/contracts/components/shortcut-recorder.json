@@ -3,7 +3,7 @@
   "id": "shortcut-recorder",
   "name": "Shortcut Recorder",
   "layer": "interaction",
-  "status": "new",
+  "status": "exists",
   "phase": 5,
   "feature": null,
   "desktop_target": "Shortcut Recorder",

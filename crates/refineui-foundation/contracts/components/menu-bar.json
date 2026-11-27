@@ -3,7 +3,7 @@
   "id": "menu-bar",
   "name": "Menu Bar",
   "layer": "application",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Menu Bar",

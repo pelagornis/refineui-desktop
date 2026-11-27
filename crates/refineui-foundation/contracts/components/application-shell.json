@@ -3,7 +3,7 @@
   "id": "application-shell",
   "name": "Application Shell",
   "layer": "application",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Application Shell",
@@ -102,10 +102,6 @@
     {
       "keys": "f10",
       "action": "focus the menu bar"
-    },
-    {
-      "keys": "secondary-shift-p",
-      "action": "command palette"
     }
   ],
   "focus": {

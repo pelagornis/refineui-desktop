@@ -1,9 +1,9 @@
-//! Demo actions, key bindings, menus and palette commands shared by the
+//! Demo actions, key bindings, menus and command entries shared by the
 //! gallery stories.
 
 use gpui::App;
 use refineui::IconName;
-use refineui::components::CommandItem;
+use refineui::components::{CommandGroup, CommandItem};
 use refineui::interaction::keymap::KeybindingManager;
 use refineui::platform::Os;
 use refineui::shell::AppMenu;
@@ -49,6 +49,7 @@ gpui::actions!(
         NewWindow,
         ToggleInspector,
         ResetLayout,
+        ShowCommands,
     ]
 );
 
@@ -70,11 +71,7 @@ pub fn keymap() -> KeybindingManager {
         ("secondary-v", "demo::Paste", Some("Editor")),
         ("secondary-a", "demo::SelectAll", Some("Editor")),
         ("secondary-f", "demo::Find", None),
-        (
-            "secondary-shift-p",
-            "command_palette::ToggleCommandPalette",
-            None,
-        ),
+        ("secondary-shift-p", "demo::ShowCommands", None),
         ("secondary-b", "demo::ToggleSidebar", None),
         ("secondary-j", "demo::TogglePanel", None),
         ("secondary-=", "demo::ZoomIn", None),
@@ -165,7 +162,7 @@ pub fn menus() -> Vec<AppMenu> {
     );
     v.push(
         AppMenu::new("View")
-            .action("Command Palette…", "command_palette::ToggleCommandPalette")
+            .action("Command Palette…", "demo::ShowCommands")
             .separator()
             .action("Toggle Sidebar", "demo::ToggleSidebar")
             .action("Toggle Panel", "demo::TogglePanel")
@@ -214,92 +211,144 @@ pub fn menus() -> Vec<AppMenu> {
     v
 }
 
-/// Command palette entries.
-pub fn commands() -> Vec<CommandItem> {
-    vec![
-        CommandItem::new("New File")
-            .action("demo::NewFile")
-            .group("File")
-            .icon(IconName::Document),
-        CommandItem::new("Open…")
-            .action("demo::OpenFile")
-            .group("File")
-            .icon(IconName::FolderOpen),
-        CommandItem::new("Save")
-            .action("demo::Save")
-            .group("File")
-            .icon(IconName::Save),
-        CommandItem::new("Save All")
-            .action("demo::SaveAll")
-            .group("File"),
-        CommandItem::new("Close Tab")
-            .action("demo::CloseTab")
-            .group("File"),
-        CommandItem::new("Toggle Sidebar")
-            .action("demo::ToggleSidebar")
-            .group("View")
-            .icon(IconName::PanelLeft)
-            .keywords(["explorer", "panel"]),
-        CommandItem::new("Toggle Panel")
-            .action("demo::TogglePanel")
-            .group("View")
-            .keywords(["terminal", "output", "problems"]),
-        CommandItem::new("Toggle Status Bar")
-            .action("demo::ToggleStatusBar")
-            .group("View"),
-        CommandItem::new("Toggle Inspector")
-            .action("demo::ToggleInspector")
-            .group("View")
-            .icon(IconName::Options),
-        CommandItem::new("Split Editor Right")
-            .action("demo::SplitRight")
-            .group("Layout")
-            .icon(IconName::SquareMultiple)
-            .keywords(["split", "group", "pane"]),
-        CommandItem::new("Split Editor Down")
-            .action("demo::SplitDown")
-            .group("Layout")
-            .keywords(["split", "group", "pane"]),
-        CommandItem::new("Toggle Maximized Editor Group")
-            .action("demo::ToggleZoom")
-            .group("Layout")
-            .icon(IconName::FullScreenMaximize)
-            .keywords(["zoom", "maximize"]),
-        CommandItem::new("Float Panel")
-            .action("demo::FloatPanel")
-            .group("Layout")
-            .keywords(["detach", "window", "undock"]),
-        CommandItem::new("Reset Layout")
-            .action("demo::ResetLayout")
-            .group("Layout"),
-        CommandItem::new("New Window")
-            .action("demo::NewWindow")
-            .group("Window")
-            .icon(IconName::Desktop),
-        CommandItem::new("Toggle Light / Dark")
-            .action("demo::ToggleAppearance")
-            .group("View")
-            .icon(IconName::Moon)
-            .keywords(["theme", "appearance", "dark", "light"]),
-        CommandItem::new("Cycle Density")
-            .action("demo::CycleDensity")
-            .group("View")
-            .keywords(["compact", "comfortable", "spacious"]),
-        CommandItem::new("Run")
-            .action("demo::Run")
-            .group("Run")
-            .icon(IconName::Play),
-        CommandItem::new("Start Debugging")
-            .action("demo::Debug")
-            .group("Run")
-            .icon(IconName::Bug),
-        CommandItem::new("Settings")
-            .action("demo::Preferences")
-            .group("Preferences")
-            .icon(IconName::Settings),
-        CommandItem::new("Documentation")
-            .action("demo::Docs")
-            .group("Help")
-            .icon(IconName::QuestionCircle),
-    ]
+/// Command entries, grouped in first-seen order (each runs a demo action).
+pub fn commands() -> Vec<CommandGroup> {
+    let items = [
+        (
+            "File",
+            CommandItem::new("New File")
+                .action("demo::NewFile")
+                .icon(IconName::Document),
+        ),
+        (
+            "File",
+            CommandItem::new("Open…")
+                .action("demo::OpenFile")
+                .icon(IconName::FolderOpen),
+        ),
+        (
+            "File",
+            CommandItem::new("Save")
+                .action("demo::Save")
+                .icon(IconName::Save),
+        ),
+        ("File", CommandItem::new("Save All").action("demo::SaveAll")),
+        (
+            "File",
+            CommandItem::new("Close Tab").action("demo::CloseTab"),
+        ),
+        (
+            "View",
+            CommandItem::new("Toggle Sidebar")
+                .action("demo::ToggleSidebar")
+                .icon(IconName::PanelLeft)
+                .keywords(["explorer", "panel"]),
+        ),
+        (
+            "View",
+            CommandItem::new("Toggle Panel")
+                .action("demo::TogglePanel")
+                .keywords(["terminal", "output", "problems"]),
+        ),
+        (
+            "View",
+            CommandItem::new("Toggle Status Bar").action("demo::ToggleStatusBar"),
+        ),
+        (
+            "View",
+            CommandItem::new("Toggle Inspector")
+                .action("demo::ToggleInspector")
+                .icon(IconName::Options),
+        ),
+        (
+            "Layout",
+            CommandItem::new("Split Editor Right")
+                .action("demo::SplitRight")
+                .icon(IconName::SquareMultiple)
+                .keywords(["split", "group", "pane"]),
+        ),
+        (
+            "Layout",
+            CommandItem::new("Split Editor Down")
+                .action("demo::SplitDown")
+                .keywords(["split", "group", "pane"]),
+        ),
+        (
+            "Layout",
+            CommandItem::new("Toggle Maximized Editor Group")
+                .action("demo::ToggleZoom")
+                .icon(IconName::FullScreenMaximize)
+                .keywords(["zoom", "maximize"]),
+        ),
+        (
+            "Layout",
+            CommandItem::new("Float Panel")
+                .action("demo::FloatPanel")
+                .keywords(["detach", "window", "undock"]),
+        ),
+        (
+            "Layout",
+            CommandItem::new("Reset Layout").action("demo::ResetLayout"),
+        ),
+        (
+            "Window",
+            CommandItem::new("New Window")
+                .action("demo::NewWindow")
+                .icon(IconName::Desktop),
+        ),
+        (
+            "View",
+            CommandItem::new("Toggle Light / Dark")
+                .action("demo::ToggleAppearance")
+                .icon(IconName::Moon)
+                .keywords(["theme", "appearance", "dark", "light"]),
+        ),
+        (
+            "View",
+            CommandItem::new("Cycle Density")
+                .action("demo::CycleDensity")
+                .keywords(["compact", "comfortable", "spacious"]),
+        ),
+        (
+            "Run",
+            CommandItem::new("Run")
+                .action("demo::Run")
+                .icon(IconName::Play),
+        ),
+        (
+            "Run",
+            CommandItem::new("Start Debugging")
+                .action("demo::Debug")
+                .icon(IconName::Bug),
+        ),
+        (
+            "Preferences",
+            CommandItem::new("Settings")
+                .action("demo::Preferences")
+                .icon(IconName::Settings),
+        ),
+        (
+            "Help",
+            CommandItem::new("Documentation")
+                .action("demo::Docs")
+                .icon(IconName::QuestionCircle),
+        ),
+    ];
+    let mut order: Vec<&str> = Vec::new();
+    for (heading, _) in &items {
+        if !order.contains(heading) {
+            order.push(heading);
+        }
+    }
+    order
+        .into_iter()
+        .map(|heading| {
+            items
+                .iter()
+                .filter(|(h, _)| *h == heading)
+                .fold(CommandGroup::new(heading), |g, (_, item)| {
+                    g.item(item.clone())
+                })
+        })
+        .collect()
 }

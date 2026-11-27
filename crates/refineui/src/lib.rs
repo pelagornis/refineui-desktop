@@ -63,7 +63,6 @@ pub mod shell;
 mod styles;
 mod theme;
 mod theme_colors;
-pub mod vibrancy;
 pub mod workspace;
 
 pub use assets::Assets;
@@ -83,7 +82,6 @@ pub use root::{FocusNext, FocusPrevious, root};
 pub use styles::StyledExt;
 pub use theme::{ActiveTheme, Appearance, Theme};
 pub use theme_colors::ThemeColors;
-pub use vibrancy::{FrostMode, frost_mode, set_frost_mode};
 
 /// Everything an app usually needs: `use refineui::prelude::*;`.
 pub mod prelude {
@@ -94,9 +92,10 @@ pub mod prelude {
     pub use crate::motion::{Motion, TrackInteraction};
     pub use crate::platform::{Os, PlatformAdapter, ScrollbarStyle};
     pub use crate::shell::{
-        ActivityBar, ActivityItem, AppMenu, ApplicationShell, BarSide, ItemBadge, MenuBar,
-        RailEdge, ShellDock, ShellSpec, StatusBar, StatusItem, StatusTone, Titlebar,
-        ToolbarPlacement, WindowControls, WindowFrame, WindowPreset, WindowSpec, WindowState,
+        ActiveIndicator, ActivityBar, ActivityItem, ActivityLabels, AppMenu, ApplicationShell,
+        BarSide, ItemBadge, MenuBar, RailEdge, ShellDock, ShellSpec, StatusBar, StatusItem,
+        StatusTone, Titlebar, ToolbarPlacement, WindowControls, WindowFrame, WindowPreset,
+        WindowSpec, WindowState,
     };
     pub use crate::shell::{
         FloatingPanelEvent, FloatingPanelFrame, FloatingPanelOptions, open_floating_panel,

@@ -5,7 +5,7 @@ sidebar:
   order: 0
 ---
 
-RefineUI GPUI targets **macOS on Apple Silicon** and GPUI `0.2`. It needs Rust 1.88 or newer.
+RefineUI GPUI targets GPUI `0.2.2`. macOS is the primary platform; Linux and Windows build and run the gallery. It needs Rust 1.98 or newer (required by the `refineui-system-icons` crate).
 
 ## Add the crate
 
@@ -16,8 +16,11 @@ gpui = "0.2.2"
 refineui = { git = "https://github.com/pelagornis/refineui-desktop" }
 ```
 
-The `bundled-fonts` feature (on by default) embeds Inter. Disable it with
-`default-features = false` if your app ships its own fonts.
+Default features: `bundled-fonts` (embeds Inter) and `syntax-highlight`
+(CodeBlock colours). Use `default-features = false` if your app ships its
+own fonts or does not need highlighting. The other features (`material`,
+`serde`, `web-extras`) are listed in the
+[architecture overview](/architecture/overview/#cargo-features).
 
 ### Materials (real backdrop blur)
 
@@ -36,7 +39,7 @@ gpui = { git = "https://github.com/pelagornis/refineui-desktop" }
 ```
 
 Without the feature everything works on stock gpui and frosted surfaces use
-opaque fills. See [Material Components](/foundations/material-components/).
+an opaque pre-composited fill. See [Material Components](/foundations/material-components/).
 
 ## Initialise
 

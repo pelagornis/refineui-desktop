@@ -4384,7 +4384,6 @@ name = "refineui"
 version = "0.1.0"
 dependencies = [
  "gpui",
- "objc",
  "raw-window-handle",
  "refineui-foundation",
  "refineui-material",

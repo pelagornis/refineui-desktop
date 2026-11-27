@@ -7,7 +7,7 @@ sidebar:
 
 ## Preserved from web (`refineui-foundation`)
 
-Color (palette + 69 semantic aliases, light/dark), typography (16 styles,
+Color (palette + 69 semantic aliases from the web pairs, plus `surfaceOverlay` and `surfaceFrosted`; light/dark), typography (16 styles,
 21 roles), spacing, sizing (`componentSizes`, icon sizes), radius, border
 (`stroke`), elevation (`shadow` / `Elevation`), opacity, motion (durations,
 easings, distances), blur (`blur`, `blur::role`). `scripts/sync_tokens.py`
@@ -29,12 +29,12 @@ values are checked against the web package by the token audit.
 | Focus | `Theme::focus_ring`, `interaction::focus` | 2px `borderFocus` ring on keyboard focus only. Regions cycle with F6. |
 | Keyboard | `interaction::keymap` | Contexts, conflicts, platform labels. |
 | Interaction states | `contracts::InteractionState` | Default, hovered, pressed, focused, disabled, loading, selected, dragging. |
-| Window metrics | `refineui_tokens::window`, `platform` | Titlebar heights, controls, resize hit areas, minimum window size. |
+| Window metrics | `refineui_foundation::window`, `platform` | Titlebar heights, controls, resize hit areas, minimum window size. |
 | Pointer and cursor | `foundation::CursorRole` | Desktop convention: arrow on buttons, hand only on links. |
-| Scroll behaviour | `ScrollArea` | Overlay scrollbars on macOS. Phase 2 adds a legacy (always-visible) style on Windows via the adapter. |
+| Scroll behaviour | `ScrollArea`, `platform::ScrollbarStyle` | The platform adapter picks the scrollbar style: overlay on macOS, always visible on Windows. |
 | Selection | `interaction::selection` | See [Interaction model](/architecture/interaction/). |
 | Drag and drop | `interaction::dnd` | Drop edges, dock zones, reorder. |
-| Accessibility | contracts `a11y_role`, focus rules | Roles map to AccessKit when GPUI exposes it. Until then, keyboard and focus contracts are enforced. |
+| Accessibility | contracts `a11y_role`, focus rules | GPUI 0.2.2 has no accessibility tree, so roles are recorded in the contracts and keyboard / focus rules are enforced by tests. |
 
 ## Material tokens
 

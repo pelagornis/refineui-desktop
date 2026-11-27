@@ -14,17 +14,14 @@
   "states": {
     "default": {
       "status": "implemented",
-      "visual": "resting tokens"
+      "visual": "resting tokens; borderFocus + focus halo while the calendar is open"
     },
     "hovered": {
-      "status": "planned",
+      "status": "implemented",
       "visual": "borderHover"
     },
     "pressed": null,
-    "focused": {
-      "status": "planned",
-      "visual": "borderFocus + focusRing; caret visible"
-    },
+    "focused": null,
     "disabled": {
       "status": "implemented",
       "visual": "backgroundSurfaceDisabled, foregroundDisabled"
@@ -33,10 +30,7 @@
       "status": "planned",
       "visual": "trailing spinner (async validation / search)"
     },
-    "selected": {
-      "status": "planned",
-      "visual": "text selection uses the selection highlight"
-    },
+    "selected": null,
     "dragging": null
   },
   "sizes": {
@@ -126,43 +120,14 @@
     }
   },
   "tokens": {},
-  "keyboard": [
-    {
-      "keys": "left",
-      "action": "previous day"
-    },
-    {
-      "keys": "right",
-      "action": "next day"
-    },
-    {
-      "keys": "up",
-      "action": "previous week"
-    },
-    {
-      "keys": "down",
-      "action": "next week"
-    },
-    {
-      "keys": "pageup",
-      "action": "previous month"
-    },
-    {
-      "keys": "pagedown",
-      "action": "next month"
-    },
-    {
-      "keys": "enter",
-      "action": "choose day"
-    }
-  ],
+  "keyboard": [],
   "focus": {
-    "tab_stop": "single",
+    "tab_stop": "none",
     "ring": "focusRing",
     "restores_focus": false
   },
   "pointer": {
-    "cursor": "text",
+    "cursor": "pointer",
     "hover_only": false
   }
 }

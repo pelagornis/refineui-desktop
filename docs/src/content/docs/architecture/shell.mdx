@@ -20,8 +20,7 @@ sidebar:
 └───────────────────────────────────────────────────────────────┘
 ```
 
-Phase 2 ships every part as a GPUI view in `refineui::shell` and composes
-them in [`ApplicationShell`](/shell/application-shell/); the gallery's
+Every part is a GPUI view in `refineui::shell`, composed in [`ApplicationShell`](/shell/application-shell/); the gallery's
 Application Shell page shows the composed shell live, per OS.
 
 ```rust
@@ -46,8 +45,10 @@ ApplicationShell::new("app")
   gives GPUI `WindowOptions` with a transparent titlebar, the macOS
   traffic-light point for the titlebar height, the preset's minimum size,
   `is_minimizable` and, on Linux, `WindowDecorations::Client`.
-- Presets: **Main** 1280×800 (min 720×480), **Document** 1000×720,
-  **Settings** 720×560 (no minimize / maximize), **Utility** 420×520.
+- Presets (`WindowPreset::default_size` / `min_size`): **Main** 1280×800
+  (min 640×400), **Document** 960×720 (min 480×360), **Settings** 720×560
+  (min 560×420) and **Utility** 360×480 (min 280×240). Settings and
+  Utility have no minimize or maximize button.
 - Restore: `track_window_state(window, cx, path)` saves `WindowState`
   (bounds, maximized, full screen) on every move / resize and on close.
   `WindowSpec::restore(WindowState::load(&path))` re-applies it after
@@ -89,22 +90,23 @@ platform's chrome as a static preview (docs, galleries).
 
 `ToolbarPlacement::{Unified, Separate, None}`. In the unified titlebar use
 `Toolbar::fill(true)` with `spacer()`s; each item is occluded from the drag
-region. Overflow into a menu is Phase 3.
+region. With `.overflow(true)` items that do not fit move into a trailing
+overflow menu.
 
 ## Activity bar / Navigation rail
 
-`ActivityBar` replaces Side Dock and the old rail / navigation-rail
-presets with one unified RefineUI rail: density-sized (48px comfortable),
-tiles that morph toward a squircle when selected, a `backgroundBrandSubtle`
-selected plate, a brand edge indicator and tooltips. Items can carry an
-external `image` (URL or asset) and a count or dot badge. `folder` groups
-items in a Toolbar-style tube: closed, the tile shows a 2×2 stacked preview
-of its members (and a count badge when there are more than four); open, it
-shows the FolderOpen icon and the members sit inside the same rounded
-plate, which grows and shrinks with accordion height motion (`default_open`
-seeds the first frame). `render_item` replaces the face entirely. Items
-reorder by drag or ⌥↑ / ⌥↓; open-folder children are in the ↑ / ↓ order
-and Enter / Space also toggles a focused folder.
+`ActivityBar` is the one RefineUI navigation bar: same-size hit targets with a
+`roundedLarge` plate, a neutral `backgroundSurfaceSelected` selected plate,
+a 2px brand line on the outer edge (`ActiveIndicator::Edge`, or `Plate`) and
+`Tooltip`s placed away from the docked edge. It can be icon-only, show
+captions (`ActivityLabels::Below`) or expand into a labelled list
+(`expanded(true)`), and docks on any side (`BarSide::Top` / `Bottom` lay it
+out horizontally). Count / dot badges sit inside the item with a ring in the
+colour behind them, so they never cross a border. `divider` / `section`
+group items, `footer_item`s stay pinned while the list scrolls, and `folder`
+rolls up its members' badges and reveals them on a recessed group plate with
+accordion motion. `render_item` replaces the face. Items reorder by drag or
+⌥+arrow; arrows follow the orientation and skip disabled items.
 
 ## Status bar
 

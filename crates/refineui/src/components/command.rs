@@ -1,5 +1,5 @@
-//! Command — web `Command` (`components/Command/style.ts`): a command palette
-//! with a search field and a filtered, grouped results list.
+//! Command — web `Command` (`components/Command/style.ts`): a searchable
+//! command list with a search field and a filtered, grouped results list.
 //!
 //! Detached layout (`gap-small`): a [`crate::SearchField`] over a separate
 //! results panel — hairline `borderDefault`, `backgroundPrimary`, `shadow2`,
@@ -21,9 +21,11 @@
 //! `(value, search, keywords) -> score`), emits the search query
 //! ([`CommandEvent::QueryChange`], web `onValueChange`) and the highlighted
 //! item ([`CommandEvent::Highlight`], web `onSelectedValueChange`).
-//! [`CommandDialog`] is the web `CommandDialog`: the same `Command` inside a
-//! [`crate::Dialog`] whose panel is transparent, so the field and the results
-//! panel float on the scrim.
+//! [`CommandDialog`] is the web `CommandDialog`: the same `Command` (opaque
+//! panel, no material) inside a [`crate::Dialog`] whose panel is transparent,
+//! so the field and the results panel float on the scrim; it defaults the
+//! command to `lg`. `size` also sizes the search field, and the list caps at
+//! `min(60% of the window, 320px)`.
 //!
 //! Matching is fuzzy (ordered subsequence, scored for word starts and runs);
 //! matched label characters are highlighted, items sort by score within
@@ -62,10 +64,8 @@ pub struct CommandItem {
     shortcut: Option<SharedString>,
     keywords: Vec<SharedString>,
     disabled: bool,
-    /// Catalog group heading when this item is fed to [`CommandPalette`].
-    group: Option<SharedString>,
-    /// Nested [`CommandPage`] id this item opens (desktop palette).
-    page: Option<SharedString>,
+    /// GPUI action dispatched when the item runs (desktop addition).
+    action: Option<SharedString>,
     on_select: Option<Rc<dyn Fn(&SharedString, &mut Window, &mut App)>>,
 }
 
@@ -158,19 +158,18 @@ impl CommandItem {
             shortcut: None,
             keywords: Vec::new(),
             disabled: false,
-            group: None,
-            page: None,
+            action: None,
             on_select: None,
         }
     }
 
-    /// Secondary line under the label (palette results).
+    /// Secondary line under the label (desktop addition).
     pub fn subtitle(mut self, s: impl Into<SharedString>) -> Self {
         self.subtitle = Some(s.into());
         self
     }
 
-    /// Trailing icon (web `endIcon`), e.g. a chevron for an item that opens a page.
+    /// Trailing icon (web `endIcon`), e.g. a chevron.
     pub fn end_icon(mut self, icon: IconName) -> Self {
         self.end_icon = Some(icon);
         self
@@ -249,31 +248,15 @@ impl CommandItem {
         self
     }
 
-    /// Dispatch the GPUI action named `name` when this item is run (also used as `value`).
-    /// Desktop addition used by [`CommandPalette`].
+    /// Dispatch the GPUI action named `name` (e.g. `"editor::Save"`) when
+    /// this item is run; `name` is also its `value`. Without an explicit
+    /// [`Self::shortcut`] the row shows the keymap shortcut bound to the
+    /// action. Desktop addition (the web item has only `onSelect`).
     pub fn action(mut self, name: impl Into<SharedString>) -> Self {
-        self.value = name.into();
+        let name = name.into();
+        self.value = name.clone();
+        self.action = Some(name);
         self
-    }
-
-    /// Catalog group heading when building a [`CommandPalette`] from a flat list.
-    pub fn group(mut self, group: impl Into<SharedString>) -> Self {
-        self.group = Some(group.into());
-        self
-    }
-
-    /// Opens the nested [`CommandPage`] with this id (chevron, `page:{id}` value).
-    pub fn opens_page(mut self, page: impl Into<SharedString>) -> Self {
-        let page = page.into();
-        self.page = Some(page.clone());
-        self.value = SharedString::from(format!("page:{page}"));
-        self.end_icon = Some(IconName::ChevronRight);
-        self
-    }
-
-    /// Item that opens nested page `page` (web has no pages; desktop palette).
-    pub fn page(label: impl Into<SharedString>, page: impl Into<SharedString>) -> Self {
-        Self::new(label).opens_page(page)
     }
 
     /// Does the item match `query` (fuzzy label or keywords)?
@@ -322,32 +305,48 @@ pub enum CommandEvent {
     QueryChange(SharedString),
     /// The highlighted item changed (web `onSelectedValueChange`).
     Highlight(SharedString),
-    /// Backspace on an empty query (the palette pops a nested page).
-    Back,
 }
 
-/// The command palette (an entity: create with `cx.new(|cx| Command::new(window, cx))`).
+/// Web `size` default: `md`, or `lg` inside a `CommandDialog`.
+fn resolve_size(explicit: Option<ControlSize>, in_dialog: bool) -> ControlSize {
+    explicit.unwrap_or(if in_dialog {
+        ControlSize::Large
+    } else {
+        ControlSize::Medium
+    })
+}
+
+/// Web `min(60vh, 320px)` list cap for a window `viewport_h` tall.
+fn list_max_height(viewport_h: f32) -> f32 {
+    COMMAND_LIST_MAX_HEIGHT.min(viewport_h * 0.6)
+}
+
+/// The command list (an entity: create with `cx.new(|cx| Command::new(window, cx))`).
 pub struct Command {
     search: Entity<TextInput>,
     groups: Vec<CommandGroup>,
     query: SharedString,
     selected: Option<SharedString>,
-    size: ControlSize,
+    /// Explicit `size`; `None` follows the web default (`md`, `lg` inside a
+    /// [`CommandDialog`]).
+    size: Option<ControlSize>,
+    /// Rendered by a [`CommandDialog`] (web `commandProps.size ?? "lg"`).
+    in_dialog: bool,
+    /// Size last pushed to the search field (web passes `size` to `SearchField`).
+    search_size: Option<ControlSize>,
     empty: SharedString,
     should_filter: bool,
     filter: Option<CommandFilter>,
-    breadcrumb: Vec<SharedString>,
     hints: bool,
     /// Enter pressed in the field: run on the next render (needs `Window`).
     pending_select: Option<SharedString>,
-    material: bool,
     _sub: Subscription,
 }
 
 impl EventEmitter<CommandEvent> for Command {}
 
 impl Command {
-    /// New palette with a "Type a command or search…" field.
+    /// New command list with a "Type a command or search…" field.
     pub fn new(_window: &mut Window, cx: &mut Context<Self>) -> Self {
         let search = cx.new(|cx| SearchField::new(cx).placeholder("Type a command or search…"));
         let sub = cx.subscribe(&search, |this: &mut Self, _, e: &InputEvent, cx| match e {
@@ -371,14 +370,14 @@ impl Command {
             groups: Vec::new(),
             query: SharedString::default(),
             selected: None,
-            size: ControlSize::Medium,
+            size: None,
+            in_dialog: false,
+            search_size: None,
             empty: "No results found.".into(),
             should_filter: true,
             filter: None,
-            breadcrumb: Vec::new(),
             hints: false,
             pending_select: None,
-            material: false,
             _sub: sub,
         }
     }
@@ -407,10 +406,23 @@ impl Command {
         cx.notify();
     }
 
-    /// Row size (web `size`, default `md`).
+    /// Size of the search field, rows, icons and list radius (web `size`;
+    /// default `md`, or `lg` inside a [`CommandDialog`]).
     pub fn size(mut self, size: ControlSize) -> Self {
-        self.size = size;
+        self.size = Some(size);
         self
+    }
+
+    /// The size this command renders at.
+    pub fn effective_size(&self) -> ControlSize {
+        resolve_size(self.size, self.in_dialog)
+    }
+
+    pub(crate) fn set_in_dialog(&mut self, on: bool, cx: &mut Context<Self>) {
+        if self.in_dialog != on {
+            self.in_dialog = on;
+            cx.notify();
+        }
     }
 
     /// Filter items by the query (web `shouldFilter`, default `true`).
@@ -433,21 +445,6 @@ impl Command {
             s.set_placeholder(p, cx);
         });
         self
-    }
-
-    /// Breadcrumb chips shown above the results (nested palette pages).
-    pub fn set_breadcrumb(&mut self, crumbs: Vec<SharedString>, cx: &mut Context<Self>) {
-        self.breadcrumb = crumbs;
-        cx.notify();
-    }
-
-    /// Draw the results panel as the Popover material and the search field
-    /// as glass when [`crate::materials_active`] (the Command Palette turns
-    /// this on). Default `false`: the opaque web-parity panel.
-    pub fn set_material(&mut self, on: bool, cx: &mut Context<Self>) {
-        self.material = on;
-        self.search.update(cx, |s, cx| s.set_glass(on, cx));
-        cx.notify();
     }
 
     /// Show the keyboard hint row under the results.
@@ -559,13 +556,21 @@ impl Command {
             .find(|i| &i.value == value)
     }
 
-    /// Runs an item: its `on_select`, then [`CommandEvent::Select`].
+    /// Runs an item: its `on_select`, then [`CommandEvent::Select`], then
+    /// its [`CommandItem::action`] (dispatched from the focused element).
     pub fn select(&mut self, value: SharedString, window: &mut Window, cx: &mut Context<Self>) {
         self.selected = Some(value.clone());
-        if let Some(h) = self.item(&value).and_then(|i| i.on_select.clone()) {
+        let (on_select, action) = match self.item(&value) {
+            Some(i) => (i.on_select.clone(), i.action.clone()),
+            None => (None, None),
+        };
+        if let Some(h) = on_select {
             h(&value, window, cx);
         }
         cx.emit(CommandEvent::Select(value));
+        if let Some(a) = action.and_then(|a| cx.build_action(&a, None).ok()) {
+            window.dispatch_action(a, cx);
+        }
         cx.notify();
     }
 }
@@ -599,12 +604,20 @@ impl Render for Command {
         let theme = cx.theme().clone();
         let c = theme.colors;
         let id: ElementId = ("refineui-command", cx.entity_id()).into();
-        let (text, py, icon) = match self.size {
+        let size = self.effective_size();
+        if self.search_size != Some(size) {
+            // Web `CommandInput` passes the command `size` to its SearchField.
+            self.search_size = Some(size);
+            self.search.update(cx, |s, cx| s.set_size(size, cx));
+        }
+        // Web: the list grows up to `min(60vh, 320px)`, then scrolls.
+        let list_max_h = list_max_height(f32::from(window.viewport_size().height));
+        let (text, py, icon) = match size {
             ControlSize::Small => (role::BODY_SM, spacing::XX_SMALL, 16.),
             ControlSize::Medium => (role::BODY_MD, spacing::SMALL, 20.),
             ControlSize::Large => (role::BODY_LG, spacing::MEDIUM, 24.),
         };
-        let list_radius = match self.size {
+        let list_radius = match size {
             ControlSize::Small => radius::LARGE,
             ControlSize::Medium => radius::X_LARGE,
             ControlSize::Large => radius::XX_LARGE,
@@ -668,6 +681,12 @@ impl Render for Command {
                 let value = item.value.clone();
                 let hover_value = item.value.clone();
                 let disabled = item.disabled;
+                let shortcut = item.shortcut.clone().or_else(|| {
+                    item.action
+                        .as_ref()
+                        .and_then(|a| crate::interaction::keymap::shortcut_for(a, cx))
+                        .map(SharedString::from)
+                });
                 let this = cx.entity().downgrade();
                 let this_hover = this.clone();
                 let row = div()
@@ -712,7 +731,7 @@ impl Render for Command {
                                 )
                             }),
                     )
-                    .when_some(item.shortcut.clone(), |d, s| {
+                    .when_some(shortcut, |d, s| {
                         d.child(
                             div()
                                 .relative()
@@ -801,23 +820,13 @@ impl Render for Command {
             .children(rows);
         let this = cx.entity().downgrade();
         let panel_shadow = theme.shadow(Elevation::SURFACE);
-        let plate = if self.material {
-            crate::material::backing(
-                crate::SurfaceKind::Popover,
-                px(list_radius),
-                stroke::HAIRLINE,
-                c.background_primary,
-                Some(c.border_default),
-                panel_shadow,
-                cx,
-            )
-        } else {
-            crate::material::Backing {
-                fill: c.background_primary,
-                border: c.border_default,
-                shadows: panel_shadow,
-                layer: None,
-            }
+        // Web `listShell`: an opaque `backgroundPrimary` panel with a hairline
+        // `borderDefault` and `shadow-2`, inline and inside a CommandDialog.
+        let plate = crate::material::Backing {
+            fill: c.background_primary,
+            border: c.border_default,
+            shadows: panel_shadow,
+            layer: None,
         };
         div()
             .id(id.clone())
@@ -827,16 +836,6 @@ impl Render for Command {
             .gap(px(spacing::SMALL))
             .font_family(theme.font_family.clone())
             .text_color(c.foreground_primary)
-            .capture_key_down({
-                let this = this.clone();
-                move |e: &KeyDownEvent, _, cx| {
-                    if e.keystroke.key == "backspace"
-                        && this.update(cx, |t, _| t.query.is_empty()).unwrap_or(false)
-                    {
-                        this.update(cx, |_, cx| cx.emit(CommandEvent::Back)).ok();
-                    }
-                }
-            })
             .on_key_down(move |e: &KeyDownEvent, _, cx| {
                 let d = match e.keystroke.key.as_str() {
                     "down" => 1,
@@ -865,34 +864,6 @@ impl Render for Command {
                     .shadow(plate.shadows)
                     .relative()
                     .children(plate.layer)
-                    .when(!self.breadcrumb.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .flex()
-                                .items_center()
-                                .gap(px(spacing::XX_SMALL))
-                                .px(px(spacing::MEDIUM))
-                                .pt(px(spacing::SMALL))
-                                .children(self.breadcrumb.iter().enumerate().flat_map(|(i, b)| {
-                                    let chip = div()
-                                        .px(px(spacing::X_SMALL))
-                                        .py(px(spacing::XXX_SMALL))
-                                        .rounded(px(radius::MEDIUM))
-                                        .bg(c.background_surface_hover)
-                                        .text_style_token(role::CAPTION_LG)
-                                        .text_color(c.foreground_secondary)
-                                        .child(b.clone())
-                                        .into_any_element();
-                                    let sep = (i > 0).then(|| {
-                                        Icon::new(IconName::ChevronRight)
-                                            .size(IconSize::XXSmall)
-                                            .color(c.foreground_tertiary)
-                                            .into_any_element()
-                                    });
-                                    sep.into_iter().chain([chip])
-                                })),
-                        )
-                    })
                     .map(|d| {
                         if empty {
                             // Web `CommandEmpty`: the empty state lives inside
@@ -908,7 +879,7 @@ impl Render for Command {
                         } else {
                             d.child(
                                 ScrollArea::new(child_id(&id, "scroll"))
-                                    .max_height(px(COMMAND_LIST_MAX_HEIGHT))
+                                    .max_height(px(list_max_h))
                                     .child(list_inner),
                             )
                         }
@@ -921,11 +892,6 @@ impl Render for Command {
                                 .gap(px(spacing::XX_SMALL))
                                 .child(crate::Kbd::new(k))
                                 .child(label)
-                        };
-                        let back = if self.breadcrumb.is_empty() {
-                            "Close"
-                        } else {
-                            "Back"
                         };
                         d.child(
                             div()
@@ -941,7 +907,7 @@ impl Render for Command {
                                 .text_color(c.foreground_tertiary)
                                 .child(hint("↑↓", "Navigate"))
                                 .child(hint("↵", "Run"))
-                                .child(hint("esc", back)),
+                                .child(hint("esc", "Close")),
                         )
                     }),
             )
@@ -950,10 +916,19 @@ impl Render for Command {
 
 /// Web `CommandDialog`: a [`Command`] inside a [`crate::Dialog`] whose panel
 /// is transparent (the search field and results panel float on the scrim).
+/// The command looks exactly like an inline one (same opaque results panel,
+/// search field, rows and tokens), at `lg` unless [`Command::size`] was set.
+/// The only dialog chrome is the modal scrim: `surfaceOverlay` with the
+/// web's 2px `overlayScrim` backdrop blur when materials are active.
 ///
-/// Controlled like `Dialog`: keep rendering it and pass `open`; close it in
-/// `on_close` (scrim click or Escape). Focus the command's search field when
-/// you open it (`window.focus(&cmd.read(cx).search().focus_handle(cx))`).
+/// It is only a composition, like the web: [`crate::Dialog`] (`bare`,
+/// `size` default `Large`) around the command. Controlled like `Dialog`:
+/// keep rendering it and pass `open`; close it in `on_close` (scrim click or
+/// Escape). The Dialog focuses the search field on open (web: first
+/// focusable in the panel) and gives focus back on close; each opening
+/// starts with an empty query (the web unmounts the closed dialog's
+/// Command). Items with [`CommandItem::action`] dispatch their action; close
+/// the dialog on [`CommandEvent::Select`] for ⇧⌘P-style use.
 #[derive(IntoElement)]
 pub struct CommandDialog {
     id: ElementId,
@@ -962,7 +937,6 @@ pub struct CommandDialog {
     size: crate::DialogSize,
     on_close: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
     inline: bool,
-    content: Option<AnyElement>,
 }
 
 impl CommandDialog {
@@ -975,15 +949,7 @@ impl CommandDialog {
             size: crate::DialogSize::Large,
             on_close: None,
             inline: false,
-            content: None,
         }
-    }
-
-    /// Wraps the command in custom content (it must contain the command
-    /// entity); used by [`crate::CommandPalette`] for its page transition.
-    pub fn content(mut self, content: impl IntoElement) -> Self {
-        self.content = Some(content.into_any_element());
-        self
     }
 
     /// Open state (web `open`).
@@ -1012,16 +978,23 @@ impl CommandDialog {
 }
 
 impl RenderOnce for CommandDialog {
-    fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
+        // Web: `<Dialog size="lg"><DialogContent transparent, unscrolled>
+        // <Command size={commandProps.size ?? "lg"}>`. Everything else
+        // (scrim, Escape / outside click, focus into the panel and back) is
+        // the Dialog's own behaviour.
+        self.command.update(cx, |c, cx| c.set_in_dialog(true, cx));
+        let search = self.command.read(cx).search().clone();
+        let search = gpui::Focusable::focus_handle(search.read(cx), cx);
+        let command = self.command.clone();
         let mut d = crate::Dialog::new(self.id, "Command")
             .bare(true)
             .size(self.size)
             .open(self.open)
             .inline(self.inline)
-            .child(match self.content {
-                Some(c) => c,
-                None => self.command.into_any_element(),
-            });
+            .initial_focus(search)
+            .on_open(move |_, cx| command.update(cx, |c, cx| c.reset(cx)))
+            .child(self.command);
         if let Some(h) = self.on_close {
             d = d.on_close(move |w, cx| h(w, cx));
         }
@@ -1034,12 +1007,33 @@ mod tests {
     use super::*;
 
     #[test]
+    fn size_defaults_follow_the_web() {
+        assert_eq!(resolve_size(None, false), ControlSize::Medium);
+        assert_eq!(resolve_size(None, true), ControlSize::Large);
+        assert_eq!(
+            resolve_size(Some(ControlSize::Small), true),
+            ControlSize::Small
+        );
+        assert_eq!(list_max_height(1000.), COMMAND_LIST_MAX_HEIGHT);
+        assert!((list_max_height(400.) - 240.).abs() < 0.01);
+    }
+
+    #[test]
     fn matches_every_word_in_label_or_keywords() {
         let i = CommandItem::new("Open settings").keywords(["preferences"]);
         assert!(i.matches("open"));
         assert!(i.matches("SETTINGS open"));
         assert!(i.matches("pref"));
         assert!(!i.matches("close"));
+    }
+
+    #[test]
+    fn action_sets_value_and_dispatch_target() {
+        let i = CommandItem::new("Save").action("editor::Save");
+        assert_eq!(i.value_str().as_ref(), "editor::Save");
+        assert_eq!(i.action.as_ref().map(|a| a.as_ref()), Some("editor::Save"));
+        assert_eq!(i.label().as_ref(), "Save");
+        assert!(CommandItem::new("Open").action.is_none());
     }
 
     #[test]
@@ -1053,9 +1047,3 @@ mod tests {
         assert!(fuzzy_match("ofi", "Open File").is_some());
     }
 }
-
-#[path = "command_palette.rs"]
-mod palette;
-pub use palette::{
-    COMMAND_PALETTE_WIDTH, CommandPage, CommandPalette, RECENT_LIMIT, ToggleCommandPalette,
-};

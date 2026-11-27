@@ -12,7 +12,7 @@ use gpui::{
 };
 
 use crate::Menu;
-use crate::components::menu::{MenuHandler, fade, native_menu_spec, submenu_state};
+use crate::components::menu::{MenuHandler, fade, submenu_state};
 use crate::motion::{Motion, child_id, presence};
 
 /// Right-click menu: wraps `content` and opens a frosted [`Menu`] at the
@@ -56,62 +56,6 @@ impl RenderOnce for ContextMenu {
         let close2 = pos.clone();
         let close_key = pos.clone();
         let sub = submenu_state(self.menu.id(), window, cx);
-        if crate::vibrancy::native_frost_active(cx) {
-            // FrostMode::Native: the menu opens in its own OS-blurred pop-up
-            // window at the pointer; a new right click reopens it there.
-            let open = window.use_keyed_state(child_id(&self.id, "native-open"), cx, |_, _| false);
-            let is_open = *open.read(cx);
-            let width = self.menu.panel_width();
-            let bounds = at
-                .filter(|_| is_open)
-                .map(|at| gpui::Bounds::new(at, gpui::size(width, px(200.))));
-            let menu = self.menu.clone();
-            let spec_open = open.clone();
-            crate::vibrancy::drive_native_popup(
-                &self.id,
-                is_open,
-                bounds,
-                move || native_menu_spec(menu, spec_open, true),
-                window,
-                cx,
-            );
-            let shut = |open: &gpui::Entity<bool>| {
-                let open = open.clone();
-                move |cx: &mut App| {
-                    open.update(cx, |o, cx| {
-                        *o = false;
-                        cx.notify();
-                    })
-                }
-            };
-            let (close_left, close_out, close_esc) = (shut(&open), shut(&open), shut(&open));
-            let opener = open.clone();
-            let esc_open = open.clone();
-            return div()
-                .id(self.id)
-                .on_mouse_down(MouseButton::Right, move |e, _, cx| {
-                    set.update(cx, |p, cx| {
-                        *p = (false, Some(e.position));
-                        cx.notify();
-                    });
-                    opener.update(cx, |o, cx| {
-                        *o = true;
-                        cx.notify();
-                    });
-                })
-                .when(is_open, |d| {
-                    d.on_mouse_down(MouseButton::Left, move |_, _, cx| close_left(cx))
-                        .on_mouse_down_out(move |_, _, cx| close_out(cx))
-                })
-                .on_key_down(move |e: &gpui::KeyDownEvent, _, cx| {
-                    if e.keystroke.key == "escape" && *esc_open.read(cx) {
-                        cx.stop_propagation();
-                        close_esc(cx);
-                    }
-                })
-                .child(self.content)
-                .into_any_element();
-        }
         div()
             .id(self.id)
             .on_mouse_down(MouseButton::Right, move |e, _, cx| {

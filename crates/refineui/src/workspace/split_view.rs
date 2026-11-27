@@ -456,6 +456,9 @@ impl RenderOnce for SplitView {
 
         let mut offset = 0.;
         let count = n;
+        // Handles go after every pane so a pane's own fill never paints
+        // over the splitter of the boundary before it.
+        let mut handles = Vec::with_capacity(n.saturating_sub(1));
         for (i, (child, r)) in self.children.into_iter().zip(ratios.iter()).enumerate() {
             let pane = div()
                 .flex_none()
@@ -485,7 +488,7 @@ impl RenderOnce for SplitView {
                     })
                     .on_reset(move |w, cx| apply_reset(&equal_ratios(count), w, cx));
                 let at = relative(offset);
-                root = root.child(
+                handles.push(
                     div()
                         .absolute()
                         .when(horizontal, |d| d.top_0().bottom_0().left(at).w(px(0.)))
@@ -494,7 +497,7 @@ impl RenderOnce for SplitView {
                 );
             }
         }
-        root
+        root.children(handles)
     }
 }
 

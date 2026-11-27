@@ -31,6 +31,7 @@ export default defineConfig({
         { label: 'Foundations', items: [{ autogenerate: { directory: 'foundations' } }] },
         { label: 'Components', items: [{ autogenerate: { directory: 'components' } }] },
         { label: 'Desktop shell', items: [{ autogenerate: { directory: 'shell' } }] },
+        { label: 'Workspace', items: [{ autogenerate: { directory: 'workspace' } }] },
         { label: 'Guides', items: [{ autogenerate: { directory: 'guides' } }] },
         { label: 'API reference', items: [{ autogenerate: { directory: 'reference' } }] },
         { label: 'Final report', items: [{ autogenerate: { directory: 'report' } }] },

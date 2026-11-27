@@ -1,34 +1,49 @@
-//! Activity Bar / Navigation Rail — the vertical strip of top-level
-//! destinations at the window edge (brief §5 Application). Rebuilt from the
-//! old Side Dock with RefineUI's own look and free customization.
+//! Activity Bar — the strip of top-level destinations at a window edge
+//! (brief §5 Application).
 //!
-//! **One component, no variants.** The look is the former Rail preset,
-//! rebuilt on RefineUI tokens: a `surfaceSunken` column (density width) with
-//! a hairline `borderSubtle` inner edge; tiles are circles at rest that
-//! morph to `roundedXLarge` squares on hover / selection; the selected tile
-//! sits on `backgroundBrandSubtle` with a `foregroundBrand` icon and a
-//! `backgroundBrand` edge bar (8 unread / ~40% hover / ~80% selected of the
-//! tile); hover is `backgroundPrimaryHover`; badges are brand pills.
+//! **Look.** Desktop-tool style (VS Code, Zed, Xcode): every item is the
+//! same `activity_item` (density) hit target with a `roundedLarge` plate and
+//! a 20px icon. At rest the plate is clear and the icon is
+//! `foregroundSecondary`; hover is `backgroundPrimaryHover`, pressed
+//! `backgroundPrimaryActive` and selected `backgroundSurfaceSelected` with a
+//! `foregroundPrimary` icon. The active item also gets an [`ActiveIndicator`]:
+//! by default a 2px `backgroundBrand` line on the bar's edge (outer edge for a
+//! vertical bar, bottom edge for a horizontal one). The bar is
+//! `backgroundPrimary` (or the Sidebar chrome material) with a hairline
+//! `borderSubtle` on its inner edge.
 //!
-//! Items can show an external [`ActivityItem::image`] (URL or asset) and a
-//! count or dot [`ActivityItem::badge`]. [`ActivityItem::folder`] groups
-//! items in a Toolbar-style tube: a closed folder shows a 2×2 stacked
-//! preview of its members (and a count badge when there are more than four
-//! and the item has no badge of its own); an open folder shows the
-//! FolderOpen icon, and the members sit inside the same rounded plate,
-//! which grows and shrinks with accordion height motion (`ACCORDION_PANEL`
-//! / `ACCORDION_CONTENT`).
+//! **Badges** ([`ActivityItem::badge`] / [`ActivityItem::dot`]) sit on the
+//! icon's top-right corner, fully inside the item, and wear a 2px ring in the
+//! colour behind them (the plate when it shows, else the bar or the folder
+//! group), so they never touch the bar's edge, the indicator or a group
+//! outline. Corner badges are a compact pill (14px, 9px digits) that spells
+//! out at most [`ActivityBar::corner_badge_max`] (default 9, so `9+`), keeping
+//! the icon readable; the tooltip then carries the full count. With labels
+//! beside the icons the badge moves to the end of the row at full size, and
+//! counts above 99 read `99+`. [`ActivityItem::badge_variant`] picks
+//! the colour (brand ink by default).
 //!
-//! Slots: `header` / `footer` elements, pinned `footer_item`s, a custom
-//! face per item ([`ActivityBar::render_item`]) and drag-to-reorder
-//! ([`ActivityBar::on_reorder`]).
+//! **Labels** ([`ActivityLabels`]): `Tooltip` (icon-only; a RefineUI
+//! [`crate::Tooltip`] opens beside the item, away from the docked edge, with
+//! the item's action shortcut), `Below` (a caption under each icon) or
+//! `Beside` (an expanded bar, [`ActivityBar::expanded`]); the width animates
+//! when it changes.
 //!
-//! **Keyboard** — when the bar has focus: ↑ / ↓ move a focus ring (open
-//! folder children are in the order), Home / End jump, Enter / Space
-//! activate and also toggle a focused folder; ⌥↑ / ⌥↓ move the focused
-//! main item when reordering is on (folder children are skipped).
-//! **Pointer** — click activates; items never act on hover alone; tooltips
-//! (with the item's action shortcut) appear when labels are hidden.
+//! **Structure.** Items scroll (hidden scrollbar) between an optional
+//! `header` and the pinned `footer_item`s / `footer`. [`ActivityBar::divider`]
+//! and [`ActivityBar::section`] group items (a section shows its title when
+//! labels are beside the icons). [`ActivityItem::folder`] groups items under
+//! one item: open, the members sit in a recessed group plate that grows with
+//! accordion motion; closed, the folder shows its icon and the sum of its
+//! members' badges. A selected member also lights the folder's indicator.
+//! [`BarSide::Top`] / [`BarSide::Bottom`] lay the bar out horizontally.
+//!
+//! **Keyboard** — when the bar has focus: ↑ / ↓ (← / → when horizontal) move
+//! a focus ring, skipping disabled items (open folder members are in the
+//! order); Home / End jump; Enter / Space activate and toggle a focused
+//! folder; ⌥ + arrow moves the focused main item when reordering is on.
+//! **Pointer** — click activates; nothing acts on hover alone. Disabled items
+//! are dimmed (`foregroundDisabled`), not clickable and skipped by the keys.
 
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -36,142 +51,103 @@ use std::rc::Rc;
 use gpui::{
     AnyElement, App, ElementId, FocusHandle, Hsla, ImageSource, InteractiveElement, IntoElement,
     KeyDownEvent, ParentElement, Render, RenderOnce, SharedString, StatefulInteractiveElement,
-    Styled, Window, anchored, div, img, prelude::*, px,
+    Styled, Window, div, img, prelude::*, px,
 };
-use refineui_foundation::{radius, spacing, stroke, typography::role};
+use refineui_foundation::{radius, size::icon, spacing, stroke, typography::role};
 
-use crate::components::floating::{BeakAlign, BeakSide};
 use crate::interaction::dnd::{DropEdge, drop_edge, insertion_index};
 use crate::motion::{
-    Motion, TrackInteraction, animate, child_id, focus_visible, presence, probe, use_interaction,
-    use_layout_probe,
+    Motion, TrackInteraction, animate, child_id, focus_visible, mix, use_interaction,
 };
 use crate::platform::ScrollbarStyle;
 use crate::{
-    ActiveTheme, DragPreview, DropIndicator, Icon, IconName, IconSize, ScrollArea, StyledExt,
+    ActiveTheme, AnchorSide, BadgeVariant, DragPreview, DropIndicator, Icon, IconName, IconSize,
+    ScrollArea, StyledExt, Tooltip,
 };
-
-/// Item corner shape.
-#[allow(dead_code)] // internal render knobs; the public bar has one look
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum ItemShape {
-    /// Rounded square with this radius.
-    Rounded(f32),
-    /// Sharp square.
-    Square,
-    /// Circle.
-    Circle,
-    /// Circle at rest, `roundedXXLarge` square when hovered / selected
-    /// (the Rail preset).
-    Morph,
-}
-
-/// Selection indicator.
-#[allow(dead_code)] // internal render knobs; the public bar has one look
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum IndicatorStyle {
-    /// No indicator (pair with a selected colour).
-    None,
-    /// Bar on the docked edge (grows on hover / select; a short mark for
-    /// unread items).
-    Bar,
-    /// Dot under the icon (selected: ink, unread: muted).
-    Dot,
-    /// Filled plate behind the selected item.
-    Plate,
-}
-
-/// How item names show.
-#[allow(dead_code)] // internal render knobs; the public bar has one look
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LabelMode {
-    /// Tooltip beside the item (icon-only bar).
-    Tooltip,
-    /// Caption under each icon (navigation rail).
-    Below,
-    /// Label beside the icon in a wider bar (expanded).
-    Beside,
-}
 
 /// Which window edge the bar is docked to.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BarSide {
-    /// Leading (left) edge.
+    /// Leading (left) edge, vertical.
     #[default]
     Leading,
-    /// Trailing (right) edge.
+    /// Trailing (right) edge, vertical.
     Trailing,
+    /// Top edge, horizontal (e.g. above a sidebar).
+    Top,
+    /// Bottom edge, horizontal.
+    Bottom,
 }
 
-/// The complete look of an [`ActivityBar`]; `None` colours resolve from the
-/// theme.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct ActivityBarStyle {
-    /// Bar width (`None` = density `activity_bar_width`).
-    pub width: Option<f32>,
-    /// Width in [`LabelMode::Beside`].
-    pub expanded_width: f32,
-    /// Item size (`None` = density `activity_item`).
-    pub item_size: Option<f32>,
-    /// Gap between items.
-    pub gap: f32,
-    /// Item shape.
-    pub shape: ItemShape,
-    /// Selection indicator.
-    pub indicator: IndicatorStyle,
-    /// Fill selected items with `selected` even when the indicator is not
-    /// `Plate`.
-    pub fill_selected: bool,
-    /// Label mode.
-    pub labels: LabelMode,
-    /// Icon size.
-    pub icon: IconSize,
-    /// Hairline on the inner edge.
-    pub border: bool,
-    /// Bar background.
-    pub background: Option<Hsla>,
-    /// Item fill at rest.
-    pub item: Option<Hsla>,
-    /// Item ink at rest.
-    pub ink: Option<Hsla>,
-    /// Hover fill.
-    pub hover: Option<Hsla>,
-    /// Selected fill.
-    pub selected: Option<Hsla>,
-    /// Selected ink.
-    pub selected_ink: Option<Hsla>,
-    /// Indicator colour.
-    pub indicator_color: Option<Hsla>,
-    /// Badge fill.
-    pub badge: Option<Hsla>,
-    /// Badge ink.
-    pub badge_ink: Option<Hsla>,
-}
+impl BarSide {
+    /// Items run left to right.
+    pub const fn is_horizontal(self) -> bool {
+        matches!(self, Self::Top | Self::Bottom)
+    }
 
-impl ActivityBarStyle {
-    /// The one Activity Bar look (an improved Rail). See the module docs.
-    pub(crate) const fn unified() -> Self {
-        Self {
-            width: None,
-            expanded_width: 220.,
-            item_size: None,
-            gap: spacing::XX_SMALL,
-            shape: ItemShape::Morph,
-            indicator: IndicatorStyle::Bar,
-            fill_selected: true,
-            labels: LabelMode::Tooltip,
-            icon: IconSize::Small,
-            border: true,
-            background: None,
-            item: None,
-            ink: None,
-            hover: None,
-            selected: None,
-            selected_ink: None,
-            indicator_color: None,
-            badge: None,
-            badge_ink: None,
+    /// Side a tooltip opens on: away from the docked edge.
+    pub const fn tooltip_side(self) -> AnchorSide {
+        match self {
+            Self::Leading => AnchorSide::Right,
+            Self::Trailing => AnchorSide::Left,
+            Self::Top => AnchorSide::Bottom,
+            Self::Bottom => AnchorSide::Top,
         }
+    }
+}
+
+/// How item names show.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActivityLabels {
+    /// Icon-only bar; the name shows in a tooltip.
+    #[default]
+    Tooltip,
+    /// Caption under each icon (navigation rail). Horizontal bars show the
+    /// caption beside the icon instead.
+    Below,
+    /// Label beside the icon in a wider bar.
+    Beside,
+}
+
+/// How the active item is marked (on top of its selected plate).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ActiveIndicator {
+    /// 2px brand line on the bar edge (default).
+    #[default]
+    Edge,
+    /// The selected plate only.
+    Plate,
+}
+
+/// Badge on an item.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ItemBadge {
+    /// Count (`99+` above 99 in a row; corner badges cap at
+    /// [`ActivityBar::corner_badge_max`]).
+    Count(u32),
+    /// Small dot.
+    Dot,
+}
+
+impl ItemBadge {
+    /// Text of a count badge (`None` for a dot).
+    pub fn text(self) -> Option<SharedString> {
+        self.label(ACTIVITY_ROW_BADGE_MAX)
+    }
+
+    /// Text of a count badge capped at `max` (`{max}+` above it).
+    pub fn label(self, max: u32) -> Option<SharedString> {
+        let max = max.max(1);
+        match self {
+            Self::Count(n) if n > max => Some(format!("{max}+").into()),
+            Self::Count(n) => Some(n.to_string().into()),
+            Self::Dot => None,
+        }
+    }
+
+    /// Whether `label(max)` drops digits.
+    pub fn is_capped(self, max: u32) -> bool {
+        matches!(self, Self::Count(n) if n > max.max(1))
     }
 }
 
@@ -179,17 +155,11 @@ impl ActivityBarStyle {
 enum Face {
     Icon(IconName),
     Image(ImageSource),
-    /// Members and whether the folder starts open.
-    Folder(Vec<ActivityItem>, bool),
-}
-
-/// Badge on an item.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ItemBadge {
-    /// Count (`99+` above 99).
-    Count(u32),
-    /// Small dot.
-    Dot,
+    Folder {
+        members: Vec<ActivityItem>,
+        open: bool,
+        icon: IconName,
+    },
 }
 
 /// One destination.
@@ -197,8 +167,10 @@ pub enum ItemBadge {
 pub struct ActivityItem {
     id: SharedString,
     label: SharedString,
+    tooltip: Option<SharedString>,
     face: Face,
     badge: Option<ItemBadge>,
+    badge_variant: BadgeVariant,
     unread: bool,
     disabled: bool,
     action: Option<SharedString>,
@@ -209,8 +181,10 @@ impl ActivityItem {
         Self {
             id: id.into(),
             label: label.into(),
+            tooltip: None,
             face,
             badge: None,
+            badge_variant: BadgeVariant::Default,
             unread: false,
             disabled: false,
             action: None,
@@ -226,7 +200,8 @@ impl ActivityItem {
         Self::new(id, label, Face::Icon(icon))
     }
 
-    /// Picture item from an external image source (URL, asset, or bytes).
+    /// Picture item (workspace logo, account): an external image source
+    /// (URL, asset or bytes) drawn as a 24px rounded square.
     pub fn image(
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -235,9 +210,9 @@ impl ActivityItem {
         Self::new(id, label, Face::Image(src.into()))
     }
 
-    /// Folder of items. Clicking the tile expands or collapses the members
-    /// inside a shared Toolbar-style tube. Closed, the tile shows a 2×2
-    /// stacked preview of the members; open, it shows the FolderOpen icon.
+    /// Folder of items. Clicking it shows or hides the members in a group
+    /// plate under it. Closed, it shows its icon ([`Self::folder_icon`],
+    /// `Folder` by default) and the sum of its members' badges.
     pub fn folder(
         id: impl Into<SharedString>,
         label: impl Into<SharedString>,
@@ -246,14 +221,27 @@ impl ActivityItem {
         Self::new(
             id,
             label,
-            Face::Folder(members.into_iter().collect(), false),
+            Face::Folder {
+                members: members.into_iter().collect(),
+                open: false,
+                icon: IconName::Folder,
+            },
         )
+    }
+
+    /// Icon of a folder (folders only; open folders show `FolderOpen` when
+    /// this is the default `Folder`).
+    pub fn folder_icon(mut self, glyph: IconName) -> Self {
+        if let Face::Folder { icon, .. } = &mut self.face {
+            *icon = glyph;
+        }
+        self
     }
 
     /// Open this folder on first show (folders only).
     pub fn default_open(mut self, open: bool) -> Self {
-        if let Face::Folder(_, default_open) = &mut self.face {
-            *default_open = open;
+        if let Face::Folder { open: o, .. } = &mut self.face {
+            *o = open;
         }
         self
     }
@@ -270,15 +258,29 @@ impl ActivityItem {
         self
     }
 
-    /// Unread mark (indicator-dependent: short bar / muted dot).
+    /// Badge colour: `Default` (brand ink, the default), `Neutral`,
+    /// `Success`, `Warning` or `Danger` (`Outline` draws as `Neutral`).
+    pub fn badge_variant(mut self, variant: BadgeVariant) -> Self {
+        self.badge_variant = variant;
+        self
+    }
+
+    /// Unread mark: a small muted dot on the bar edge (quieter than a
+    /// badge).
     pub fn unread(mut self, unread: bool) -> Self {
         self.unread = unread;
         self
     }
 
-    /// Disabled (skipped by the keyboard, no activation).
+    /// Disabled (dimmed, skipped by the keyboard, no activation).
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Tooltip text (defaults to the label).
+    pub fn tooltip(mut self, text: impl Into<SharedString>) -> Self {
+        self.tooltip = Some(text.into());
         self
     }
 
@@ -299,11 +301,51 @@ impl ActivityItem {
         &self.label
     }
 
-    /// Icon, for icon items.
+    /// Icon, for icon and folder items.
     pub fn icon_name(&self) -> Option<IconName> {
-        match self.face {
-            Face::Icon(i) => Some(i),
-            _ => None,
+        match &self.face {
+            Face::Icon(i) => Some(*i),
+            Face::Folder { icon, .. } => Some(*icon),
+            Face::Image(_) => None,
+        }
+    }
+
+    /// Whether this is a folder.
+    pub fn is_folder(&self) -> bool {
+        matches!(self.face, Face::Folder { .. })
+    }
+
+    /// The badge drawn on the item: its own badge, or for a folder the sum
+    /// of its members' count badges (a dot when members only have dots).
+    pub fn displayed_badge(&self) -> Option<ItemBadge> {
+        if self.badge.is_some() {
+            return self.badge;
+        }
+        let Face::Folder { members, .. } = &self.face else {
+            return None;
+        };
+        let mut sum = 0u32;
+        let mut dot = false;
+        for m in members {
+            match m.displayed_badge() {
+                Some(ItemBadge::Count(n)) => sum = sum.saturating_add(n),
+                Some(ItemBadge::Dot) => dot = true,
+                None => {}
+            }
+        }
+        if sum > 0 {
+            Some(ItemBadge::Count(sum))
+        } else if dot {
+            Some(ItemBadge::Dot)
+        } else {
+            None
+        }
+    }
+
+    fn contains(&self, id: &SharedString) -> bool {
+        match &self.face {
+            Face::Folder { members, .. } => members.iter().any(|m| &m.id == id || m.contains(id)),
+            _ => false,
         }
     }
 }
@@ -315,8 +357,12 @@ pub struct ActivityItemState {
     pub selected: bool,
     /// Pointer over it.
     pub hovered: bool,
+    /// Pointer pressed on it.
+    pub pressed: bool,
     /// Keyboard cursor on it (focus-visible).
     pub focused: bool,
+    /// Disabled.
+    pub disabled: bool,
     /// Item size (px).
     pub size: f32,
     /// Ink colour the bar would use.
@@ -330,7 +376,8 @@ type ItemRenderer =
 
 enum Entry {
     Item(ActivityItem),
-    Divider,
+    /// Group break; the title shows when labels are beside the icons.
+    Section(Option<SharedString>),
 }
 
 /// The bar. See the module docs.
@@ -338,7 +385,10 @@ enum Entry {
 pub struct ActivityBar {
     id: ElementId,
     side: BarSide,
-    style: ActivityBarStyle,
+    labels: ActivityLabels,
+    indicator: ActiveIndicator,
+    expanded_width: f32,
+    border: bool,
     header: Option<AnyElement>,
     footer: Option<AnyElement>,
     entries: Vec<Entry>,
@@ -348,15 +398,32 @@ pub struct ActivityBar {
     on_reorder: Option<ReorderHandler>,
     render_item: Option<ItemRenderer>,
     fill: bool,
+    corner_badge_max: u32,
 }
 
+/// Largest count a row badge (labels beside the icons) spells out.
+pub const ACTIVITY_ROW_BADGE_MAX: u32 = 99;
+/// Default largest count a corner badge spells out (icon-only and caption
+/// bars); above it the badge reads `9+` and the tooltip has the count.
+pub const ACTIVITY_CORNER_BADGE_MAX: u32 = 9;
+
+/// Default width of an expanded ([`ActivityLabels::Beside`]) vertical bar.
+pub const ACTIVITY_EXPANDED_WIDTH: f32 = 200.;
+/// Width of a vertical bar with captions below the icons.
+pub const ACTIVITY_CAPTION_WIDTH: f32 = 72.;
+/// Length of the [`ActiveIndicator::Edge`] line (the icon size).
+pub const ACTIVITY_INDICATOR_LENGTH: f32 = icon::SMALL;
+
 impl ActivityBar {
-    /// New bar (collapsed).
+    /// New icon-only bar on the leading edge.
     pub fn new(id: impl Into<ElementId>) -> Self {
         Self {
             id: id.into(),
             side: BarSide::Leading,
-            style: ActivityBarStyle::unified(),
+            labels: ActivityLabels::Tooltip,
+            indicator: ActiveIndicator::Edge,
+            expanded_width: ACTIVITY_EXPANDED_WIDTH,
+            border: true,
             header: None,
             footer: None,
             entries: Vec::new(),
@@ -366,22 +433,65 @@ impl ActivityBar {
             on_reorder: None,
             render_item: None,
             fill: true,
+            corner_badge_max: ACTIVITY_CORNER_BADGE_MAX,
         }
     }
 
-    /// Docked edge.
+    /// Largest count a corner badge (icon-only and caption bars) spells out
+    /// before it reads `{max}+` (default 9). Keep it to one or two digits so
+    /// the badge stays on the icon's corner; the tooltip shows the full count.
+    pub fn corner_badge_max(mut self, max: u32) -> Self {
+        self.corner_badge_max = max.max(1);
+        self
+    }
+
+    /// Docked edge ([`BarSide::Top`] / [`BarSide::Bottom`] are horizontal).
     pub fn side(mut self, side: BarSide) -> Self {
         self.side = side;
         self
     }
 
-    /// Element above the items (logo, workspace switcher).
+    /// How item names show.
+    pub fn labels(mut self, labels: ActivityLabels) -> Self {
+        self.labels = labels;
+        self
+    }
+
+    /// Expanded (labels beside the icons) or icon-only with tooltips.
+    pub fn expanded(self, expanded: bool) -> Self {
+        self.labels(if expanded {
+            ActivityLabels::Beside
+        } else {
+            ActivityLabels::Tooltip
+        })
+    }
+
+    /// Width of the expanded vertical bar (default
+    /// [`ACTIVITY_EXPANDED_WIDTH`]).
+    pub fn expanded_width(mut self, width: f32) -> Self {
+        self.expanded_width = width;
+        self
+    }
+
+    /// Active-item mark.
+    pub fn indicator(mut self, indicator: ActiveIndicator) -> Self {
+        self.indicator = indicator;
+        self
+    }
+
+    /// Hairline on the inner edge (default on).
+    pub fn border(mut self, border: bool) -> Self {
+        self.border = border;
+        self
+    }
+
+    /// Element before the items (logo, workspace switcher).
     pub fn header(mut self, e: impl IntoElement) -> Self {
         self.header = Some(e.into_any_element());
         self
     }
 
-    /// Element below the pinned footer items (account, sync state).
+    /// Element after the pinned footer items (account, sync state).
     pub fn footer(mut self, e: impl IntoElement) -> Self {
         self.footer = Some(e.into_any_element());
         self
@@ -401,11 +511,18 @@ impl ActivityBar {
 
     /// Divider between groups.
     pub fn divider(mut self) -> Self {
-        self.entries.push(Entry::Divider);
+        self.entries.push(Entry::Section(None));
         self
     }
 
-    /// Item pinned to the bottom (Settings, Accounts).
+    /// Start a titled group: a divider in an icon-only bar, the title in an
+    /// expanded one.
+    pub fn section(mut self, title: impl Into<SharedString>) -> Self {
+        self.entries.push(Entry::Section(Some(title.into())));
+        self
+    }
+
+    /// Item pinned to the end (Settings, Accounts).
     pub fn footer_item(mut self, item: ActivityItem) -> Self {
         self.footer_items.push(item);
         self
@@ -417,22 +534,22 @@ impl ActivityBar {
         self
     }
 
-    /// Activation handler.
+    /// Activation handler (click, Enter, Space).
     pub fn on_select(mut self, f: impl Fn(&SharedString, &mut Window, &mut App) + 'static) -> Self {
         self.on_select = Some(Rc::new(f));
         self
     }
 
     /// Enable drag-to-reorder of the main items: `f(from, to)` with
-    /// indices into the main item list (dividers excluded; `to` is the
+    /// indices into the main item list (sections excluded; `to` is the
     /// final index after removal, as [`crate::interaction::dnd::reorder`]).
     pub fn on_reorder(mut self, f: impl Fn(usize, usize, &mut Window, &mut App) + 'static) -> Self {
         self.on_reorder = Some(Rc::new(f));
         self
     }
 
-    /// Draw every item face yourself (the bar keeps hit-testing, focus,
-    /// indicator and tooltip).
+    /// Draw every item face yourself (the bar keeps the plate, hit-testing,
+    /// focus, indicator, badge and tooltip).
     pub fn render_item(
         mut self,
         f: impl Fn(&ActivityItem, ActivityItemState, &mut Window, &mut App) -> AnyElement + 'static,
@@ -441,62 +558,95 @@ impl ActivityBar {
         self
     }
 
-    /// Fill the parent's height (default) or hug the content.
+    /// Fill the parent's cross size (default) or hug the content.
     pub fn fill(mut self, fill: bool) -> Self {
         self.fill = fill;
         self
     }
 }
 
-fn badge_text(n: u32) -> SharedString {
-    if n > 99 {
-        "99+".into()
+/// Effective label mode: horizontal bars have no room for a caption below.
+fn effective_labels(side: BarSide, labels: ActivityLabels) -> ActivityLabels {
+    if side.is_horizontal() && labels == ActivityLabels::Below {
+        ActivityLabels::Beside
     } else {
-        n.to_string().into()
+        labels
     }
 }
 
-/// Edge-bar heights `(unread, hover, selected)` for an item of `size`.
-pub fn bar_heights(size: f32) -> (f32, f32, f32) {
-    (8., (size * 0.42).round(), (size * 0.83).round())
+/// Bar thickness (width of a vertical bar, height of a horizontal one).
+fn bar_thickness(side: BarSide, labels: ActivityLabels, expanded: f32, density: f32) -> f32 {
+    if side.is_horizontal() {
+        return density;
+    }
+    match labels {
+        ActivityLabels::Tooltip => density,
+        ActivityLabels::Below => ACTIVITY_CAPTION_WIDTH,
+        ActivityLabels::Beside => expanded,
+    }
 }
 
-#[derive(Clone)]
-struct Resolved {
-    bar: Hsla,
-    item: Hsla,
-    ink: Hsla,
-    hover: Hsla,
-    selected: Hsla,
-    selected_ink: Hsla,
-    indicator: Hsla,
-    badge: Hsla,
-    badge_ink: Hsla,
-    size: f32,
-    width: f32,
+/// Badge `(fill, ink)` for a variant.
+fn badge_colors(v: BadgeVariant, c: &crate::ThemeColors) -> (Hsla, Hsla) {
+    match v {
+        BadgeVariant::Default => (c.background_brand, c.foreground_on_brand),
+        BadgeVariant::Neutral | BadgeVariant::Outline => {
+            (c.background_surface_selected, c.foreground_primary)
+        }
+        BadgeVariant::Success => (c.background_success, c.foreground_on_success),
+        BadgeVariant::Warning => (c.background_warning, c.foreground_on_warning),
+        BadgeVariant::Danger => (c.background_error, c.foreground_on_error),
+    }
 }
 
-fn resolve(s: &ActivityBarStyle, cx: &App) -> Resolved {
-    let t = cx.theme();
-    let c = t.colors;
-    let d = t.density.desktop();
-    let size = s.item_size.unwrap_or(d.activity_item);
-    let width = match s.labels {
-        LabelMode::Beside => s.expanded_width,
-        _ => s.width.unwrap_or(d.activity_bar_width),
-    };
-    Resolved {
-        bar: s.background.unwrap_or(c.surface_sunken),
-        item: s.item.unwrap_or(gpui::transparent_black()),
-        ink: s.ink.unwrap_or(c.foreground_secondary),
-        hover: s.hover.unwrap_or(c.background_primary_hover),
-        selected: s.selected.unwrap_or(c.background_brand_subtle),
-        selected_ink: s.selected_ink.unwrap_or(c.foreground_brand),
-        indicator: s.indicator_color.unwrap_or(c.background_brand),
-        badge: s.badge.unwrap_or(c.background_brand),
-        badge_ink: s.badge_ink.unwrap_or(c.foreground_on_brand),
-        size,
-        width,
+/// Row count-badge height.
+const BADGE_H: f32 = 16.;
+/// Corner count-badge height (without its ring): a compact pill so it only
+/// covers the icon's corner.
+const CORNER_BADGE_H: f32 = 14.;
+/// Dot-badge size (without its ring).
+const DOT: f32 = 8.;
+/// Ring that separates a corner badge from what is behind it.
+const RING: f32 = stroke::THICK;
+
+/// Most a corner count badge may overhang its icon box (into the bar's own
+/// padding, never across the bar edge, the indicator or a folder outline).
+pub const CORNER_BADGE_OVERHANG: f32 = spacing::XX_SMALL;
+
+/// Corner-badge offset `(top, right)` from the icon box's top-right corner
+/// (negative = outside the box) for an icon box of `box_w × box_h`.
+///
+/// A dot sits on the icon's top-right corner, inside the box. A count pill
+/// sits up and to the right of the icon's corner, so only its lower-left
+/// part covers the icon, and grows to the left; it may leave the box by up
+/// to `slack = (right, top)` (the clear space around the box, at most
+/// [`CORNER_BADGE_OVERHANG`]).
+pub fn badge_offset(
+    badge: ItemBadge,
+    box_w: f32,
+    box_h: f32,
+    icon_size: f32,
+    slack: (f32, f32),
+) -> (f32, f32) {
+    // Icon corner, measured from the box's top and right edges.
+    let corner_top = (box_h - icon_size) / 2.;
+    let corner_right = (box_w - icon_size) / 2.;
+    match badge {
+        ItemBadge::Dot => {
+            let outer = DOT + 2. * RING;
+            let top = (corner_top - outer / 2. + spacing::XXX_SMALL).max(0.);
+            let right = (corner_right - outer / 2. + spacing::XXX_SMALL).max(0.);
+            (top, right)
+        }
+        ItemBadge::Count(_) => {
+            let outer = CORNER_BADGE_H + 2. * RING;
+            let clamp = |v: f32| v.clamp(0., CORNER_BADGE_OVERHANG);
+            // Centre of a one-digit pill `XXX_SMALL + 1` beyond the corner.
+            let out = spacing::XXX_SMALL + 1.;
+            let top = (corner_top - out - outer / 2.).max(-clamp(slack.1));
+            let right = (corner_right - out - outer / 2.).max(-clamp(slack.0));
+            (top, right)
+        }
     }
 }
 
@@ -522,8 +672,11 @@ impl Render for ActivityDrag {
 struct Ctx<'a> {
     bar: &'a ElementId,
     side: BarSide,
-    style: &'a ActivityBarStyle,
-    r: Resolved,
+    labels: ActivityLabels,
+    indicator: ActiveIndicator,
+    bar_bg: Hsla,
+    size: f32,
+    thickness: f32,
     selected: Option<&'a SharedString>,
     on_select: Option<SelectHandler>,
     on_reorder: Option<ReorderHandler>,
@@ -534,149 +687,22 @@ struct Ctx<'a> {
     drop: gpui::Entity<Option<(usize, DropEdge)>>,
     folder_open: HashSet<SharedString>,
     on_folder_toggle: Rc<dyn Fn(&SharedString, &mut App)>,
-}
-
-fn face(
-    item: &ActivityItem,
-    size: f32,
-    ink: Hsla,
-    radius_px: f32,
-    icon: IconSize,
-    folder_open_t: f32,
-    _cx: &App,
-) -> AnyElement {
-    match &item.face {
-        Face::Icon(i) => Icon::new(*i).size(icon).color(ink).into_any_element(),
-        Face::Image(src) => img(src.clone())
-            .size(px(size))
-            .rounded(px(radius_px))
-            .into_any_element(),
-        Face::Folder(members, _) => {
-            // Open: FolderOpen glyph. Closed: 2×2 stacked preview of up to
-            // four members (empty slots keep the grid stable). An empty
-            // folder falls back to the closed Folder glyph.
-            if folder_open_t > 0.5 || members.is_empty() {
-                let glyph = if folder_open_t > 0.5 {
-                    IconName::FolderOpen
-                } else {
-                    IconName::Folder
-                };
-                Icon::new(glyph).size(icon).color(ink).into_any_element()
-            } else {
-                folder_preview(members, size, ink)
-            }
-        }
-    }
+    corner_max: u32,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Role {
     Main(usize),
     Footer,
-    /// Member of an open folder; in ↑/↓ order, not in ⌥↑/⌥↓ reorder.
+    /// Member of an open folder; in the arrow order, not in ⌥-reorder.
     Child,
-}
-
-/// Badge shown on a tile: the item's own badge, or a folder member count
-/// when there are more than four members and no user badge.
-fn displayed_badge(item: &ActivityItem) -> Option<ItemBadge> {
-    if item.badge.is_some() {
-        return item.badge;
-    }
-    match &item.face {
-        Face::Folder(members, _) if members.len() > 4 => {
-            Some(ItemBadge::Count(members.len() as u32))
-        }
-        _ => None,
-    }
-}
-
-fn folder_preview_cell(member: &ActivityItem, cell: f32, ink: Hsla) -> AnyElement {
-    let inner = cell.max(1.);
-    let icon_sz = (inner * 0.78).max(8.);
-    let slot = div()
-        .size(px(inner))
-        .rounded(px((inner * 0.28).min(radius::SMALL)))
-        .overflow_hidden()
-        .flex()
-        .items_center()
-        .justify_center();
-    match &member.face {
-        Face::Icon(name) => slot
-            .child(
-                Icon::new(*name)
-                    .size(IconSize::Custom(px(icon_sz)))
-                    .color(ink),
-            )
-            .into_any_element(),
-        Face::Image(src) => slot
-            .child(img(src.clone()).size(px(inner)))
-            .into_any_element(),
-        Face::Folder(_, _) => slot
-            .child(
-                Icon::new(IconName::Folder)
-                    .size(IconSize::Custom(px(icon_sz)))
-                    .color(ink),
-            )
-            .into_any_element(),
-    }
-}
-
-fn folder_preview(members: &[ActivityItem], size: f32, ink: Hsla) -> AnyElement {
-    let pad = spacing::XXX_SMALL;
-    let gap = 2.0_f32;
-    let inner = (size - pad * 2. - gap).max(1.);
-    let cell = inner / 2.;
-    let slot = |i: usize| {
-        members
-            .get(i)
-            .map(|m| folder_preview_cell(m, cell, ink))
-            .unwrap_or_else(|| div().size(px(cell.max(1.))).into_any_element())
-    };
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(gap))
-        .p(px(pad))
-        .size(px(size))
-        .child(div().flex().gap(px(gap)).child(slot(0)).child(slot(1)))
-        .child(div().flex().gap(px(gap)).child(slot(2)).child(slot(3)))
-        .into_any_element()
-}
-
-/// ToolbarGroup-like tube around a folder tile and its accordion panel.
-fn folder_tube(
-    item_size: f32,
-    labels: LabelMode,
-    border: Hsla,
-    fill: Hsla,
-    tile: AnyElement,
-    panel: Option<AnyElement>,
-) -> AnyElement {
-    let pad = spacing::XXX_SMALL;
-    div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .p(px(pad))
-        .rounded(px(radius::XX_LARGE + pad))
-        .border(px(stroke::THIN))
-        .border_color(border)
-        .bg(fill)
-        .when(labels == LabelMode::Beside, |d| d.w_full())
-        .when(labels != LabelMode::Beside, |d| {
-            d.w(px(item_size + pad * 2.))
-        })
-        .child(tile)
-        .children(panel)
-        .into_any_element()
 }
 
 #[derive(Clone, Debug, PartialEq)]
 struct NavEntry {
     id: SharedString,
     disabled: bool,
-    /// Index in the main item row; `None` for folder children and footer items.
+    /// Index in the main item row; `None` for folder members and footer items.
     main_ix: Option<usize>,
     is_folder: bool,
 }
@@ -690,23 +716,21 @@ fn nav_order(
     let mut main_ix = 0usize;
     for e in entries {
         let Entry::Item(i) = e else { continue };
-        let is_folder = matches!(i.face, Face::Folder(_, _));
         order.push(NavEntry {
             id: i.id.clone(),
             disabled: i.disabled,
             main_ix: Some(main_ix),
-            is_folder,
+            is_folder: i.is_folder(),
         });
-        if is_folder
-            && open.contains(&i.id)
-            && let Face::Folder(members, _) = &i.face
+        if open.contains(&i.id)
+            && let Face::Folder { members, .. } = &i.face
         {
             for m in members {
                 order.push(NavEntry {
                     id: m.id.clone(),
                     disabled: m.disabled,
                     main_ix: None,
-                    is_folder: matches!(m.face, Face::Folder(_, _)),
+                    is_folder: m.is_folder(),
                 });
             }
         }
@@ -717,274 +741,255 @@ fn nav_order(
             id: i.id.clone(),
             disabled: i.disabled,
             main_ix: None,
-            is_folder: matches!(i.face, Face::Folder(_, _)),
+            is_folder: i.is_folder(),
         });
     }
     order
 }
 
+/// Next focusable index for an arrow / Home / End key, or `None` to ignore
+/// the key. `cur` is the current cursor position.
+fn step(order: &[NavEntry], cur: Option<usize>, key: &str, horizontal: bool) -> Option<usize> {
+    let n = order.len();
+    let enabled = |i: usize| !order[i].disabled;
+    let (prev, next) = if horizontal {
+        ("left", "right")
+    } else {
+        ("up", "down")
+    };
+    if key == next {
+        let start = cur.map(|c| c + 1).unwrap_or(0);
+        (start..n).find(|&i| enabled(i)).or(cur)
+    } else if key == prev {
+        match cur {
+            None => (0..n).rev().find(|&i| enabled(i)),
+            Some(c) => (0..c).rev().find(|&i| enabled(i)).or(Some(c)),
+        }
+    } else if key == "home" {
+        (0..n).find(|&i| enabled(i))
+    } else if key == "end" {
+        (0..n).rev().find(|&i| enabled(i))
+    } else {
+        None
+    }
+}
+
+fn face(item: &ActivityItem, ink: Hsla, open: bool) -> AnyElement {
+    match &item.face {
+        Face::Icon(i) => Icon::new(*i)
+            .size(IconSize::Small)
+            .color(ink)
+            .into_any_element(),
+        Face::Image(src) => img(src.clone())
+            .size(px(icon::MEDIUM))
+            .rounded(px(radius::MEDIUM))
+            .into_any_element(),
+        Face::Folder { icon: glyph, .. } => {
+            let glyph = if open && *glyph == IconName::Folder {
+                IconName::FolderOpen
+            } else {
+                *glyph
+            };
+            Icon::new(glyph)
+                .size(IconSize::Small)
+                .color(ink)
+                .into_any_element()
+        }
+    }
+}
+
+/// A row badge (`ring: None`, full size, `99+`) or a corner badge (compact
+/// pill in a ring, capped at `corner_max`).
+fn badge_el(
+    b: ItemBadge,
+    variant: BadgeVariant,
+    ring: Option<Hsla>,
+    corner_max: u32,
+    cx: &App,
+) -> gpui::Div {
+    let c = cx.theme().colors;
+    let (fill, ink) = badge_colors(variant, &c);
+    let corner = ring.is_some();
+    let ring_w = if corner { 2. * RING } else { 0. };
+    let (h, text_size, pad, text) = if corner {
+        (CORNER_BADGE_H, 9., 3., b.label(corner_max))
+    } else {
+        (BADGE_H, 10., spacing::XX_SMALL, b.text())
+    };
+    let d = div()
+        .flex_none()
+        .rounded_full()
+        .bg(fill)
+        .when_some(ring, |d, r| d.border(px(RING)).border_color(r));
+    match text {
+        None => d.size(px(DOT + ring_w)),
+        Some(text) => d
+            .h(px(h + ring_w))
+            .min_w(px(h + ring_w))
+            .px(px(pad))
+            .flex()
+            .items_center()
+            .justify_center()
+            .text_color(ink)
+            .text_size(px(text_size))
+            .line_height(px(h))
+            .font_weight(gpui::FontWeight::SEMIBOLD)
+            .child(text),
+    }
+}
+
+/// One item: plate, face, badge, indicator, tooltip and the drag / click
+/// wiring. `behind` is the colour under the item (bar or folder group).
 fn tile(
-    _ix: usize,
     item: ActivityItem,
     role: Role,
+    behind: Hsla,
     t: &Ctx,
     window: &mut Window,
     cx: &mut App,
 ) -> AnyElement {
     let theme = cx.theme().clone();
     let c = theme.colors;
-    let r = &t.r;
-    let s = t.style;
+    let horizontal = t.side.is_horizontal();
     let iid = ElementId::NamedChild(Box::new(t.bar.clone()), format!("item-{}", item.id).into());
     let (istate, i) = use_interaction(&iid, window, cx);
+    let disabled = item.disabled;
     let active = t.selected == Some(&item.id);
-    let hovered = i.hovered && !item.disabled;
-    let size = r.size;
-    let beside = s.labels == LabelMode::Beside;
-    let below = s.labels == LabelMode::Below;
-    let fill_sel = active && (s.indicator == IndicatorStyle::Plate || s.fill_selected);
-    let (bg, ink) = match (&item.face, fill_sel, hovered) {
-        (Face::Image(_), _, _) | (Face::Folder(_, _), _, _) => (
-            if hovered && !matches!(item.face, Face::Image(_)) {
-                c.background_primary_hover
-            } else {
-                r.item
-            },
-            r.ink,
-        ),
-        (_, true, _) => (r.selected, r.selected_ink),
-        (_, false, true) => (
-            r.hover,
-            if s.shape == ItemShape::Morph {
-                r.selected_ink
-            } else {
-                c.foreground_primary
-            },
-        ),
-        _ => (r.item, if active { r.selected_ink } else { r.ink }),
-    };
-    let ink = if item.disabled {
-        c.foreground_disabled
-    } else {
-        ink
-    };
-    let bg = animate(child_id(&iid, "bg"), bg, Motion::FAST, window, cx);
-    let ink = animate(child_id(&iid, "ink"), ink, Motion::FAST, window, cx);
-    let square = matches!(item.face, Face::Folder(_, _)) || active || hovered;
-    let radius_target = match s.shape {
-        ItemShape::Rounded(rr) => rr,
-        ItemShape::Square => 0.,
-        ItemShape::Circle => size / 2.,
-        ItemShape::Morph => {
-            if square {
-                radius::XX_LARGE
-            } else {
-                size / 2.
-            }
-        }
-    };
-    let rad = animate(
-        child_id(&iid, "radius"),
-        radius_target,
-        Motion::FAST,
-        window,
-        cx,
-    );
-    let (unread_h, hover_h, sel_h) = bar_heights(size);
-    let bar_target = if s.indicator != IndicatorStyle::Bar {
-        0.
+    let holds_selected = t.selected.is_some_and(|s| item.contains(s));
+    let hovered = i.hovered && !disabled;
+    let pressed = i.pressed && !disabled;
+    let size = t.size;
+    let beside = t.labels == ActivityLabels::Beside;
+    let below = t.labels == ActivityLabels::Below;
+    let is_folder = item.is_folder();
+    let open = is_folder && t.folder_open.contains(&item.id);
+
+    let plate_target = if pressed {
+        c.background_primary_active
     } else if active {
-        sel_h
+        c.background_surface_selected
     } else if hovered {
-        hover_h
-    } else if item.unread {
-        unread_h
+        c.background_primary_hover
     } else {
-        0.
+        c.background_primary_hover.opacity(0.)
     };
-    let bar_h = animate(
-        child_id(&iid, "bar"),
-        bar_target,
-        Motion::INDICATOR,
-        window,
-        cx,
-    );
-    let bounds_probe = use_layout_probe(&iid, window, cx);
-    let bounds = bounds_probe.read(cx).container;
-    let show_tip = s.labels == LabelMode::Tooltip && hovered;
-    let tip = presence(
-        child_id(&iid, "tip"),
-        show_tip,
-        Motion::new(
-            crate::motion::duration::FAST,
-            crate::motion::easing::EMPHASIZED,
-        ),
+    let ink_target = if disabled {
+        c.foreground_disabled
+    } else if active || hovered || holds_selected {
+        c.foreground_primary
+    } else {
+        c.foreground_secondary
+    };
+    let plate = animate(
+        child_id(&iid, "plate"),
+        plate_target,
         Motion::FAST,
         window,
         cx,
     );
+    let ink = animate(child_id(&iid, "ink"), ink_target, Motion::FAST, window, cx);
+    // What a badge ring must match: the plate where it shows, else `behind`.
+    let ring = mix(behind, plate.opacity(1.), plate.a);
+
     let focus_ring = t.focused && t.cursor.as_ref() == Some(&item.id) && focus_visible(cx);
     let state = ActivityItemState {
         selected: active,
         hovered,
+        pressed,
         focused: focus_ring,
+        disabled,
         size,
         ink,
     };
-    let is_folder = matches!(item.face, Face::Folder(_, _));
-    let folder_is_open = is_folder && t.folder_open.contains(&item.id);
-    let folder_open_t = if is_folder {
-        animate(
-            child_id(&iid, "folder-open"),
-            if folder_is_open { 1.0f32 } else { 0.0 },
-            Motion::CHEVRON,
-            window,
-            cx,
-        )
-    } else {
-        0.
-    };
     let face_el = match &t.render_item {
         Some(f) => f(&item, state, window, cx),
-        None => face(&item, size, ink, rad, s.icon, folder_open_t, cx),
+        None => face(&item, ink, open),
     };
 
-    let bar = div()
-        .absolute()
-        .top(px((size - bar_h) / 2.))
-        .w(px(if s.shape == ItemShape::Morph { 4. } else { 3. }))
-        .h(px(bar_h.max(0.)))
-        .bg(r.indicator)
-        .when(bar_h < 0.5, |d| d.invisible())
-        .map(|d| match t.side {
-            BarSide::Leading => d.left_0().rounded_r(px(radius::SMALL)),
-            BarSide::Trailing => d.right_0().rounded_l(px(radius::SMALL)),
-        });
-
-    let dot = (s.indicator == IndicatorStyle::Dot && (active || item.unread)).then(|| {
+    // Icon box: the plate in icon-only and caption modes.
+    // Expanded rows are list-height, not square tiles.
+    let row_h = (size - spacing::SMALL).max(28.);
+    let (box_w, box_h) = if below {
+        (size + spacing::SMALL, size - spacing::XX_SMALL)
+    } else if beside {
+        (size, row_h)
+    } else {
+        (size, size)
+    };
+    let badge = item.displayed_badge();
+    let corner_badge = (!beside).then_some(badge).flatten().map(|b| {
+        // Clear space around the box: the bar padding across the bar (less a
+        // folder group's inset), keeping `XXX_SMALL` from any edge.
+        let child_inset = if role == Role::Child {
+            spacing::XXX_SMALL
+        } else {
+            0.
+        };
+        let room = |cross: f32| (t.thickness - cross) / 2. - child_inset - spacing::XXX_SMALL;
+        let slack = if horizontal {
+            (0., room(box_h))
+        } else {
+            (room(box_w), 0.)
+        };
+        let (top, right) = badge_offset(b, box_w, box_h, icon::SMALL, slack);
         div()
             .absolute()
-            .bottom(px(2.))
-            .left(px(size / 2. - 2.))
-            .size(px(4.))
-            .rounded_full()
-            .bg(if active {
-                r.indicator
-            } else {
-                c.foreground_tertiary
-            })
+            .top(px(top))
+            .right(px(right))
+            .child(badge_el(
+                b,
+                item.badge_variant,
+                Some(ring),
+                t.corner_max,
+                cx,
+            ))
     });
+    let row_badge = beside
+        .then_some(badge)
+        .flatten()
+        .map(|b| badge_el(b, item.badge_variant, None, t.corner_max, cx));
 
-    // Over the icon's corner, or inline at the row end when labels sit
-    // beside the icons.
-    let badge = displayed_badge(&item).map(|b| {
-        let base = div()
-            .rounded_full()
-            .bg(r.badge)
-            .when(!beside, |d| {
-                d.absolute().border(px(stroke::THICK)).border_color(r.bar)
-            })
-            .when(beside, |d| d.flex_none());
-        match b {
-            ItemBadge::Dot if beside => base.size(px(8.)).mr(px(spacing::X_SMALL)),
-            ItemBadge::Dot => base.right(px(-1.)).top(px(-1.)).size(px(10.)),
-            ItemBadge::Count(n) => base
-                .when(!beside, |d| {
-                    d.right(px(-4.))
-                        .bottom(px(-4.))
-                        .min_w(px(16. + 2. * stroke::THICK))
-                        .h(px(16. + 2. * stroke::THICK))
-                        .px(px(3. + stroke::THICK))
-                })
-                .when(beside, |d| {
-                    d.min_w(px(18.))
-                        .h(px(18.))
-                        .px(px(5.))
-                        .mr(px(spacing::XX_SMALL))
-                })
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(r.badge_ink)
-                .text_size(px(10.))
-                .line_height(px(14.))
-                .font_weight(gpui::FontWeight::BOLD)
-                .child(badge_text(n)),
-        }
+    let icon_box = div()
+        .relative()
+        .flex_none()
+        .w(px(box_w))
+        .h(px(box_h))
+        .flex()
+        .items_center()
+        .justify_center()
+        .when(!beside, |d| d.rounded(px(radius::LARGE)).bg(plate))
+        .when(!beside && focus_ring, |d| d.shadow(theme.focus_ring()))
+        .child(face_el)
+        .children(corner_badge);
+
+    let label_el = beside.then(|| {
+        div()
+            .flex_1()
+            .min_w_0()
+            .truncate()
+            .text_style_token(role::BODY_SM)
+            .text_color(ink)
+            .when(active, |d| d.font_weight(gpui::FontWeight::MEDIUM))
+            .child(item.label.clone())
     });
-    let (corner_badge, row_badge) = if beside { (None, badge) } else { (badge, None) };
-
-    let tooltip = (tip.mounted).then_some(bounds).flatten().map(|b| {
-        let gap = px(spacing::MEDIUM);
-        let (x, beak) = match t.side {
-            BarSide::Leading => (b.right() + gap, BeakSide::Left),
-            BarSide::Trailing => (b.left() - gap, BeakSide::Right),
-        };
-        let text: SharedString = match item
-            .action
-            .as_ref()
-            .and_then(|a| crate::interaction::keymap::shortcut_for(a, cx))
-        {
-            Some(k) => format!("{}  {}", item.label, k).into(),
-            None => item.label.clone(),
-        };
-        let bubble = crate::components::tooltip::tooltip_with_beak_aligned(
-            text,
-            beak,
-            BeakAlign::Center,
-            cx,
-        );
-        let slide = px(spacing::X_SMALL * (1. - tip.progress));
-        crate::layer(
-            anchored()
-                .position(gpui::point(x, b.top()))
-                .map(|a| match t.side {
-                    BarSide::Leading => a,
-                    BarSide::Trailing => a.anchor(gpui::Corner::TopRight),
-                })
-                .child(
-                    div()
-                        .h(px(size))
-                        .flex()
-                        .items_center()
-                        .opacity(tip.progress)
-                        .map(|d| match t.side {
-                            BarSide::Leading => d.ml(slide),
-                            BarSide::Trailing => d.mr(slide),
-                        })
-                        .child(bubble),
-                ),
-        )
-        .priority(crate::foundation::LayerOrder::Tooltip.priority())
-        .into_any_element()
+    let chevron = (beside && is_folder && !horizontal).then(|| {
+        Icon::new(if open {
+            IconName::ChevronDown
+        } else {
+            IconName::ChevronRight
+        })
+        .size(IconSize::XXSmall)
+        .color(c.foreground_tertiary)
     });
-
-    let on_select = t.on_select.clone();
-    let on_folder_toggle = t.on_folder_toggle.clone();
-    let cursor = t.cursor_state.clone();
-    let id = item.id.clone();
-    let disabled = item.disabled;
-    let label_el = match s.labels {
-        LabelMode::Beside => Some(
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .text_style_token(role::BODY_SM)
-                .text_color(ink)
-                .when(active, |d| d.font_weight(gpui::FontWeight::MEDIUM))
-                .child(item.label.clone())
-                .into_any_element(),
-        ),
-        _ => None,
-    };
     let caption = below.then(|| {
         div()
             .w_full()
             .flex()
             .justify_center()
             .text_style_token(role::CAPTION_SM)
-            .text_color(if active {
+            .text_color(if disabled {
+                c.foreground_disabled
+            } else if active {
                 c.foreground_primary
             } else {
                 c.foreground_secondary
@@ -993,53 +998,31 @@ fn tile(
             .child(div().truncate().child(item.label.clone()))
     });
 
-    let face_box = div()
-        .relative()
-        .flex_none()
-        .size(px(size))
-        .flex()
-        .items_center()
-        .justify_center()
-        .when(!beside, |d| d.rounded(px(rad)).bg(bg))
-        .child(face_el)
-        .children(dot)
-        .children(corner_badge);
-
-    let drop_state = t.drop.clone();
-    let drop_now = *t.drop.read(cx);
-    let drop_line = match (role, drop_now) {
-        (Role::Main(m), Some((target, edge))) if target == m => Some(edge),
-        _ => None,
-    };
-    let reorder = t.on_reorder.clone();
-    let bar_id = t.bar.clone();
+    let on_select = t.on_select.clone();
+    let on_folder_toggle = t.on_folder_toggle.clone();
+    let cursor = t.cursor_state.clone();
+    let id = item.id.clone();
     let tile_el = div()
-        .id(iid)
+        .id(iid.clone())
         .relative()
         .flex_none()
         .flex()
         .items_center()
         .when(beside, |d| {
-            d.w_full()
-                .h(px(size))
+            d.h(px(row_h))
+                .when(!horizontal, |d| d.w_full())
                 .gap(px(spacing::X_SMALL))
-                .px(px(spacing::XX_SMALL))
-                .rounded(px(match s.shape {
-                    ItemShape::Circle | ItemShape::Morph => size / 2.,
-                    ItemShape::Square => 0.,
-                    ItemShape::Rounded(rr) => rr,
-                }))
-                .bg(bg)
+                .pr(px(spacing::SMALL))
+                .rounded(px(radius::LARGE))
+                .bg(plate)
+                .when(focus_ring, |d| d.shadow(theme.focus_ring()))
         })
         .when(below, |d| {
             d.flex_col()
                 .gap(px(spacing::XXX_SMALL))
-                .w(px(r.width - 2. * spacing::XX_SMALL))
-                .py(px(spacing::XX_SMALL))
-                .rounded(px(radius::LARGE))
+                .w(px(t.thickness - 2. * spacing::XX_SMALL))
         })
         .when(!beside && !below, |d| d.justify_center())
-        .when(focus_ring, |d| d.shadow(theme.focus_ring()))
         .when(!disabled, |d| d.cursor_action())
         .when(disabled, |d| {
             d.cursor_role(crate::foundation::CursorRole::NotAllowed)
@@ -1057,24 +1040,30 @@ fn tile(
                 h(&id, w, cx);
             }
         })
-        .child(probe(&bounds_probe, None))
-        .child(face_box)
+        .child(icon_box)
         .children(label_el)
         .children(row_badge)
+        .children(chevron)
         .children(caption);
 
-    let tile_el = match (role, reorder) {
+    // Drag to reorder (main items only).
+    let drop_now = *t.drop.read(cx);
+    let drop_line = match (role, drop_now) {
+        (Role::Main(m), Some((target, edge))) if target == m => Some(edge),
+        _ => None,
+    };
+    let tile_el = match (role, t.on_reorder.clone()) {
         (Role::Main(m), Some(reorder)) => {
             let payload = ActivityDrag {
-                bar: bar_id.clone(),
+                bar: t.bar.clone(),
                 from: m,
                 label: item.label.clone(),
                 icon: item.icon_name(),
             };
-            let over = drop_state.clone();
-            let clear = drop_state.clone();
-            let bar_for_move = bar_id.clone();
-            let bar_for_drop = bar_id.clone();
+            let over = t.drop.clone();
+            let clear = t.drop.clone();
+            let bar_for_move = t.bar.clone();
+            let bar_for_drop = t.bar.clone();
             tile_el
                 .on_drag(payload, |p, _, _, cx| cx.new(|_| p.clone()))
                 .on_drag_move::<ActivityDrag>(move |e, _, cx| {
@@ -1085,11 +1074,19 @@ fn tile(
                     if !b.contains(&e.event.position) {
                         return;
                     }
-                    let edge = drop_edge(
-                        f32::from(e.event.position.y - b.top()),
-                        f32::from(b.size.height),
-                        false,
-                    );
+                    let edge = if horizontal {
+                        drop_edge(
+                            f32::from(e.event.position.x - b.left()),
+                            f32::from(b.size.width),
+                            false,
+                        )
+                    } else {
+                        drop_edge(
+                            f32::from(e.event.position.y - b.top()),
+                            f32::from(b.size.height),
+                            false,
+                        )
+                    };
                     over.update(cx, |d, cx| {
                         if *d != Some((m, edge)) {
                             *d = Some((m, edge));
@@ -1112,62 +1109,279 @@ fn tile(
                         reorder(p.from, to, w, cx);
                     }
                 })
+                .into_any_element()
         }
-        _ => tile_el,
+        _ => tile_el.into_any_element(),
     };
 
-    let ind_w = r.width;
+    // Tooltip in icon-only bars (never while a drag is in flight), and on
+    // captioned items whose corner badge is capped: it carries the full count.
+    let capped = !beside && badge.is_some_and(|b| b.is_capped(t.corner_max));
+    let tile_el = if t.labels == ActivityLabels::Tooltip || capped {
+        let name = item.tooltip.clone().unwrap_or(item.label.clone());
+        let text: SharedString = match badge {
+            Some(ItemBadge::Count(n)) if capped => format!("{name} · {n}").into(),
+            _ => name,
+        };
+        let mut tip = Tooltip::new(child_id(&iid, "tip"), text).placement(t.side.tooltip_side());
+        if let Some(a) = &item.action {
+            tip = tip.action(a.clone());
+        }
+        tip.child(tile_el).into_any_element()
+    } else {
+        tile_el
+    };
+
+    // Active indicator (and unread mark) on the bar edge. Folder members
+    // sit inside the group plate, so their folder carries the line.
+    let lit = active || (holds_selected && is_folder);
+    let edge_line = t.indicator == ActiveIndicator::Edge && role != Role::Child;
+    let len = animate(
+        child_id(&iid, "indicator"),
+        if lit && edge_line {
+            ACTIVITY_INDICATOR_LENGTH
+        } else {
+            0.
+        },
+        Motion::INDICATOR,
+        window,
+        cx,
+    );
+    let along = if below { box_h } else { size };
+    let indicator = (len > 0.5).then(|| {
+        let d = div().absolute().rounded_full().bg(c.background_brand);
+        match t.side {
+            BarSide::Leading | BarSide::Trailing => {
+                let d = d
+                    .w(px(stroke::THICK))
+                    .h(px(len))
+                    .top(px((along - len) / 2.));
+                if t.side == BarSide::Leading {
+                    d.left_0()
+                } else {
+                    d.right_0()
+                }
+            }
+            BarSide::Top | BarSide::Bottom => {
+                let d = d.h(px(stroke::THICK)).w(px(len));
+                let d = if beside {
+                    d.left(px(spacing::SMALL))
+                } else {
+                    d.left(px((size - len) / 2.))
+                };
+                if t.side == BarSide::Top {
+                    d.bottom_0()
+                } else {
+                    d.top_0()
+                }
+            }
+        }
+    });
+    let unread = (item.unread && !lit && role != Role::Child).then(|| {
+        let d = div()
+            .absolute()
+            .size(px(spacing::XX_SMALL))
+            .rounded_full()
+            .bg(c.foreground_tertiary);
+        match t.side {
+            BarSide::Leading => d
+                .left(px(spacing::XXX_SMALL))
+                .top(px((along - spacing::XX_SMALL) / 2.)),
+            BarSide::Trailing => d
+                .right(px(spacing::XXX_SMALL))
+                .top(px((along - spacing::XX_SMALL) / 2.)),
+            BarSide::Top => d
+                .bottom(px(spacing::XXX_SMALL))
+                .left(px((size - spacing::XX_SMALL) / 2.)),
+            BarSide::Bottom => d
+                .top(px(spacing::XXX_SMALL))
+                .left(px((size - spacing::XX_SMALL) / 2.)),
+        }
+    });
+
+    let drop_mark = |edge: DropEdge| {
+        let line = if horizontal {
+            DropIndicator::between_tabs()
+        } else {
+            DropIndicator::between_rows()
+        };
+        let d = div().absolute();
+        let d = match (horizontal, edge) {
+            (false, DropEdge::Before) => d.top(px(-3.)).left_0().right_0(),
+            (false, _) => d.bottom(px(-3.)).left_0().right_0(),
+            (true, DropEdge::Before) => d.left(px(-3.)).top_0().bottom_0(),
+            (true, _) => d.right(px(-3.)).top_0().bottom_0(),
+        };
+        d.child(line)
+    };
+
+    // The slot spans the bar's cross axis so the indicator lands on its edge.
+    let pad = spacing::X_SMALL;
     div()
         .relative()
-        .w(px(ind_w))
         .flex_none()
         .flex()
-        .flex_col()
-        .items_center()
-        .when(beside, |d| d.px(px(spacing::X_SMALL)))
-        .when(drop_line == Some(DropEdge::Before), |d| {
-            d.child(
-                div()
-                    .absolute()
-                    .top(px(-4.))
-                    .left_0()
-                    .right_0()
-                    .px(px(spacing::XX_SMALL))
-                    .child(DropIndicator::between_rows()),
-            )
+        .when(!horizontal, |d| {
+            d.flex_col()
+                .items_center()
+                .when(role != Role::Child, |d| d.w(px(t.thickness)).px(px(pad)))
+                .when(role == Role::Child, |d| d.w_full())
         })
-        .child(bar)
-        .child(tile_el)
-        .when(drop_line == Some(DropEdge::After), |d| {
-            d.child(
-                div()
-                    .absolute()
-                    .bottom(px(-4.))
-                    .left_0()
-                    .right_0()
-                    .px(px(spacing::XX_SMALL))
-                    .child(DropIndicator::between_rows()),
-            )
-        })
-        .children(tooltip)
+        .when(horizontal, |d| d.h_full().items_center())
+        .children(drop_line.filter(|e| *e == DropEdge::Before).map(drop_mark))
+        .children(indicator)
+        .children(unread)
+        .child(
+            div()
+                .when(!horizontal && beside, |d| d.w_full())
+                .child(tile_el),
+        )
+        .children(drop_line.filter(|e| *e != DropEdge::Before).map(drop_mark))
         .into_any_element()
 }
 
-fn divider(width: f32, cx: &App) -> AnyElement {
+fn section(title: Option<SharedString>, t: &Ctx, cx: &App) -> AnyElement {
     let c = cx.theme().colors;
+    let horizontal = t.side.is_horizontal();
+    match (title, t.labels == ActivityLabels::Beside && !horizontal) {
+        (Some(title), true) => div()
+            .w_full()
+            .flex_none()
+            .pt(px(spacing::SMALL))
+            .pb(px(spacing::XX_SMALL))
+            .px(px(spacing::X_SMALL + spacing::SMALL))
+            .text_style_token(role::CAPTION_MD)
+            .text_color(c.foreground_tertiary)
+            .truncate()
+            .child(title)
+            .into_any_element(),
+        _ if horizontal => div()
+            .flex_none()
+            .h_full()
+            .flex()
+            .items_center()
+            .px(px(spacing::XX_SMALL))
+            .child(
+                div()
+                    .w(px(stroke::THIN))
+                    .h(px(icon::SMALL))
+                    .bg(c.border_subtle),
+            )
+            .into_any_element(),
+        _ => div()
+            .w_full()
+            .flex_none()
+            .flex()
+            .justify_center()
+            .py(px(spacing::XX_SMALL))
+            .child(
+                div()
+                    .w(px(if t.labels == ActivityLabels::Beside {
+                        t.thickness - 2. * (spacing::X_SMALL + spacing::SMALL)
+                    } else {
+                        icon::SMALL
+                    }))
+                    .h(px(stroke::THIN))
+                    .bg(c.border_subtle),
+            )
+            .into_any_element(),
+    }
+}
+
+/// An open folder: the folder tile on top of its members, in a recessed
+/// group plate that fades in with the panel.
+fn folder_group(
+    item: ActivityItem,
+    main_ix: usize,
+    t: &Ctx,
+    window: &mut Window,
+    cx: &mut App,
+) -> AnyElement {
+    let c = cx.theme().colors;
+    let horizontal = t.side.is_horizontal();
+    let fid = item.id.clone();
+    let open = t.folder_open.contains(&fid);
+    let members = match &item.face {
+        Face::Folder { members, .. } => members.clone(),
+        _ => Vec::new(),
+    };
+    let gid = ElementId::NamedChild(Box::new(t.bar.clone()), format!("folder-{fid}").into());
+    let open_t = animate(
+        child_id(&gid, "group"),
+        if open { 1.0f32 } else { 0.0 },
+        Motion::ACCORDION_PANEL,
+        window,
+        cx,
+    );
+    let group_bg = c.background_surface_hover;
+    let behind = mix(t.bar_bg, group_bg, open_t);
+    let head = tile(item, Role::Main(main_ix), behind, t, window, cx);
+    if horizontal {
+        // No height to animate: members appear inline.
+        return div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .h_full()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .rounded(px(radius::X_LARGE))
+                    .when(open, |d| {
+                        d.bg(group_bg)
+                            .border(px(stroke::HAIRLINE))
+                            .border_color(c.border_subtle)
+                            .pr(px(spacing::XXX_SMALL))
+                    })
+                    .child(head)
+                    .when(open, |d| {
+                        d.children(
+                            members
+                                .into_iter()
+                                .map(|m| tile(m, Role::Child, group_bg, t, window, cx)),
+                        )
+                    }),
+            )
+            .into_any_element();
+    }
+    let panel = crate::components::disclosure::collapse_panel(&gid, open, window, cx, |w, cx| {
+        div()
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap(px(spacing::XXX_SMALL))
+            .pb(px(spacing::XXX_SMALL))
+            .children(
+                members
+                    .into_iter()
+                    .map(|m| tile(m, Role::Child, group_bg, t, w, cx)),
+            )
+            .into_any_element()
+    });
+    let inset = spacing::XXX_SMALL;
     div()
-        .w(px(width))
+        .relative()
         .flex_none()
+        .w(px(t.thickness))
         .flex()
-        .justify_center()
-        .py(px(spacing::XX_SMALL))
+        .flex_col()
+        .items_center()
+        // Group plate behind the folder tile and its members.
         .child(
             div()
-                .w(px((width * 0.45).min(32.)))
-                .h(px(stroke::THIN))
-                .rounded_full()
-                .bg(c.border_default),
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(px(spacing::X_SMALL - inset))
+                .right(px(spacing::X_SMALL - inset))
+                .rounded(px(radius::LARGE + inset))
+                .bg(group_bg.opacity(open_t))
+                .border(px(stroke::HAIRLINE))
+                .border_color(c.border_subtle.opacity(open_t)),
         )
+        .child(head)
+        .children(panel.map(|p| div().w(px(t.thickness - 2. * spacing::X_SMALL)).child(p)))
         .into_any_element()
 }
 
@@ -1175,10 +1389,14 @@ impl RenderOnce for ActivityBar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme().clone();
         let c = theme.colors;
-        let r = resolve(&self.style, cx);
-        let width = animate(
+        let d = theme.density.desktop();
+        let side = self.side;
+        let horizontal = side.is_horizontal();
+        let labels = effective_labels(side, self.labels);
+        let target = bar_thickness(side, labels, self.expanded_width, d.activity_bar_width);
+        let thickness = animate(
             child_id(&self.id, "width"),
-            r.width,
+            target,
             Motion::MEDIUM,
             window,
             cx,
@@ -1197,7 +1415,6 @@ impl RenderOnce for ActivityBar {
             None::<(usize, DropEdge)>
         });
         let focused = focus.is_focused(window);
-        // Clear a stale drop marker once no drag is active.
         if drop.read(cx).is_some() && !cx.has_active_drag() {
             drop.update(cx, |d, _| *d = None);
         }
@@ -1207,7 +1424,7 @@ impl RenderOnce for ActivityBar {
             .iter()
             .filter_map(|e| match e {
                 Entry::Item(i) => match &i.face {
-                    Face::Folder(_, true) => Some(i.id.clone()),
+                    Face::Folder { open: true, .. } => Some(i.id.clone()),
                     _ => None,
                 },
                 _ => None,
@@ -1231,11 +1448,15 @@ impl RenderOnce for ActivityBar {
             .clone()
             .or_else(|| self.selected.clone());
 
+        let bar_bg = c.background_primary;
         let t = Ctx {
             bar: &self.id,
-            side: self.side,
-            style: &self.style,
-            r: Resolved { width, ..r.clone() },
+            side,
+            labels,
+            indicator: self.indicator,
+            bar_bg,
+            size: d.activity_item,
+            thickness,
             selected: self.selected.as_ref(),
             on_select: self.on_select.clone(),
             on_reorder: self.on_reorder.clone(),
@@ -1246,110 +1467,110 @@ impl RenderOnce for ActivityBar {
             drop: drop.clone(),
             folder_open,
             on_folder_toggle,
+            corner_max: self.corner_badge_max,
         };
-        let mut ix = 0usize;
         let mut main_ix = 0usize;
         let mut list: Vec<AnyElement> = Vec::new();
         for e in self.entries {
             match e {
-                Entry::Item(item) => {
-                    let members = match &item.face {
-                        Face::Folder(m, _) => Some((item.id.clone(), m.clone())),
-                        _ => None,
-                    };
-                    let open = members
-                        .as_ref()
-                        .is_some_and(|(id, _)| t.folder_open.contains(id));
-                    let tile_el = tile(ix, item, Role::Main(main_ix), &t, window, cx);
-                    ix += 1;
+                Entry::Item(item) if item.is_folder() => {
+                    list.push(folder_group(item, main_ix, &t, window, cx));
                     main_ix += 1;
-                    if let Some((fid, members)) = members {
-                        let panel_id = ElementId::NamedChild(
-                            Box::new(self.id.clone()),
-                            format!("folder-{fid}").into(),
-                        );
-                        let panel = crate::components::disclosure::collapse_panel(
-                            &panel_id,
-                            open,
-                            window,
-                            cx,
-                            |w, cx| {
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .items_center()
-                                    .gap(px(t.style.gap))
-                                    .children(
-                                        members
-                                            .into_iter()
-                                            .map(|m| tile(0, m, Role::Child, &t, w, cx)),
-                                    )
-                                    .into_any_element()
-                            },
-                        );
-                        list.push(folder_tube(
-                            t.r.size,
-                            t.style.labels,
-                            c.border_default,
-                            c.background_brand_subtle,
-                            tile_el,
-                            panel,
-                        ));
-                    } else {
-                        list.push(tile_el);
-                    }
                 }
-                Entry::Divider => list.push(divider(width, cx)),
+                Entry::Item(item) => {
+                    list.push(tile(item, Role::Main(main_ix), bar_bg, &t, window, cx));
+                    main_ix += 1;
+                }
+                Entry::Section(title) => list.push(section(title, &t, cx)),
             }
         }
-        let mut footer_list: Vec<AnyElement> = Vec::new();
-        for item in self.footer_items {
-            footer_list.push(tile(ix, item, Role::Footer, &t, window, cx));
-            ix += 1;
-        }
+        let footer_list: Vec<AnyElement> = self
+            .footer_items
+            .into_iter()
+            .map(|item| tile(item, Role::Footer, bar_bg, &t, window, cx))
+            .collect();
 
         let keys = cursor_state.clone();
         let on_select = self.on_select.clone();
         let on_reorder = self.on_reorder.clone();
         let on_folder_toggle_kb = t.on_folder_toggle.clone();
-        let n = order.len();
         let order_kb = order.clone();
         let selected_id = self.selected.clone();
-        let edge_border = self.style.border;
+        let gap = spacing::XXX_SMALL;
+        let items = if horizontal {
+            div()
+                .id(child_id(&self.id, "scroll"))
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .overflow_x_scroll()
+                .flex()
+                .items_center()
+                .gap(px(gap))
+                .px(px(spacing::X_SMALL))
+                .children(list)
+                .into_any_element()
+        } else {
+            div()
+                .flex_1()
+                .min_h_0()
+                .child(
+                    ScrollArea::new(child_id(&self.id, "scroll"))
+                        .edge_blur(false)
+                        .scrollbar(ScrollbarStyle::Hidden)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_center()
+                                .w_full()
+                                .gap(px(gap))
+                                .pt(px(spacing::XX_SMALL))
+                                .pb(px(spacing::X_SMALL))
+                                .children(list),
+                        ),
+                )
+                .into_any_element()
+        };
+        let slot = |e: AnyElement| {
+            div()
+                .flex_none()
+                .flex()
+                .justify_center()
+                .items_center()
+                .when(!horizontal, |d| d.py(px(spacing::X_SMALL)))
+                .when(horizontal, |d| d.px(px(spacing::X_SMALL)))
+                .child(e)
+        };
         div()
             .id(self.id.clone())
             .key_context("ActivityBar")
             .track_focus(&focus)
             .tab_index(0)
             .on_key_down(move |e: &KeyDownEvent, w, cx| {
-                if n == 0 {
+                if order_kb.is_empty() {
                     return;
                 }
                 let cur_id = keys.read(cx).clone().or_else(|| selected_id.clone());
                 let cur = cur_id
                     .as_ref()
                     .and_then(|id| order_kb.iter().position(|o| &o.id == id));
-                let enabled = |i: usize| !order_kb[i].disabled;
                 let k = e.keystroke.key.as_str();
-                let alt = e.keystroke.modifiers.alt;
-                if alt && (k == "up" || k == "down") {
+                let (prev, next) = if horizontal {
+                    ("left", "right")
+                } else {
+                    ("up", "down")
+                };
+                if e.keystroke.modifiers.alt && (k == prev || k == next) {
                     if let (Some(c), Some(h)) = (cur, &on_reorder)
                         && let Some(from) = order_kb[c].main_ix
                     {
-                        // Walk neighboring main-row items only; folder children
-                        // and footer items are not part of the reorder list.
-                        let to = if k == "up" {
-                            order_kb[..c]
-                                .iter()
-                                .rev()
-                                .find_map(|o| o.main_ix)
-                                .unwrap_or(from)
+                        let to = if k == prev {
+                            order_kb[..c].iter().rev().find_map(|o| o.main_ix)
                         } else {
-                            order_kb[c + 1..]
-                                .iter()
-                                .find_map(|o| o.main_ix)
-                                .unwrap_or(from)
-                        };
+                            order_kb[c + 1..].iter().find_map(|o| o.main_ix)
+                        }
+                        .unwrap_or(from);
                         if to != from {
                             cx.stop_propagation();
                             h(from, to, w, cx);
@@ -1361,148 +1582,99 @@ impl RenderOnce for ActivityBar {
                     }
                     return;
                 }
-                let next = match k {
-                    "down" => {
-                        let start = cur.map(|c| c + 1).unwrap_or(0);
-                        (start..n).find(|&i| enabled(i)).or(cur)
-                    }
-                    "up" => match cur {
-                        None => (0..n).rev().find(|&i| enabled(i)),
-                        Some(c) => (0..c).rev().find(|&i| enabled(i)).or(Some(c)),
-                    },
-                    "home" => (0..n).find(|&i| enabled(i)),
-                    "end" => (0..n).rev().find(|&i| enabled(i)),
-                    "enter" | "space" => {
-                        if let Some(c) = cur
-                            && enabled(c)
-                        {
-                            cx.stop_propagation();
-                            if order_kb[c].is_folder {
-                                on_folder_toggle_kb(&order_kb[c].id, cx);
-                            }
-                            if let Some(h) = &on_select {
-                                h(&order_kb[c].id, w, cx);
-                            }
+                if k == "enter" || k == "space" {
+                    if let Some(c) = cur
+                        && !order_kb[c].disabled
+                    {
+                        cx.stop_propagation();
+                        if order_kb[c].is_folder {
+                            on_folder_toggle_kb(&order_kb[c].id, cx);
                         }
-                        return;
+                        if let Some(h) = &on_select {
+                            h(&order_kb[c].id, w, cx);
+                        }
                     }
-                    _ => return,
+                    return;
+                }
+                let Some(next) = step(&order_kb, cur, k, horizontal) else {
+                    return;
                 };
                 cx.stop_propagation();
                 keys.update(cx, |kk, cx| {
-                    *kk = next.map(|i| order_kb[i].id.clone());
+                    *kk = Some(order_kb[next].id.clone());
                     cx.notify();
                 });
             })
+            .relative()
             .flex()
-            .flex_col()
             .flex_none()
-            .w(px(width))
-            .when(self.fill, |d| d.h_full())
-            .map(|d| {
-                let (fill, layer) = crate::material::chrome(crate::SurfaceKind::Sidebar, r.bar, cx);
-                d.relative().bg(fill).children(layer)
+            .when(!horizontal, |d| {
+                d.flex_col()
+                    .w(px(thickness))
+                    .when(self.fill, |d| d.h_full())
             })
-            .when(edge_border, |d| match self.side {
-                BarSide::Leading => d
-                    .border_r(px(stroke::HAIRLINE))
-                    .border_color(c.border_subtle),
-                BarSide::Trailing => d
-                    .border_l(px(stroke::HAIRLINE))
-                    .border_color(c.border_subtle),
+            .when(horizontal, |d| {
+                d.flex_row()
+                    .items_center()
+                    .h(px(thickness))
+                    .when(self.fill, |d| d.w_full())
+            })
+            .map(|d| {
+                let (fill, layer) =
+                    crate::material::chrome(crate::SurfaceKind::Sidebar, bar_bg, cx);
+                d.bg(fill).children(layer)
+            })
+            .when(self.border, |d| {
+                let d = d.border_color(c.border_subtle);
+                match side {
+                    BarSide::Leading => d.border_r(px(stroke::HAIRLINE)),
+                    BarSide::Trailing => d.border_l(px(stroke::HAIRLINE)),
+                    BarSide::Top => d.border_b(px(stroke::HAIRLINE)),
+                    BarSide::Bottom => d.border_t(px(stroke::HAIRLINE)),
+                }
             })
             .font_family(theme.font_family.clone())
             .text_color(c.foreground_primary)
-            .pt(px(spacing::X_SMALL))
-            .children(self.header.map(|h| {
-                div()
-                    .flex_none()
-                    .flex()
-                    .justify_center()
-                    .pb(px(spacing::X_SMALL))
-                    .child(h)
-            }))
-            .child(
-                div().flex_1().min_h_0().child(
-                    ScrollArea::new(child_id(&self.id, "scroll"))
-                        .edge_blur(false)
-                        .scrollbar(ScrollbarStyle::Hidden)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_center()
-                                .w_full()
-                                .px(px(spacing::XXX_SMALL))
-                                .gap(px(self.style.gap))
-                                .pt(px(spacing::XX_SMALL))
-                                .pb(px(spacing::X_SMALL))
-                                .children(list),
-                        ),
-                ),
-            )
+            .children(self.header.map(slot))
+            .child(items)
             .when(!footer_list.is_empty(), |d| {
                 d.child(
                     div()
                         .flex_none()
                         .flex()
-                        .flex_col()
+                        .when(!horizontal, |d| d.flex_col().pb(px(spacing::X_SMALL)))
+                        // Expanded: a hairline keeps pinned rows apart from
+                        // a scrolled list.
+                        .when(!horizontal && labels == ActivityLabels::Beside, |d| {
+                            d.border_t(px(stroke::HAIRLINE))
+                                .border_color(c.border_subtle)
+                                .pt(px(spacing::XX_SMALL))
+                        })
+                        .when(horizontal, |d| d.h_full().pr(px(spacing::X_SMALL)))
                         .items_center()
-                        .gap(px(self.style.gap))
-                        .pb(px(spacing::X_SMALL))
+                        .gap(px(gap))
                         .children(footer_list),
                 )
             })
-            .children(self.footer.map(|f| {
-                div()
-                    .flex_none()
-                    .flex()
-                    .justify_center()
-                    .pb(px(spacing::X_SMALL))
-                    .child(f)
-            }))
+            .children(self.footer.map(slot))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Entry;
     use super::*;
 
-    #[test]
-    fn badges_and_folder_default_open() {
-        assert_eq!(badge_text(7), "7");
-        assert_eq!(badge_text(120), "99+");
-        let open = ActivityItem::folder(
-            "games",
-            "Games",
-            [ActivityItem::icon("a", "A", IconName::Bug)],
-        )
-        .default_open(true);
-        assert!(matches!(open.face, Face::Folder(_, true)));
-        assert!(open.badge.is_none());
-        assert!(displayed_badge(&open).is_none());
-
-        let many: Vec<_> = (0..5)
-            .map(|i| ActivityItem::icon(format!("m{i}"), format!("M{i}"), IconName::Bug))
-            .collect();
-        let stacked = ActivityItem::folder("apps", "Apps", many);
-        assert_eq!(displayed_badge(&stacked), Some(ItemBadge::Count(5)));
-        let labelled = stacked.clone().badge(2);
-        assert_eq!(displayed_badge(&labelled), Some(ItemBadge::Count(2)));
-    }
-
-    #[test]
-    fn nav_order_includes_open_folder_children_not_in_reorder() {
+    fn bar_entries() -> (Vec<Entry>, Vec<ActivityItem>) {
         let entries = vec![
-            Entry::Item(ActivityItem::icon("a", "A", IconName::Document)),
+            Entry::Item(ActivityItem::icon("a", "A", IconName::Bug)),
+            Entry::Section(Some("Group".into())),
             Entry::Item(
                 ActivityItem::folder(
                     "folder",
                     "Folder",
                     [
-                        ActivityItem::icon("c1", "C1", IconName::Search),
-                        ActivityItem::icon("c2", "C2", IconName::Bug),
+                        ActivityItem::icon("c1", "C1", IconName::Star).badge(3),
+                        ActivityItem::icon("c2", "C2", IconName::Code).disabled(true),
                     ],
                 )
                 .default_open(true),
@@ -1514,6 +1686,124 @@ mod tests {
             "Settings",
             IconName::Settings,
         )];
+        (entries, footer)
+    }
+
+    #[test]
+    fn badges() {
+        assert_eq!(
+            ItemBadge::Count(7).text().as_ref().map(|s| s.as_ref()),
+            Some("7")
+        );
+        assert_eq!(
+            ItemBadge::Count(99).text().as_ref().map(|s| s.as_ref()),
+            Some("99")
+        );
+        assert_eq!(
+            ItemBadge::Count(120).text().as_ref().map(|s| s.as_ref()),
+            Some("99+")
+        );
+        assert_eq!(ItemBadge::Dot.text(), None);
+        let corner = |n| {
+            ItemBadge::Count(n)
+                .label(ACTIVITY_CORNER_BADGE_MAX)
+                .map(|s| s.to_string())
+        };
+        assert_eq!(corner(1).as_deref(), Some("1"));
+        assert_eq!(corner(9).as_deref(), Some("9"));
+        assert_eq!(corner(42).as_deref(), Some("9+"));
+        assert_eq!(corner(128).as_deref(), Some("9+"));
+        assert_eq!(
+            ItemBadge::Count(42)
+                .label(99)
+                .map(|s| s.to_string())
+                .as_deref(),
+            Some("42")
+        );
+        assert_eq!(
+            ItemBadge::Count(5)
+                .label(0)
+                .map(|s| s.to_string())
+                .as_deref(),
+            Some("1+")
+        );
+        assert!(ItemBadge::Count(10).is_capped(9) && !ItemBadge::Count(9).is_capped(9));
+        assert!(!ItemBadge::Dot.is_capped(9));
+        assert!(
+            ActivityItem::icon("a", "A", IconName::Bug)
+                .badge(0)
+                .badge
+                .is_none()
+        );
+        let folder = ActivityItem::folder(
+            "f",
+            "F",
+            [
+                ActivityItem::icon("a", "A", IconName::Bug).badge(4),
+                ActivityItem::icon("b", "B", IconName::Bug).badge(120),
+                ActivityItem::icon("c", "C", IconName::Bug).dot(),
+            ],
+        );
+        assert_eq!(folder.displayed_badge(), Some(ItemBadge::Count(124)));
+        let dots = ActivityItem::folder(
+            "f",
+            "F",
+            [ActivityItem::icon("c", "C", IconName::Bug).dot()],
+        );
+        assert_eq!(dots.displayed_badge(), Some(ItemBadge::Dot));
+        let own = ActivityItem::folder(
+            "f",
+            "F",
+            [ActivityItem::icon("a", "A", IconName::Bug).badge(4)],
+        )
+        .dot();
+        assert_eq!(own.displayed_badge(), Some(ItemBadge::Dot));
+        assert!(
+            ActivityItem::folder("f", "F", [])
+                .displayed_badge()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn corner_badges_hug_the_icon_corner() {
+        for size in [32., 36., 44.] {
+            // Dots: on the icon corner, inside the box.
+            let (top, right) = badge_offset(ItemBadge::Dot, size, size, icon::SMALL, (4., 4.));
+            let outer = DOT + 2. * RING;
+            assert!(top >= 0. && right >= 0., "{size}");
+            assert!(top + outer <= size && right + outer <= size, "{size}");
+            let corner = (size + icon::SMALL) / 2.;
+            assert!((size - right - outer / 2. - corner).abs() <= 4., "{size}");
+            // Counts: never past the slack; a one-digit pill covers under a
+            // third of the icon (40% with no room around the box).
+            for slack in [(0., 0.), (4., 0.), (0., 4.), (9., 9.)] {
+                let (top, right) =
+                    badge_offset(ItemBadge::Count(5), size, size, icon::SMALL, slack);
+                let outer = CORNER_BADGE_H + 2. * RING;
+                assert!(
+                    top >= -slack.1.min(CORNER_BADGE_OVERHANG),
+                    "{size} {slack:?}"
+                );
+                assert!(
+                    right >= -slack.0.min(CORNER_BADGE_OVERHANG),
+                    "{size} {slack:?}"
+                );
+                assert!(top + outer <= size && right + outer <= size, "{size}");
+                let inset = (size - icon::SMALL) / 2.;
+                let ox = (size - right - inset).min(icon::SMALL)
+                    - (size - right - outer - inset).max(0.);
+                let oy = (top + outer - inset).min(icon::SMALL) - (top - inset).max(0.);
+                let covered = ox.max(0.) * oy.max(0.) / (icon::SMALL * icon::SMALL);
+                let cap = if slack == (0., 0.) { 0.4 } else { 0.3 };
+                assert!(covered <= cap, "{size} {slack:?} {covered}");
+            }
+        }
+    }
+
+    #[test]
+    fn nav_order_includes_open_folder_members() {
+        let (entries, footer) = bar_entries();
         let closed = nav_order(&entries, &footer, &HashSet::new());
         assert_eq!(
             closed.iter().map(|e| e.id.as_ref()).collect::<Vec<_>>(),
@@ -1523,7 +1813,6 @@ mod tests {
             closed.iter().map(|e| e.main_ix).collect::<Vec<_>>(),
             [Some(0), Some(1), Some(2), None]
         );
-
         let mut open = HashSet::new();
         open.insert("folder".into());
         let opened = nav_order(&entries, &footer, &open);
@@ -1531,21 +1820,56 @@ mod tests {
             opened.iter().map(|e| e.id.as_ref()).collect::<Vec<_>>(),
             ["a", "folder", "c1", "c2", "b", "settings"]
         );
-        assert!(opened[0].main_ix == Some(0) && !opened[0].is_folder);
-        assert!(opened[1].is_folder && opened[1].main_ix == Some(1));
-        assert!(opened[2].main_ix.is_none() && !opened[2].is_folder);
-        assert!(opened[3].main_ix.is_none());
-        assert_eq!(opened[4].main_ix, Some(2));
-        assert!(opened[5].main_ix.is_none());
+        assert!(opened[1].is_folder && opened[2].main_ix.is_none());
+        assert!(opened[3].disabled);
     }
 
     #[test]
-    fn unified_style_is_an_improved_rail() {
-        let r = ActivityBarStyle::unified();
-        assert_eq!(r.shape, ItemShape::Morph);
-        assert_eq!(r.indicator, IndicatorStyle::Bar);
-        assert_eq!(r.labels, LabelMode::Tooltip);
-        assert_eq!(r.expanded_width, 220.);
-        assert_eq!(bar_heights(48.), (8., 20., 40.));
+    fn arrows_skip_disabled_items_and_follow_the_orientation() {
+        let (entries, footer) = bar_entries();
+        let mut open = HashSet::new();
+        open.insert("folder".into());
+        let o = nav_order(&entries, &footer, &open);
+        // c1 (2) → skips disabled c2 (3) → b (4).
+        assert_eq!(step(&o, Some(2), "down", false), Some(4));
+        assert_eq!(step(&o, Some(4), "up", false), Some(2));
+        assert_eq!(step(&o, Some(2), "right", true), Some(4));
+        // Wrong axis is ignored.
+        assert_eq!(step(&o, Some(2), "right", false), None);
+        assert_eq!(step(&o, Some(5), "down", false), Some(5));
+        assert_eq!(step(&o, None, "home", false), Some(0));
+        assert_eq!(step(&o, None, "end", true), Some(5));
+    }
+
+    #[test]
+    fn layout_modes() {
+        assert!(BarSide::Top.is_horizontal() && !BarSide::Leading.is_horizontal());
+        assert_eq!(BarSide::Leading.tooltip_side(), AnchorSide::Right);
+        assert_eq!(BarSide::Trailing.tooltip_side(), AnchorSide::Left);
+        assert_eq!(BarSide::Top.tooltip_side(), AnchorSide::Bottom);
+        assert_eq!(
+            effective_labels(BarSide::Top, ActivityLabels::Below),
+            ActivityLabels::Beside
+        );
+        assert_eq!(
+            bar_thickness(BarSide::Leading, ActivityLabels::Tooltip, 200., 48.),
+            48.
+        );
+        assert_eq!(
+            bar_thickness(BarSide::Leading, ActivityLabels::Beside, 200., 48.),
+            200.
+        );
+        assert_eq!(
+            bar_thickness(BarSide::Leading, ActivityLabels::Below, 200., 48.),
+            ACTIVITY_CAPTION_WIDTH
+        );
+        assert_eq!(
+            bar_thickness(BarSide::Top, ActivityLabels::Beside, 200., 48.),
+            48.
+        );
+        let f = ActivityItem::folder("f", "F", [ActivityItem::icon("x", "X", IconName::Bug)])
+            .folder_icon(IconName::Star);
+        assert_eq!(f.icon_name(), Some(IconName::Star));
+        assert!(f.contains(&"x".into()) && !f.contains(&"y".into()));
     }
 }

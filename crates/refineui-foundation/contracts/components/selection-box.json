@@ -3,7 +3,7 @@
   "id": "selection-box",
   "name": "Selection Box",
   "layer": "interaction",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Selection Box",

@@ -3,7 +3,7 @@
   "id": "drop-zone",
   "name": "Drop Zone",
   "layer": "interaction",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Drop Zone",

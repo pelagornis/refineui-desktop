@@ -11,7 +11,7 @@ Thank you for your interest in contributing. Please follow the guidelines below 
 
 ## Development
 
-You need Rust 1.88+ (`rust-toolchain.toml` selects stable) and, for the docs, [Bun](https://bun.sh) or Node 20+.
+You need Rust 1.98+ (`rust-toolchain.toml` selects stable; `rust-version` is 1.98) and, for the docs, [Bun](https://bun.sh) or Node 20+.
 macOS on Apple Silicon is the primary platform.
 
 ```sh

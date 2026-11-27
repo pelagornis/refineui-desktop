@@ -3,7 +3,7 @@
   "id": "floating-panel",
   "name": "Floating Panel",
   "layer": "application",
-  "status": "new",
+  "status": "exists",
   "phase": 3,
   "feature": null,
   "desktop_target": "Floating Panel",

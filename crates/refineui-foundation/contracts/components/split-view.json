@@ -3,7 +3,7 @@
   "id": "split-view",
   "name": "Split View",
   "layer": "composition",
-  "status": "new",
+  "status": "exists",
   "phase": 3,
   "feature": null,
   "desktop_target": "Split View",

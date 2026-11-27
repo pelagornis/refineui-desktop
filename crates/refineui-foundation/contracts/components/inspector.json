@@ -3,7 +3,7 @@
   "id": "inspector",
   "name": "Inspector",
   "layer": "composition",
-  "status": "new",
+  "status": "exists",
   "phase": 3,
   "feature": null,
   "desktop_target": "Inspector",

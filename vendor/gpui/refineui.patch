@@ -1,7 +1,7 @@
 diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 --- /tmp/gpui-orig/src/backdrop_blur.rs	1970-01-01 09:00:00.000000000 +0900
-+++ vendor/gpui/src/backdrop_blur.rs	2026-11-20 02:32:15.914879837 +0900
-@@ -0,0 +1,347 @@
++++ vendor/gpui/src/backdrop_blur.rs	2026-11-20 15:10:32.000000000 +0900
+@@ -0,0 +1,402 @@
 +//! RefineUI patch: renderer-independent planning for backdrop blur.
 +//!
 +//! Both the Blade and the Metal renderer run the same steps (copy → downsample
@@ -10,7 +10,7 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +
 +#![cfg_attr(windows, allow(dead_code))]
 +
-+use crate::{BackdropBlur, Bounds, ScaledPixels, Size, point};
++use crate::{point, BackdropBlur, Bounds, ScaledPixels, Size};
 +
 +/// Uniform block shared by every blur step. Mirrors `BlurParams` in
 +/// `blade/backdrop_blur.wgsl` and `RefineBlurParams` in `mac/shaders.metal`.
@@ -100,6 +100,34 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +    Cached,
 +}
 +
++/// Snap a sample rectangle to the downsample grid, clamped to the drawable.
++/// Always returns a non-empty region when the drawable has a positive size,
++/// so a visible sliver at the edge still gets a tinted composite.
++fn snap_copy_region(
++    sample: Bounds<ScaledPixels>,
++    width: f32,
++    height: f32,
++    s: f32,
++) -> ([f32; 4], [f32; 4]) {
++    let mut x0 = ((sample.origin.x.0 / s).floor() * s).max(0.0);
++    let mut y0 = ((sample.origin.y.0 / s).floor() * s).max(0.0);
++    let mut x1 = (((sample.origin.x.0 + sample.size.width.0) / s).ceil() * s).min(width);
++    let mut y1 = (((sample.origin.y.0 + sample.size.height.0) / s).ceil() * s).min(height);
++    let mut region_ds = [x0 / s, y0 / s, (x1 / s).floor(), (y1 / s).floor()];
++    if region_ds[2] <= region_ds[0] || region_ds[3] <= region_ds[1] {
++        let max_x = (width / s).floor().max(1.0);
++        let max_y = (height / s).floor().max(1.0);
++        let ds_x0 = (x0 / s).floor().clamp(0.0, max_x - 1.0);
++        let ds_y0 = (y0 / s).floor().clamp(0.0, max_y - 1.0);
++        region_ds = [ds_x0, ds_y0, ds_x0 + 1.0, ds_y0 + 1.0];
++        x0 = region_ds[0] * s;
++        y0 = region_ds[1] * s;
++        x1 = (region_ds[2] * s).min(width).max(x0 + 1.0);
++        y1 = (region_ds[3] * s).min(height).max(y0 + 1.0);
++    }
++    ([x0, y0, x1, y1], region_ds)
++}
++
 +impl BackdropBlur {
 +    /// Plan the blur for a drawable of `width` × `height`; `None` when
 +    /// nothing of the shape is visible.
@@ -133,20 +161,15 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +            8.0
 +        };
 +        let sample = self.sample_bounds().intersect(&viewport);
-+        let x0 = ((sample.origin.x.0 / s).floor() * s).max(0.0);
-+        let y0 = ((sample.origin.y.0 / s).floor() * s).max(0.0);
-+        let x1 = (((sample.origin.x.0 + sample.size.width.0) / s).ceil() * s).min(width);
-+        let y1 = (((sample.origin.y.0 + sample.size.height.0) / s).ceil() * s).min(height);
 +        // A region clipped by the drawable edge can end mid-texel in the
-+        // downsampled space; only whole texels are written.
-+        let region_ds = [x0 / s, y0 / s, (x1 / s).floor(), (y1 / s).floor()];
-+        if region_ds[2] <= region_ds[0] || region_ds[3] <= region_ds[1] {
-+            return None;
-+        }
++        // downsampled space; only whole texels are written. If snapping
++        // would leave a 0-texel copy, `snap_copy_region` keeps 1 texel so
++        // the composite still paints the tinted shape.
++        let (copy, region_ds) = snap_copy_region(sample, width, height, s);
 +        Some(BackdropBlurPlan {
 +            scale: s,
 +            sigma,
-+            copy: [x0, y0, x1, y1],
++            copy,
 +            region_ds,
 +            draw,
 +            target: [width, height],
@@ -271,7 +294,7 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +#[cfg(test)]
 +mod tests {
 +    use super::*;
-+    use crate::{BackdropBlurLight, BackdropBlurShadow, ContentMask, Corners, Hsla, size};
++    use crate::{size, BackdropBlurLight, BackdropBlurShadow, ContentMask, Corners, Hsla};
 +
 +    fn blur(x: f32, y: f32, w: f32, h: f32, sigma: f32) -> BackdropBlur {
 +        let bounds = Bounds {
@@ -322,7 +345,39 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +            .unwrap();
 +        assert_eq!(plan.copy[0], 0.0);
 +        assert_eq!(plan.copy[1], 0.0);
-+        assert!(blur(600.0, 0.0, 50.0, 50.0, 8.0).plan(500.0, 500.0).is_none());
++        assert!(blur(600.0, 0.0, 50.0, 50.0, 8.0)
++            .plan(500.0, 500.0)
++            .is_none());
++    }
++
++    #[test]
++    fn plan_still_composites_a_visible_sliver_at_the_drawable_edge() {
++        // A 1px sample at the drawable edge with downsample ×8 used to snap
++        // to a 0-texel region (`floor(10/8) == 8/8`), so `plan()` returned
++        // None and the renderer left a transparent hole.
++        let sample = Bounds {
++            origin: point(ScaledPixels(9.0), ScaledPixels(0.0)),
++            size: size(ScaledPixels(1.0), ScaledPixels(10.0)),
++        };
++        let (copy, region_ds) = snap_copy_region(sample, 10.0, 10.0, 8.0);
++        assert!(region_ds[2] > region_ds[0], "{region_ds:?}");
++        assert!(region_ds[3] > region_ds[1], "{region_ds:?}");
++        assert!(copy[2] > copy[0]);
++        assert!(copy[3] > copy[1]);
++
++        let mut b = blur(9.0, 0.0, 1.0, 10.0, 40.0);
++        b.tint = Hsla::white().opacity(0.62);
++        let plan = b
++            .plan(10.0, 10.0)
++            .expect("visible sliver must still be planned");
++        assert!(plan.region_ds[2] > plan.region_ds[0]);
++        assert!(plan.region_ds[3] > plan.region_ds[1]);
++        let viewport = Bounds {
++            origin: point(ScaledPixels(0.0), ScaledPixels(0.0)),
++            size: size(ScaledPixels(10.0), ScaledPixels(10.0)),
++        };
++        let visible = b.bounds.intersect(&viewport);
++        assert!(!plan.draw.intersect(&visible).is_empty());
 +    }
 +
 +    #[test]
@@ -350,8 +405,8 @@ diff -ruN /tmp/gpui-orig/src/backdrop_blur.rs vendor/gpui/src/backdrop_blur.rs
 +    }
 +}
 diff -ruN /tmp/gpui-orig/src/gpui.rs vendor/gpui/src/gpui.rs
---- /tmp/gpui-orig/src/gpui.rs	2026-11-20 01:36:08.781910756 +0900
-+++ vendor/gpui/src/gpui.rs	2026-11-20 02:32:15.934879547 +0900
+--- /tmp/gpui-orig/src/gpui.rs	2026-11-28 01:03:55.887158661 +0900
++++ vendor/gpui/src/gpui.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -13,6 +13,7 @@
  mod arena;
  mod asset_cache;
@@ -362,7 +417,7 @@ diff -ruN /tmp/gpui-orig/src/gpui.rs vendor/gpui/src/gpui.rs
  /// The default colors used by GPUI.
 diff -ruN /tmp/gpui-orig/src/platform/blade/backdrop_blur.wgsl vendor/gpui/src/platform/blade/backdrop_blur.wgsl
 --- /tmp/gpui-orig/src/platform/blade/backdrop_blur.wgsl	1970-01-01 09:00:00.000000000 +0900
-+++ vendor/gpui/src/platform/blade/backdrop_blur.wgsl	2026-11-20 02:43:19.962129576 +0900
++++ vendor/gpui/src/platform/blade/backdrop_blur.wgsl	2026-11-20 03:35:12.000000000 +0900
 @@ -0,0 +1,330 @@
 +// RefineUI patch: real backdrop blur for the Blade renderer.
 +//
@@ -695,8 +750,8 @@ diff -ruN /tmp/gpui-orig/src/platform/blade/backdrop_blur.wgsl vendor/gpui/src/p
 +    return vec4<f32>(result.rgb / max(result.a, 0.0001), result.a);
 +}
 diff -ruN /tmp/gpui-orig/src/platform/blade/blade_renderer.rs vendor/gpui/src/platform/blade/blade_renderer.rs
---- /tmp/gpui-orig/src/platform/blade/blade_renderer.rs	2026-11-20 01:36:08.781910756 +0900
-+++ vendor/gpui/src/platform/blade/blade_renderer.rs	2026-11-20 02:33:05.866141379 +0900
+--- /tmp/gpui-orig/src/platform/blade/blade_renderer.rs	2026-11-28 01:03:55.875158830 +0900
++++ vendor/gpui/src/platform/blade/blade_renderer.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -2,15 +2,20 @@
  #![allow(irrefutable_let_patterns)]
  
@@ -1292,8 +1347,8 @@ diff -ruN /tmp/gpui-orig/src/platform/blade/blade_renderer.rs vendor/gpui/src/pl
  }
  
 diff -ruN /tmp/gpui-orig/src/platform/mac/metal_renderer.rs vendor/gpui/src/platform/mac/metal_renderer.rs
---- /tmp/gpui-orig/src/platform/mac/metal_renderer.rs	2026-11-20 01:36:08.781910756 +0900
-+++ vendor/gpui/src/platform/mac/metal_renderer.rs	2026-11-20 02:38:05.007775468 +0900
+--- /tmp/gpui-orig/src/platform/mac/metal_renderer.rs	2026-11-28 01:03:55.875158830 +0900
++++ vendor/gpui/src/platform/mac/metal_renderer.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -1,4 +1,8 @@
  use super::metal_atlas::MetalAtlas;
 +use crate::backdrop_blur::{
@@ -1729,8 +1784,8 @@ diff -ruN /tmp/gpui-orig/src/platform/mac/metal_renderer.rs vendor/gpui/src/plat
      device: &metal::DeviceRef,
      library: &metal::LibraryRef,
 diff -ruN /tmp/gpui-orig/src/platform/mac/shaders.metal vendor/gpui/src/platform/mac/shaders.metal
---- /tmp/gpui-orig/src/platform/mac/shaders.metal	2026-11-20 01:36:08.781910756 +0900
-+++ vendor/gpui/src/platform/mac/shaders.metal	2026-11-20 02:43:19.962129576 +0900
+--- /tmp/gpui-orig/src/platform/mac/shaders.metal	2026-11-28 01:03:55.875158830 +0900
++++ vendor/gpui/src/platform/mac/shaders.metal	2026-11-20 03:35:12.000000000 +0900
 @@ -1237,3 +1237,277 @@
  
    return color;
@@ -2010,8 +2065,8 @@ diff -ruN /tmp/gpui-orig/src/platform/mac/shaders.metal vendor/gpui/src/platform
 +  return float4(result.rgb / max(result.a, 0.0001), result.a);
 +}
 diff -ruN /tmp/gpui-orig/src/platform/windows/directx_renderer.rs vendor/gpui/src/platform/windows/directx_renderer.rs
---- /tmp/gpui-orig/src/platform/windows/directx_renderer.rs	2026-11-20 01:36:08.781910756 +0900
-+++ vendor/gpui/src/platform/windows/directx_renderer.rs	2026-11-20 01:39:39.323648401 +0900
+--- /tmp/gpui-orig/src/platform/windows/directx_renderer.rs	2026-11-28 01:03:55.879158774 +0900
++++ vendor/gpui/src/platform/windows/directx_renderer.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -303,6 +303,10 @@
                      sprites,
                  } => self.draw_polychrome_sprites(texture_id, sprites),
@@ -2024,8 +2079,8 @@ diff -ruN /tmp/gpui-orig/src/platform/windows/directx_renderer.rs vendor/gpui/sr
                      scene.paths.len(),
                      scene.shadows.len(),
 diff -ruN /tmp/gpui-orig/src/scene.rs vendor/gpui/src/scene.rs
---- /tmp/gpui-orig/src/scene.rs	2026-11-20 01:36:08.785910805 +0900
-+++ vendor/gpui/src/scene.rs	2026-11-20 02:56:51.459896888 +0900
+--- /tmp/gpui-orig/src/scene.rs	2026-11-28 01:03:55.883158717 +0900
++++ vendor/gpui/src/scene.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -25,6 +25,8 @@
      pub(crate) paint_operations: Vec<PaintOperation>,
      primitive_bounds: BoundsTree<ScaledPixels>,
@@ -2697,8 +2752,8 @@ diff -ruN /tmp/gpui-orig/src/scene.rs vendor/gpui/src/scene.rs
 +    }
 +}
 diff -ruN /tmp/gpui-orig/src/taffy.rs vendor/gpui/src/taffy.rs
---- /tmp/gpui-orig/src/taffy.rs	2026-11-20 01:36:08.785910805 +0900
-+++ vendor/gpui/src/taffy.rs	2026-11-20 01:39:35.107628200 +0900
+--- /tmp/gpui-orig/src/taffy.rs	2026-11-28 01:03:55.887158661 +0900
++++ vendor/gpui/src/taffy.rs	2026-11-20 03:35:12.000000000 +0900
 @@ -309,7 +309,7 @@
              unit: &Option<u16>,
          ) -> Vec<taffy::GridTemplateComponent<T>> {
@@ -2709,9 +2764,79 @@ diff -ruN /tmp/gpui-orig/src/taffy.rs vendor/gpui/src/taffy.rs
          }
  
 diff -ruN /tmp/gpui-orig/src/window.rs vendor/gpui/src/window.rs
---- /tmp/gpui-orig/src/window.rs	2026-11-20 01:36:08.785910805 +0900
-+++ vendor/gpui/src/window.rs	2026-11-20 02:30:08.872585421 +0900
-@@ -3174,6 +3174,88 @@
+--- /tmp/gpui-orig/src/window.rs	2026-11-28 01:04:31.042657814 +0900
++++ vendor/gpui/src/window.rs	2026-11-28 00:58:49.874884530 +0900
+@@ -652,6 +652,15 @@
+     tooltip: AnyTooltip,
+ }
+ 
++/// RefineUI patch: see [`Window::element_context`].
++#[derive(Clone)]
++pub struct ElementContext {
++    current_view: EntityId,
++    parent_node: DispatchNodeId,
++    element_id_stack: SmallVec<[ElementId; 32]>,
++    text_style_stack: Vec<TextStyleRefinement>,
++}
++
+ pub(crate) struct DeferredDraw {
+     current_view: EntityId,
+     priority: usize,
+@@ -2774,6 +2783,53 @@
+         });
+     }
+ 
++    /// RefineUI patch: capture what [`Window::defer_draw`] records about the
++    /// current position in the element tree (view, dispatch parent, element id
++    /// and text style stacks), so a child can be prepainted and painted later,
++    /// out of tree order, with [`Window::with_element_context`]. Used for
++    /// overlays nested inside a deferred overlay, where `defer_draw` panics.
++    ///
++    /// This method should only be called as part of the prepaint phase.
++    pub fn element_context(&self) -> ElementContext {
++        self.invalidator.debug_assert_prepaint();
++        ElementContext {
++            current_view: self.current_view(),
++            parent_node: self.next_frame.dispatch_tree.active_node_id().unwrap(),
++            element_id_stack: self.element_id_stack.clone(),
++            text_style_stack: self.text_style_stack.clone(),
++        }
++    }
++
++    /// RefineUI patch: run `f` (a prepaint or paint of an element captured
++    /// with [`Window::element_context`]) as if it were at that position in
++    /// the tree, then restore the current context.
++    pub fn with_element_context<R>(
++        &mut self,
++        context: &ElementContext,
++        f: impl FnOnce(&mut Self) -> R,
++    ) -> R {
++        self.invalidator.debug_assert_paint_or_prepaint();
++        let ids = mem::replace(
++            &mut self.element_id_stack,
++            context.element_id_stack.clone(),
++        );
++        let styles = mem::replace(
++            &mut self.text_style_stack,
++            context.text_style_stack.clone(),
++        );
++        let previous_node = self.next_frame.dispatch_tree.active_node_id();
++        self.next_frame
++            .dispatch_tree
++            .set_active_node(context.parent_node);
++        let result = self.with_rendered_view(context.current_view, f);
++        if let Some(node) = previous_node {
++            self.next_frame.dispatch_tree.set_active_node(node);
++        }
++        self.element_id_stack = ids;
++        self.text_style_stack = styles;
++        result
++    }
++
+     /// Creates a new painting layer for the specified bounds. A "layer" is a batch
+     /// of geometry that are non-overlapping and have the same draw order. This is typically used
+     /// for performance reasons.
+@@ -3174,6 +3230,88 @@
          Ok(())
      }
  
@@ -2800,7 +2925,7 @@ diff -ruN /tmp/gpui-orig/src/window.rs vendor/gpui/src/window.rs
      /// Paint a surface into the scene for the next frame at the current z-index.
      ///
      /// This method should only be called as part of the paint phase of element drawing.
-@@ -5101,3 +5183,141 @@
+@@ -5101,3 +5239,141 @@
          border_style,
      }
  }

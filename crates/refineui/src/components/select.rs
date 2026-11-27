@@ -26,8 +26,8 @@ use crate::motion::{
     probe, scaled_plate, use_interaction, use_layout_probe,
 };
 use crate::{
-    ActiveTheme, CollisionOptions, ControlSize, FloatingLayout, FloatingSide, Icon, IconName,
-    IconSize, ItemAlignedMetrics, PlacementRect, PlacementViewport, ScrollArea, StyledExt,
+    ActiveTheme, CollisionOptions, ControlSize, FloatingLayout, Icon, IconName, IconSize,
+    ItemAlignedMetrics, PlacementRect, PlacementViewport, ScrollArea, StyledExt,
     place_item_aligned, scroll_edge_item,
 };
 
@@ -68,7 +68,7 @@ struct SelectState {
     grow_ctx: Option<GrowCtx>,
 }
 
-/// Inputs of [`track_growth`] (shared with the native pop-up window).
+/// Inputs of [`track_growth`].
 #[derive(Clone, Copy)]
 struct GrowCtx {
     /// Aligned panel before any growth.
@@ -81,8 +81,8 @@ struct GrowCtx {
 
 /// Web / Radix `SelectViewport` `onScroll`: a panel opened shorter than the
 /// window grows by the scrolled distance (wheel, trackpad, scrollbar drag or
-/// arrow-key reveal) until it reaches the padded window height. Runs in
-/// whichever window shows the list, before that frame's panel size is used.
+/// arrow-key reveal) until it reaches the padded window height. Runs before that frame's panel
+/// size is used.
 fn track_growth(state: &gpui::Entity<SelectState>, scroll: &gpui::ScrollHandle, cx: &mut App) {
     let (ctx, grow, prev, armed) = {
         let s = state.read(cx);
@@ -667,7 +667,7 @@ impl RenderOnce for Select {
             };
             state.update(cx, |s, _| s.grow_ctx = Some(ctx));
         }
-        if p.mounted && !crate::vibrancy::native_frost_active(cx) {
+        if p.mounted {
             if state.read(cx).align_scroll
                 && let Some(layout) = base
             {
@@ -719,13 +719,11 @@ impl RenderOnce for Select {
         let toggle = state.clone();
         let keys = state.clone();
         let close_out = state.clone();
-        let native_close = state.clone();
         let on_change_key = self.on_change.clone();
         let key_entries = self.entries.clone();
 
-        let native = crate::vibrancy::native_frost_active(cx);
         let host = use_layout_probe(&child_id(&self.id, "highlight"), window, cx);
-        let (options, slide_plate) = if p.mounted && !native {
+        let (options, slide_plate) = if p.mounted {
             let (rows, plate) = select_rows(
                 &self.id,
                 self.entries.clone(),
@@ -740,62 +738,6 @@ impl RenderOnce for Select {
         } else {
             (Vec::new(), None)
         };
-        if native {
-            // The un-grown origin: a moved origin reopens the pop-up, and the
-            // pop-up window grows itself (see `NativePopupSpec::grow_up`).
-            let bounds = base
-                .filter(|_| p.open)
-                .or(geometry)
-                .map(|l| gpui::Bounds::new(l.origin(), gpui::size(px(l.width), px(l.height))));
-            let native_scroll = ScrollArea::handle(child_id(&self.id, "native-list"), window, cx);
-            let grow_state = state.clone();
-            let list = self.entries.clone();
-            let list_state = state.clone();
-            let still = state.clone();
-            let close_state = state.clone();
-            let on_change = self.on_change.clone();
-            let parent = self.id.clone();
-            crate::vibrancy::drive_native_popup(
-                &self.id,
-                open,
-                bounds,
-                move || crate::vibrancy::NativePopupSpec {
-                    radius: radius::XX_LARGE,
-                    close: Rc::new(move |cx| {
-                        close_state.update(cx, |s, cx| {
-                            if s.open {
-                                s.open = false;
-                                cx.notify();
-                            }
-                        })
-                    }),
-                    still_open: Rc::new(move |cx| still.read(cx).open),
-                    content: Rc::new(move |window, cx| {
-                        native_select_list(
-                            &parent,
-                            list.clone(),
-                            selected,
-                            &list_state,
-                            &native_scroll,
-                            on_change.clone(),
-                            window,
-                            cx,
-                        )
-                    }),
-                    close_on_deactivate: true,
-                    report_size: None,
-                    popover: false,
-                    grow_up: Some(Rc::new(move |cx| {
-                        grow_state
-                            .read(cx)
-                            .grow_ctx
-                            .is_some_and(|c| c.base.side == FloatingSide::Bottom)
-                    })),
-                },
-                window,
-                cx,
-            );
-        }
 
         div()
             .id(self.id)
@@ -972,16 +914,7 @@ impl RenderOnce for Select {
                             ))),
                     ),
             )
-            .when(native && open, |d| {
-                // Clicks in the pop-up window never reach this window.
-                d.on_mouse_down_out(move |_, _, cx| {
-                    native_close.update(cx, |s, cx| {
-                        s.open = false;
-                        cx.notify();
-                    })
-                })
-            })
-            .when(p.mounted && !native, |d| {
+            .when(p.mounted, |d| {
                 d.child(
                     crate::layer(
                         anchored()
@@ -1006,12 +939,16 @@ impl RenderOnce for Select {
                                         .flex_col()
                                         .font_family(theme.font_family.clone())
                                         .when(p.open, |d| {
-                                            d.occlude().on_mouse_down_out(move |_, _, cx| {
-                                                close_out.update(cx, |s, cx| {
-                                                    s.open = false;
-                                                    cx.notify();
+                                            d.occlude()
+                                                .capture_any_mouse_down(|_, _, _| {
+                                                    crate::layer::claim_mouse_down()
                                                 })
-                                            })
+                                                .on_mouse_down_out(move |_, _, cx| {
+                                                    close_out.update(cx, |s, cx| {
+                                                        s.open = false;
+                                                        cx.notify();
+                                                    })
+                                                })
                                         }),
                                     crate::SurfaceKind::Menu,
                                     cx,
@@ -1050,7 +987,7 @@ impl RenderOnce for Select {
 type OnChange = Rc<dyn Fn(&usize, &mut Window, &mut App)>;
 
 /// The option rows (and the sliding hover plate) of an open select,
-/// rendered in whichever window shows the list.
+/// rendered in the popup.
 #[allow(clippy::too_many_arguments)]
 fn select_rows(
     parent: &ElementId,
@@ -1209,88 +1146,10 @@ fn select_rows(
     (options, slide_plate.into_any_element())
 }
 
-/// The list panel of a native-frost select (inside its pop-up window).
-#[allow(clippy::too_many_arguments)]
-fn native_select_list(
-    parent: &ElementId,
-    entries: Vec<SelectEntry>,
-    selected: Option<usize>,
-    state: &gpui::Entity<SelectState>,
-    scroll: &gpui::ScrollHandle,
-    on_change: Option<OnChange>,
-    window: &mut Window,
-    cx: &mut App,
-) -> gpui::AnyElement {
-    let theme = cx.theme().clone();
-    let list_id = child_id(parent, "native-list");
-    let highlighted = state.read(cx).highlighted;
-    let Some(ctx) = state.read(cx).grow_ctx else {
-        return div().into_any_element();
-    };
-    if state.read(cx).align_scroll {
-        // Same item-aligned scroll as the in-window panel.
-        scroll.set_offset(gpui::point(px(0.), px(-ctx.base.scroll_top)));
-        state.update(cx, |s, _| {
-            s.grow = 0.;
-            s.expand_armed = false;
-        });
-        state.update(cx, |s, _| {
-            s.align_scroll = false;
-            s.last_scrolled_hl = highlighted.or(selected);
-        });
-    } else {
-        if let Some(ix) = highlighted
-            && state.read(cx).last_scrolled_hl != Some(ix)
-        {
-            let vh = f32::from(scroll.bounds().size.height);
-            if vh > 0. {
-                ensure_item_visible(scroll, &entries, ix, vh);
-                state.update(cx, |s, _| s.last_scrolled_hl = Some(ix));
-            }
-        }
-        // The pop-up window scrolls without re-rendering the owner, so the
-        // expansion is tracked here; the window then grows to the content.
-        track_growth(state, scroll, cx);
-    }
-    let layout = crate::grow_item_aligned(ctx.base, state.read(cx).grow);
-    let (min_width, height) = (layout.width, layout.height);
-    let (rows, plate) = select_rows(
-        parent,
-        entries,
-        selected,
-        highlighted,
-        state,
-        on_change,
-        window,
-        cx,
-    );
-    let host = use_layout_probe(&child_id(parent, "highlight"), window, cx);
-    let list_h = height - 2. * stroke::HAIRLINE;
-    ScrollArea::new(list_id)
-        .track_scroll(scroll.clone())
-        .max_height(px(list_h))
-        .child(
-            div()
-                .min_w(px(min_width - 2. * stroke::HAIRLINE))
-                .p(px(spacing::XX_SMALL))
-                .font_family(theme.font_family.clone())
-                .child(
-                    div()
-                        .relative()
-                        .flex()
-                        .flex_col()
-                        .gap(px(1.))
-                        .child(probe(&host, None))
-                        .child(plate)
-                        .children(rows),
-                ),
-        )
-        .into_any_element()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::FloatingSide;
 
     fn sample() -> Vec<SelectEntry> {
         vec![

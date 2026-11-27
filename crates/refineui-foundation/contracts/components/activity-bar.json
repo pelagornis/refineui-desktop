@@ -3,7 +3,7 @@
   "id": "activity-bar",
   "name": "Activity Bar",
   "layer": "application",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Activity Bar / Navigation Rail",
@@ -19,19 +19,19 @@
     },
     "hovered": {
       "status": "implemented",
-      "visual": "row plate backgroundPrimaryHover (pointer)"
+      "visual": "item plate backgroundPrimaryHover, foregroundPrimary ink"
     },
     "pressed": {
-      "status": "planned",
-      "visual": "row plate backgroundPrimaryActive"
+      "status": "implemented",
+      "visual": "item plate backgroundPrimaryActive"
     },
     "focused": {
       "status": "implemented",
-      "visual": "keyboard cursor row plate + focusRing on the container"
+      "visual": "keyboard cursor item gets focusRing around its plate"
     },
     "disabled": {
       "status": "implemented",
-      "visual": "row foregroundDisabled, skipped by arrows"
+      "visual": "item foregroundDisabled, not clickable, skipped by arrows"
     },
     "loading": {
       "status": "planned",
@@ -39,7 +39,7 @@
     },
     "selected": {
       "status": "implemented",
-      "visual": "selected plate (backgroundPrimaryHover / surfaceSelected) + medium weight"
+      "visual": "backgroundSurfaceSelected plate + 2px backgroundBrand edge line (ActiveIndicator::Edge)"
     },
     "dragging": {
       "status": "implemented",
@@ -94,19 +94,19 @@
   "tokens": {
     "color": [
       "backgroundBrand",
-      "backgroundBrandSubtle",
       "backgroundPrimary",
+      "backgroundPrimaryActive",
       "backgroundPrimaryHover",
+      "backgroundSurfaceHover",
+      "backgroundSurfaceSelected",
       "borderDefault",
       "borderFocus",
       "borderSubtle",
-      "foregroundBrand",
       "foregroundDisabled",
       "foregroundOnBrand",
       "foregroundPrimary",
       "foregroundSecondary",
-      "foregroundTertiary",
-      "surfaceSunken"
+      "foregroundTertiary"
     ],
     "radius": [
       "roundedLarge",
@@ -138,23 +138,59 @@
   "keyboard": [
     {
       "keys": "down",
-      "action": "next item"
+      "action": "next item (skips disabled)",
+      "when": "vertical bar"
     },
     {
       "keys": "up",
-      "action": "previous item"
+      "action": "previous item (skips disabled)",
+      "when": "vertical bar"
+    },
+    {
+      "keys": "right",
+      "action": "next item (skips disabled)",
+      "when": "horizontal bar"
+    },
+    {
+      "keys": "left",
+      "action": "previous item (skips disabled)",
+      "when": "horizontal bar"
+    },
+    {
+      "keys": "home",
+      "action": "first item"
+    },
+    {
+      "keys": "end",
+      "action": "last item"
     },
     {
       "keys": "enter",
-      "action": "activate item"
+      "action": "activate item / toggle folder"
+    },
+    {
+      "keys": "space",
+      "action": "activate item / toggle folder"
     },
     {
       "keys": "alt-up",
-      "action": "move item up"
+      "action": "move item up",
+      "when": "vertical bar"
     },
     {
       "keys": "alt-down",
-      "action": "move item down"
+      "action": "move item down",
+      "when": "vertical bar"
+    },
+    {
+      "keys": "alt-left",
+      "action": "move item earlier",
+      "when": "horizontal bar"
+    },
+    {
+      "keys": "alt-right",
+      "action": "move item later",
+      "when": "horizontal bar"
     }
   ],
   "focus": {

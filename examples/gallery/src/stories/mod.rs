@@ -16,6 +16,7 @@ mod foundations;
 mod materials;
 mod navigation;
 mod overlays;
+mod workspace;
 
 pub(crate) use desktop::DESKTOP_SHOWCASE_SIZE;
 
@@ -38,11 +39,13 @@ pub enum StoryGroup {
     Data,
     /// Desktop shell chrome and interaction (Phase 2).
     Desktop,
+    /// Workspace composition: splits, tabs, panels, docks.
+    Workspace,
 }
 
 impl StoryGroup {
     /// All groups in sidebar order.
-    pub const ALL: [StoryGroup; 8] = [
+    pub const ALL: [StoryGroup; 9] = [
         Self::Foundations,
         Self::Actions,
         Self::Forms,
@@ -51,6 +54,7 @@ impl StoryGroup {
         Self::Overlays,
         Self::Data,
         Self::Desktop,
+        Self::Workspace,
     ];
 
     /// Label.
@@ -64,6 +68,7 @@ impl StoryGroup {
             Self::Overlays => "Overlays",
             Self::Data => "Data",
             Self::Desktop => "Desktop shell",
+            Self::Workspace => "Workspace",
         }
     }
 }
@@ -148,6 +153,7 @@ pub fn all_stories() -> Vec<Story> {
     v.extend(data::stories());
     v.extend(desktop::stories());
     v.extend(extra::stories());
+    v.extend(workspace::stories());
     v
 }
 

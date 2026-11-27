@@ -33,3 +33,26 @@ docs always build.
 Stories live in `examples/gallery/src/stories/`. Each `Story` has an `id`
 (the docs slug), a group, a summary, a capture size and a render function.
 The same function drives the gallery page and the screenshot.
+
+A new story also needs a `page(...)` entry in `scripts/gen_docs.py` (the
+generator refuses to run when a story has no page or a page has no story).
+
+## Regenerate the pages
+
+The pages under Foundations, Components, Desktop shell, Workspace and API
+reference, plus the [component inventory](/architecture/inventory/), are
+generated from the gallery stories and the crate sources:
+
+```sh
+python3 scripts/gen_docs.py           # write pages that changed, delete stale ones
+python3 scripts/gen_docs.py --check   # change nothing; exit 1 if a page is out of date
+```
+
+Page text (summary, usage notes, example, motion) lives in the generator; the
+API tables come from the `///` docs and `pub fn` signatures. Edit the
+generator or the doc comments, never a generated page.
+
+Visual-regression baselines are separate captures in
+`tests/visual/baselines/<os>/`; after a visual change run
+`./scripts/visual-regression.sh` (and `--update` when the change is
+intended).

@@ -4,19 +4,62 @@
 //! (`"cannot call defer_draw during deferred drawing"`), so a Select inside
 //! a Dialog, a submenu inside a context menu, or a Select inside a Popover
 //! would panic. [`layer`] behaves like `deferred` at the top level; inside
-//! another layer it queues itself and is drawn right after the enclosing
-//! layer's content, so it still paints above it.
+//! another layer it queues itself and is prepainted and painted right after
+//! the enclosing layer's content (with its own tree context, through the
+//! vendored gpui's `Window::element_context`), so it paints *and hit-tests*
+//! above everything in that layer — like the web, where a Select inside a
+//! Popover portals its list to `body` as a later `z-popup` layer. Its
+//! backdrop blur therefore samples the finished enclosing layer.
 
 use std::cell::RefCell;
 
 use gpui::{
-    AnyElement, App, Bounds, Element, GlobalElementId, InspectorElementId, IntoElement, LayoutId,
-    Pixels, Window,
+    AnyElement, App, Bounds, Element, ElementContext, GlobalElementId, InspectorElementId,
+    IntoElement, LayoutId, Pixels, Point, Window,
 };
 
 thread_local! {
     /// How many layers are currently prepainting / painting.
     static DEPTH: RefCell<usize> = const { RefCell::new(0) };
+    /// Layers met while prepainting each enclosing layer (innermost last).
+    static QUEUE: RefCell<Vec<Vec<Nested>>> = const { RefCell::new(Vec::new()) };
+}
+
+thread_local! {
+    /// Set when an overlay surface took the current mouse down.
+    static CLAIMED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// An overlay surface (Select list, menu) took this mouse down. A press on a
+/// Select list that overhangs its Popover is still "inside" the Popover.
+pub(crate) fn claim_mouse_down() {
+    CLAIMED.with(|c| c.set(true));
+}
+
+/// Outside-press handler for a popover-like layer that can hold nested
+/// overlays: runs `close` after the event unless a nested overlay surface
+/// claimed the press ([`claim_mouse_down`]). Outer layers paint (and so
+/// capture) before their nested layers, so this resets the claim, and the
+/// nested surface sets it later in the same dispatch.
+pub(crate) fn close_on_outside_press(
+    window: &mut Window,
+    cx: &mut App,
+    close: impl FnOnce(&mut Window, &mut App) + 'static,
+) {
+    CLAIMED.with(|c| c.set(false));
+    window.defer(cx, move |window, cx| {
+        if !CLAIMED.with(|c| c.get()) {
+            close(window, cx);
+        }
+    });
+}
+
+/// A layer inside another layer, drawn after that layer's content.
+struct Nested {
+    element: AnyElement,
+    offset: Point<Pixels>,
+    priority: usize,
+    context: ElementContext,
 }
 
 fn depth() -> usize {
@@ -30,11 +73,11 @@ pub fn layer(child: impl IntoElement) -> Layer {
         child: Some(
             Guard {
                 child: child.into_any_element(),
+                nested: Vec::new(),
             }
             .into_any_element(),
         ),
         priority: 0,
-        inline: false,
     }
 }
 
@@ -42,8 +85,6 @@ pub fn layer(child: impl IntoElement) -> Layer {
 pub struct Layer {
     child: Option<AnyElement>,
     priority: usize,
-    /// Drawn in place because an enclosing layer is already drawing.
-    inline: bool,
 }
 
 impl Layer {
@@ -90,13 +131,18 @@ impl Element for Layer {
         _: Bounds<Pixels>,
         _: &mut (),
         window: &mut Window,
-        cx: &mut App,
+        _cx: &mut App,
     ) {
+        let child = self.child.take().unwrap();
         if depth() > 0 {
-            self.inline = true;
-            self.child.as_mut().unwrap().prepaint(window, cx);
+            let nested = Nested {
+                element: child,
+                offset: window.element_offset(),
+                priority: self.priority,
+                context: window.element_context(),
+            };
+            QUEUE.with(|q| q.borrow_mut().last_mut().unwrap().push(nested));
         } else {
-            let child = self.child.take().unwrap();
             window.defer_draw(child, window.element_offset(), self.priority);
         }
     }
@@ -108,20 +154,18 @@ impl Element for Layer {
         _: Bounds<Pixels>,
         _: &mut (),
         _: &mut (),
-        window: &mut Window,
-        cx: &mut App,
+        _: &mut Window,
+        _: &mut App,
     ) {
-        if self.inline
-            && let Some(child) = self.child.as_mut()
-        {
-            child.paint(window, cx);
-        }
+        // Drawn by `defer_draw` or by the enclosing layer's `Guard`.
     }
 }
 
-/// Marks "inside a layer" while its child draws.
+/// Marks "inside a layer" while its child draws, then draws the layers
+/// nested in it on top.
 struct Guard {
     child: AnyElement,
+    nested: Vec<Nested>,
 }
 
 impl IntoElement for Guard {
@@ -163,7 +207,17 @@ impl Element for Guard {
         cx: &mut App,
     ) {
         DEPTH.with(|d| *d.borrow_mut() += 1);
+        QUEUE.with(|q| q.borrow_mut().push(Vec::new()));
         self.child.prepaint(window, cx);
+        let mut nested = QUEUE.with(|q| q.borrow_mut().pop()).unwrap_or_default();
+        nested.sort_by_key(|n| n.priority);
+        for n in &mut nested {
+            let (element, offset) = (&mut n.element, n.offset);
+            window.with_element_context(&n.context, |window| {
+                window.with_absolute_element_offset(offset, |window| element.prepaint(window, cx))
+            });
+        }
+        self.nested = nested;
         DEPTH.with(|d| *d.borrow_mut() -= 1);
     }
 
@@ -179,6 +233,10 @@ impl Element for Guard {
     ) {
         DEPTH.with(|d| *d.borrow_mut() += 1);
         self.child.paint(window, cx);
+        for n in &mut self.nested {
+            let element = &mut n.element;
+            window.with_element_context(&n.context, |window| element.paint(window, cx));
+        }
         DEPTH.with(|d| *d.borrow_mut() -= 1);
     }
 }

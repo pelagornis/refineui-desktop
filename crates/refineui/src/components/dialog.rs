@@ -64,6 +64,8 @@ pub struct Dialog {
     open: bool,
     bare: bool,
     material: bool,
+    initial_focus: Option<gpui::FocusHandle>,
+    on_open: Option<CloseHandler>,
 }
 
 impl Dialog {
@@ -81,7 +83,25 @@ impl Dialog {
             open: true,
             bare: false,
             material: false,
+            initial_focus: None,
+            on_open: None,
         }
+    }
+
+    /// What takes focus when the dialog opens (web `DialogContent` focuses
+    /// the first focusable element in the panel). Default: the panel itself.
+    /// Either way, closing gives focus back to whatever had it before.
+    pub fn initial_focus(mut self, handle: gpui::FocusHandle) -> Self {
+        self.initial_focus = Some(handle);
+        self
+    }
+
+    /// Runs each time the dialog opens, before its content renders. The web
+    /// `DialogContent` unmounts its children while closed, so their state
+    /// starts fresh on every opening; entity content resets itself here.
+    pub fn on_open(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
+        self.on_open = Some(Rc::new(f));
+        self
     }
 
     /// Draw the panel as the Sheet material (thick blur, glass rim, modal
@@ -167,6 +187,40 @@ fn focus_on_mount(id: &ElementId, window: &mut Window, cx: &mut App) -> gpui::Fo
     focus.read(cx).clone()
 }
 
+/// Web `useFocusTrap` on open/close: when `open` turns on, remember the
+/// focused element, run `on_open` and focus `target`; when it turns off,
+/// give focus back.
+fn track_open(
+    id: &ElementId,
+    open: bool,
+    target: &gpui::FocusHandle,
+    on_open: Option<&CloseHandler>,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    // (was open last frame, focus to give back on close)
+    let state = window.use_keyed_state(child_id(id, "open-focus"), cx, |_, _| {
+        (false, None::<gpui::FocusHandle>)
+    });
+    let was_open = state.read(cx).0;
+    if open && !was_open {
+        let restore = window.focused(cx);
+        if let Some(h) = on_open {
+            h(window, cx);
+        }
+        window.focus(target);
+        state.update(cx, |s, _| *s = (true, restore));
+    } else if !open && was_open {
+        let restore = state.update(cx, |s, _| {
+            s.0 = false;
+            s.1.take()
+        });
+        if let Some(h) = restore {
+            window.focus(&h);
+        }
+    }
+}
+
 impl RenderOnce for Dialog {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.theme().clone();
@@ -203,11 +257,25 @@ impl RenderOnce for Dialog {
             )
         };
         let max_h = window.viewport_size().height * 0.9;
+        let panel_focus = window
+            .use_keyed_state(child_id(&self.id, "focus"), cx, |_, cx| cx.focus_handle())
+            .read(cx)
+            .clone();
+        let target = self.initial_focus.clone().unwrap_or(panel_focus.clone());
+        track_open(
+            &self.id,
+            self.open,
+            &target,
+            self.on_open.as_ref(),
+            window,
+            cx,
+        );
         if self.bare {
-            // Bare panels don't take focus: their content (e.g. a search
-            // field) is focused by the owner; Escape still bubbles to the layer.
+            // Bare panels have no chrome to focus: `initial_focus` (e.g. a
+            // search field) takes it; Escape still bubbles to the layer.
             let panel = div()
                 .id("panel")
+                .track_focus(&panel_focus)
                 .occlude()
                 .w(self.size.px())
                 .max_w_full()
@@ -233,7 +301,7 @@ impl RenderOnce for Dialog {
                 cx,
             );
         }
-        let focus = focus_on_mount(&self.id, window, cx);
+        let focus = panel_focus;
         let plate = if self.material {
             crate::material::backing(
                 crate::SurfaceKind::Sheet,

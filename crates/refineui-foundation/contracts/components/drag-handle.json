@@ -3,7 +3,7 @@
   "id": "drag-handle",
   "name": "Drag Handle",
   "layer": "interaction",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Drag Handle",

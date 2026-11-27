@@ -22,7 +22,7 @@
 //! GPUI's action registry, contexts parsed as `key_context` predicates) and
 //! keeps the manager as the app-wide [`Keymap`] global, the single source of
 //! truth for [`crate::ShortcutHint`], [`crate::Tooltip::action`],
-//! menu-item shortcuts and the [`crate::CommandPalette`].
+//! menu-item shortcuts and [`crate::CommandItem::action`] rows.
 
 use std::collections::HashMap;
 
@@ -53,7 +53,7 @@ pub fn shortcut_for(action: &str, cx: &gpui::App) -> Option<String> {
 pub struct Binding {
     /// Keystrokes as written (`"secondary-shift-p"`, `"ctrl-k ctrl-s"`).
     pub keys: String,
-    /// Action name (`"workspace::ToggleCommandPalette"`).
+    /// Action name (`"workspace::ShowCommands"`).
     pub action: String,
     /// Context name, `None` = global.
     pub context: Option<String>,
@@ -362,7 +362,7 @@ mod tests {
             .context("Terminal", Some("Workspace"));
         m.bind(
             "secondary-shift-p",
-            "command_palette::Toggle",
+            "workspace::ShowCommands",
             Some("Workspace"),
         )
         .bind("secondary-w", "pane::CloseActiveItem", Some("Workspace"))
@@ -395,7 +395,7 @@ mod tests {
             m.resolve("cmd-k", Os::Windows, &["Terminal", "Workspace"])
                 .is_none()
         );
-        assert_eq!(m.keys_for("command_palette::Toggle", Os::MacOs).len(), 1);
+        assert_eq!(m.keys_for("workspace::ShowCommands", Os::MacOs).len(), 1);
     }
 
     #[test]

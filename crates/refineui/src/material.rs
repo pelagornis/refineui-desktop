@@ -115,13 +115,11 @@ impl SurfaceKind {
 }
 
 /// True when components draw real materials: the `material` feature is on,
-/// the renderer supports backdrop blur, reduced transparency is off and
-/// native macOS frost is not in use.
+/// the renderer supports backdrop blur and reduced transparency is off.
 pub fn materials_active(cx: &App) -> bool {
     #[cfg(feature = "material")]
     {
         refineui_material::MaterialSettings::blur_enabled(cx)
-            && !crate::vibrancy::native_frost_active(cx)
     }
     #[cfg(not(feature = "material"))]
     {

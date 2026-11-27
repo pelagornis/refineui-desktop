@@ -39,7 +39,7 @@ shortcuts:
 ```rust
 let mut keys = KeybindingManager::new();
 keys.context("Workspace", None).context("Editor", Some("Workspace"));
-keys.bind("secondary-shift-p", "command_palette::Toggle", Some("Workspace"))
+keys.bind("secondary-shift-p", "workspace::ShowCommands", Some("Workspace"))
     .bind("secondary-w", "pane::CloseActiveItem", Some("Workspace"))
     .bind("secondary-w", "editor::CloseSplit", Some("Editor"));
 
@@ -59,15 +59,16 @@ platform::current().shortcut_label("secondary-shift-p"); // ⇧⌘P or Ctrl+Shif
   - `Prefix`: a single stroke is also the start of a chord, which delays
     it.
 - **Platform-only bindings** use `bind_for(Os::MacOs, …)`.
-- **GPUI binding (Phase 2)**: `KeybindingManager::install(cx)` turns every
+- **GPUI binding**: `KeybindingManager::install(cx)` turns every
   binding for the current OS into a GPUI `KeyBinding` (contexts become
   `KeyBindingContextPredicate`s), stores the manager as the `Keymap`
   global and returns problems (unknown actions, bad contexts, `Duplicate`
   conflicts). `shortcut_for("editor::Save", cx)` then feeds
   `ShortcutHint::action`, `Tooltip::for_action` / `Button::tooltip_action`,
   `MenuItem::action`, `MenuBar`, the macOS system menu key equivalents and
-  `CommandPalette` — one source of truth. A Shortcut Recorder follows in
-  Phase 5.
+  `CommandItem::action` rows — one source of truth. `ShortcutRecorder`
+  captures a new binding and warns about conflicts (see
+  [Shortcut Recorder](/shell/shortcut-recorder/)).
 
 ## Focus regions (F6)
 
@@ -107,9 +108,9 @@ lands:
 - `insertion_index` + `reorder` move items consistently.
 - Drag previews paint on `LayerOrder::DragPreview`; drop indicators use
   `borderFocus`; the source shows the *dragging* state (reduced opacity).
-- Visual parts (Phase 2): `DragHandle`, `DragPreview`, `DropIndicator`
+- Visual parts: `DragHandle`, `DragPreview`, `DropIndicator`
   and `DropZone` — see [Drag and Drop](/shell/drag-and-drop/).
-  `ActivityBar::on_reorder` is the first built-in consumer (drag or ⌥↑ / ⌥↓).
+  `ActivityBar::on_reorder` (drag or ⌥↑ / ⌥↓) and `SortableList` use it, and `WorkspaceLayout` applies `DockZone` drops.
 
 ## Selection box
 

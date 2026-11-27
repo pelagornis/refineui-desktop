@@ -239,7 +239,7 @@ impl ApplicationShell {
         self
     }
 
-    /// Element painted over the shell (command palette, toasts).
+    /// Element painted over the shell (a command dialog, toasts).
     pub fn overlay(mut self, e: impl IntoElement) -> Self {
         self.overlays.push(e.into_any_element());
         self

@@ -117,26 +117,6 @@ pub fn popover_panel(
     popover_panel_at(title, body, close, align, AnchorSide::Bottom, None, cx)
 }
 
-/// Like [`popover_panel`], with an explicit placement and optional beak
-/// center (distance along the facing edge, aimed at the trigger midpoint).
-pub fn popover_panel_at(
-    title: Option<SharedString>,
-    body: AnyElement,
-    close: Option<Rc<dyn Fn(&mut App)>>,
-    align: PopoverAlign,
-    placement: AnchorSide,
-    beak_center: Option<f32>,
-    cx: &App,
-) -> gpui::Stateful<gpui::Div> {
-    popover_panel_impl(
-        title,
-        body,
-        close,
-        Some((align, placement, beak_center)),
-        cx,
-    )
-}
-
 fn beak_side_for(placement: AnchorSide) -> BeakSide {
     match placement {
         AnchorSide::Bottom => BeakSide::Top,
@@ -154,45 +134,42 @@ fn anchor_align(align: PopoverAlign) -> AnchorAlign {
     }
 }
 
-/// `chrome = None`: no surface / beak / shadow (a native-frost pop-up
-/// window draws the frosted fill and edge).
-fn popover_panel_impl(
+/// Like [`popover_panel`], with an explicit placement and optional beak
+/// center (distance along the facing edge, aimed at the trigger midpoint).
+pub fn popover_panel_at(
     title: Option<SharedString>,
     body: AnyElement,
     close: Option<Rc<dyn Fn(&mut App)>>,
-    chrome: Option<(PopoverAlign, AnchorSide, Option<f32>)>,
+    align: PopoverAlign,
+    placement: AnchorSide,
+    beak_center: Option<f32>,
     cx: &App,
 ) -> gpui::Stateful<gpui::Div> {
     use refineui_foundation::size::component::POPOVER_PANEL_WIDTH;
     let theme = cx.theme();
     let c = theme.colors;
     let fill = theme.floating_fill();
-    let beak = chrome.map(|(align, placement, center)| {
-        let align = match align {
-            PopoverAlign::Start => BeakAlign::Start,
-            PopoverAlign::Center => BeakAlign::Center,
-            PopoverAlign::End => BeakAlign::End,
-        };
-        let beak = Beak::popover(beak_side_for(placement), align);
-        match center {
-            Some(c) => beak.with_center(c),
-            None => beak,
-        }
-    });
+    let beak_align = match align {
+        PopoverAlign::Start => BeakAlign::Start,
+        PopoverAlign::Center => BeakAlign::Center,
+        PopoverAlign::End => BeakAlign::End,
+    };
+    let beak = Beak::popover(beak_side_for(placement), beak_align);
+    let beak = match beak_center {
+        Some(c) => beak.with_center(c),
+        None => beak,
+    };
     // One closed outline (panel + beak). A rectangular material plate would
     // draw a seam through the beak, so beaked chrome uses the path fill.
-    let (chrome_layers, shadows) = match beak {
-        Some(beak) => crate::components::floating::floating_chrome(
-            crate::SurfaceKind::Popover,
-            radius::XX_LARGE,
-            Some(beak),
-            fill,
-            c.border_default,
-            theme.shadow(Elevation::FLOATING),
-            cx,
-        ),
-        None => (Vec::new(), Vec::new()),
-    };
+    let (chrome_layers, shadows) = crate::components::floating::floating_chrome(
+        crate::SurfaceKind::Popover,
+        radius::XX_LARGE,
+        Some(beak),
+        fill,
+        c.border_default,
+        theme.shadow(Elevation::FLOATING),
+        cx,
+    );
     div()
         .id("refineui-popover-panel")
         .occlude()
@@ -304,88 +281,6 @@ impl RenderOnce for Popover {
                 _ => (px(0.), px(0.), preferred, None),
             };
         let measured = measure.read(cx).items.first().copied().flatten().is_some();
-        if !inline && crate::vibrancy::native_frost_active(cx) {
-            // FrostMode::Native: the panel (without beak — the pop-up window
-            // is a rounded rectangle) opens in an OS-blurred pop-up window.
-            let size = window.use_keyed_state(child_id(&self.id, "native-size"), cx, |_, _| {
-                None::<gpui::Size<gpui::Pixels>>
-            });
-            let w = size.read(cx).map(|s| s.width).unwrap_or(px(
-                refineui_foundation::size::component::POPOVER_PANEL_WIDTH,
-            ));
-            let bounds = measure.read(cx).container.map(|t| {
-                let l = place_anchored(
-                    PlacementRect::from_bounds(t),
-                    viewport,
-                    f32::from(w),
-                    120.,
-                    preferred,
-                    anchor_align(align),
-                    opts,
-                );
-                gpui::Bounds::new(
-                    gpui::point(px(l.x), px(l.y)),
-                    gpui::size(w, px(l.height.max(1.))),
-                )
-            });
-            let content = self.content.clone();
-            let title = self.title.clone();
-            let spec_close = close.clone();
-            let still = open.clone();
-            crate::vibrancy::drive_native_popup(
-                &self.id,
-                is_open,
-                bounds,
-                move || crate::vibrancy::NativePopupSpec {
-                    radius: radius::XX_LARGE,
-                    close: spec_close.clone(),
-                    still_open: Rc::new(move |cx| *still.read(cx)),
-                    content: Rc::new(move |window, cx| {
-                        let body = content(spec_close.clone(), window, cx);
-                        popover_panel_impl(
-                            title.clone(),
-                            body,
-                            title.is_some().then(|| spec_close.clone()),
-                            None,
-                            cx,
-                        )
-                        .into_any_element()
-                    }),
-                    close_on_deactivate: true,
-                    report_size: Some(size),
-                    grow_up: None,
-                    popover: true,
-                },
-                window,
-                cx,
-            );
-            return div()
-                .id(self.id)
-                .relative()
-                .flex_none()
-                .child(
-                    div()
-                        .id("trigger")
-                        .relative()
-                        .child(probe(&measure, None))
-                        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                            toggle.update(cx, |o, cx| {
-                                *o = !*o;
-                                cx.notify();
-                            })
-                        })
-                        .when(is_open, |d| {
-                            d.on_mouse_down_out(move |_, _, cx| {
-                                close_out.update(cx, |o, cx| {
-                                    *o = false;
-                                    cx.notify();
-                                })
-                            })
-                        })
-                        .child(self.trigger),
-                )
-                .into_any_element();
-        }
         div()
             .id(self.id)
             .relative()
@@ -445,11 +340,18 @@ impl RenderOnce for Popover {
                                         // Hidden for the one frame before the panel is measured.
                                         .opacity(if measured { p.progress } else { 0. })
                                         .when(p.open, |d| {
-                                            d.on_mouse_down_out(move |_, _, cx| {
-                                                close_out.update(cx, |o, cx| {
-                                                    *o = false;
-                                                    cx.notify();
-                                                })
+                                            d.on_mouse_down_out(move |_, w, cx| {
+                                                let close_out = close_out.clone();
+                                                crate::layer::close_on_outside_press(
+                                                    w,
+                                                    cx,
+                                                    move |_, cx| {
+                                                        close_out.update(cx, |o, cx| {
+                                                            *o = false;
+                                                            cx.notify();
+                                                        })
+                                                    },
+                                                )
                                             })
                                         })
                                         .child(panel),

@@ -65,8 +65,8 @@ pub(super) fn stories() -> Vec<Story> {
             id: "calendar",
             name: "Calendar",
             group: StoryGroup::Navigation,
-            summary: "Month grid date picker.",
-            shot: (340., 360.),
+            summary: "Month grid date picker: a single date or a range over two months.",
+            shot: (900., 400.),
             render: calendar,
         },
     ]
@@ -379,7 +379,9 @@ fn collapsible(w: &mut Window, cx: &mut App) -> AnyElement {
 
 fn calendar(w: &mut Window, cx: &mut App) -> AnyElement {
     let sel = state("cal-sel", w, cx, || Some(Date::new(2026, 11, 18)));
-    let month = state("cal-month", w, cx, || Date::new(2026, 11, 1));
+    let range = state("cal-range", w, cx, || {
+        (Some(Date::new(2026, 11, 24)), Some(Date::new(2026, 12, 4)))
+    });
     let set = {
         let sel = sel.clone();
         move |d: &Date, _: &mut Window, cx: &mut App| {
@@ -389,9 +391,33 @@ fn calendar(w: &mut Window, cx: &mut App) -> AnyElement {
             })
         }
     };
-    Calendar::new("cal", *month.read(cx))
-        .today(Date::new(2026, 11, 10))
-        .selected(*sel.read(cx))
-        .on_select(set)
+    let set_range = {
+        let range = range.clone();
+        move |a: Option<Date>, b: Option<Date>, _: &mut Window, cx: &mut App| {
+            range.update(cx, |r, cx| {
+                *r = (a, b);
+                cx.notify();
+            })
+        }
+    };
+    let (start, end) = *range.read(cx);
+    div()
+        .flex()
+        .items_start()
+        .gap(px(32.))
+        .child(section(
+            "Single",
+            Calendar::new("cal", Date::new(2026, 11, 1))
+                .selected(*sel.read(cx))
+                .on_select(set),
+            cx,
+        ))
+        .child(section(
+            "Range",
+            Calendar::new("cal-r", Date::new(2026, 11, 1))
+                .range(start, end)
+                .on_range_change(set_range),
+            cx,
+        ))
         .into_any_element()
 }

@@ -6,9 +6,10 @@
   "status": "adapt",
   "phase": 2,
   "feature": null,
-  "desktop_target": "Command Palette",
+  "desktop_target": "Command Dialog",
   "rust_types": [
-    "Command"
+    "Command",
+    "CommandDialog"
   ],
   "a11y_role": "combobox",
   "states": {

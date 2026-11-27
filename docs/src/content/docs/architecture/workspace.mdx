@@ -9,14 +9,13 @@ sidebar:
 
 | Component | Role |
 | --- | --- |
-| **Split View** | Two or more panes along an axis with **Resizable Handles**. Ratios are fractions; each pane has a min size. |
-| **Panel** | A titled tool surface (header: title, actions, overflow menu). Lives in a dock, a panel group or a floating panel. |
-| **Panel Group** | Panels stacked in one dock slot. Collapsible headers, or tabs at narrow sizes. |
-| **Dock / Dock Area** | The left, right and bottom window edges. Each holds panels, can be shown or hidden, is resizable, and remembers its size. |
-| **Tab Group** | Documents in one pane: **Tab Bar** + content. Tabs are **Document Tabs** (dirty dot, pinned, close button visible on hover *and* on focus / active). |
-| **Inspector** | A right-dock panel that shows the selection's properties. |
-| **Floating Panel** | A panel outside the docks, either inside the window (`LayerOrder::FloatingPanel`) or as its own native pop-up window (reuses the vibrancy pop-up infrastructure). |
-| **Editor** | The center content host for a document type, provided by the app. RefineUI supplies the chrome. |
+| [Split View](/workspace/split-view/) | Two or more panes along an axis, separated by resize handles. Ratios are fractions; each pane has a minimum size. |
+| [Panel Group](/workspace/panel-group/) | `Panel`s in one dock slot, as tabs (`PanelGroupMode::Tabs`) or stacked collapsible headers (`Stack`). |
+| [Dock Area](/workspace/dock-area/) | The center plus left, right and bottom `Dock`s. Each dock holds a panel group, is resizable within its limits, can be zoomed and accepts panel drops. |
+| [Tab Group](/workspace/tab-group/) | Documents in one pane: a `TabBar` of `DocumentTab`s (dirty dot, pinned, preview, close button on hover *and* on focus / active) plus content. |
+| [Inspector](/workspace/inspector/) | A property grid of collapsible `InspectorSection`s for the right dock. |
+| [Floating Panel](/workspace/floating-panel/) | A tool window with its own titlebar: `FloatingPanelFrame` inside a window, or `open_floating_panel` for a separate OS window (blurred background on macOS). |
+| Editor | The center content for a document type comes from the app; RefineUI supplies the chrome around it. |
 
 ## Layout state vs transient state
 
@@ -38,20 +37,22 @@ WorkspaceLayout                        hover / pressed plates
 serializable with the `serde` feature and carries a `version`.
 `WorkspaceLayout::normalize()` repairs whatever a stale file left behind:
 NaN or zero ratios, empty splits, nested same-axis splits, out-of-range
-active indices, negative dock sizes and a missing active group. `split()`
-and `close_group()` are the first mutations; Phase 3 adds move-tab,
-dock / undock and float.
+active indices, negative dock sizes and a missing active group. Mutations
+cover tabs (`open`, `promote`, `close_tab`, `close_others`,
+`close_to_right`, `close_all`, `set_pinned`, `move_tab`), splits (`split`,
+`split_with`, `set_ratios`, `close_group`), docks (`toggle_dock`,
+`set_dock_size`, `move_panel`, `activate_panel`), floating panels
+(`float_panel`, `set_floating_bounds`) and zoom (`toggle_zoom`); structural mutations re-run `normalize()`.
 
-## Rules
+## Guidelines for apps
 
-- **User arrangements win.** When the window shrinks, docks keep their
-  size until the center would go below its minimum. Then the *largest*
-  dock shrinks first, and docks auto-hide (still reachable from the
-  activity bar) below a threshold. Resizing back restores the saved sizes.
+- **User arrangements win.** Keep the user's dock sizes and restore them
+  when the window grows again; shrink docks only when the center would go
+  below its minimum.
 - **Persistence.** Save the layout on change (debounced) and on window
-  close; restore before the first frame.
+  close; restore it before the first frame.
 - **Docking by drag.** Dropping a tab or panel on a pane uses
-  `dnd::dock_zone`. The center zone joins, an edge zone splits.
-- **Keyboard.** Moving focus between panes (⌘/Ctrl-K then arrows), moving
-  tabs (⌘/Ctrl-Shift-PageUp/PageDown), toggling docks (⌘/Ctrl-B, J) and
-  resizing a focused splitter (arrows) are all bindable through the keymap.
+  `dnd::dock_zone`: the center zone joins the tab group, an edge zone
+  splits.
+- **Keyboard.** Moving focus between panes, moving tabs, toggling docks
+  and resizing a focused splitter (arrows) can all be bound through the keymap.

@@ -236,6 +236,14 @@ impl TextInput {
         self
     }
 
+    /// Runtime form of [`Self::size`].
+    pub fn set_size(&mut self, size: ControlSize, cx: &mut Context<Self>) {
+        if self.size != size {
+            self.size = size;
+            cx.notify();
+        }
+    }
+
     /// Leading icon.
     pub fn leading_icon(mut self, icon: IconName) -> Self {
         self.leading_icon = Some(icon);

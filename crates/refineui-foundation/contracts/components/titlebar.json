@@ -3,7 +3,7 @@
   "id": "titlebar",
   "name": "Titlebar",
   "layer": "application",
-  "status": "new",
+  "status": "exists",
   "phase": 2,
   "feature": null,
   "desktop_target": "Titlebar",

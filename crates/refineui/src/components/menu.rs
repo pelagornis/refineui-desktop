@@ -146,7 +146,6 @@ pub struct Menu {
     entries: Vec<MenuEntry>,
     width: Pixels,
     on_dismiss: Option<MenuHandler>,
-    native_frost: bool,
 }
 
 impl Menu {
@@ -157,7 +156,6 @@ impl Menu {
             entries: Vec::new(),
             width: px(refineui_foundation::size::component::MENU_PANEL_WIDTH),
             on_dismiss: None,
-            native_frost: false,
         }
     }
 
@@ -200,20 +198,9 @@ impl Menu {
         self
     }
 
-    /// Inside a native-frost pop-up window ([`crate::vibrancy`]): no panel
-    /// fill / border / shadow of its own — the window provides them.
-    pub(crate) fn native_frost(mut self, on: bool) -> Self {
-        self.native_frost = on;
-        self
-    }
-
     pub(crate) fn on_dismiss(mut self, f: MenuHandler) -> Self {
         self.on_dismiss = Some(f);
         self
-    }
-
-    pub(crate) fn panel_width(&self) -> Pixels {
-        self.width
     }
 
     pub(crate) fn id(&self) -> &ElementId {
@@ -230,8 +217,6 @@ pub(crate) struct SubmenuState {
     pub(crate) hovered: bool,
     /// When the pointer left both the open row and its panel.
     left_at: Option<std::time::Instant>,
-    /// Pointer is over the open submenu's native-frost pop-up window.
-    native_hovered: bool,
 }
 
 /// Web `ContextMenuSub`: hide 150ms after the pointer leaves.
@@ -365,9 +350,9 @@ impl RenderOnce for Menu {
         let parent = self.id.clone();
         let dismiss = self.on_dismiss.clone();
         let sub_state = submenu_state(&self.id, window, cx);
-        let (sub_open, sub_hovered, sub_native_hovered) = {
+        let (sub_open, sub_hovered) = {
             let s = *sub_state.read(cx);
-            (s.open, s.hovered, s.native_hovered)
+            (s.open, s.hovered)
         };
         let mut close_sub = false;
         let mut open_sub = None;
@@ -521,8 +506,7 @@ impl RenderOnce for Menu {
                             let panel_id = child_id(&id, "panel");
                             let (pstate, pi) = use_interaction(&panel_id, window, cx);
                             if is_open {
-                                panel_hovered |=
-                                    pi.hovered || (self.native_frost && sub_native_hovered);
+                                panel_hovered |= pi.hovered;
                                 open_row_hovered |= i.hovered;
                             }
                             let viewport = window.viewport_size();
@@ -548,43 +532,7 @@ impl RenderOnce for Menu {
                             .when(!item.disabled, |d| {
                                 d.cursor_action().track_interaction(&state)
                             });
-                            if self.native_frost {
-                                // Inside a native-frost pop-up: the submenu gets its
-                                // own pop-up window beside the row (never clipped).
-                                let bounds = row_bounds.map(|rb| {
-                                    let mut left = rb.right();
-                                    let screen_right = crate::vibrancy::to_screen(
-                                        window,
-                                        gpui::point(rb.right() + px(width), rb.top()),
-                                    )
-                                    .x;
-                                    if let Some(display) = window.display(cx)
-                                        && screen_right > display.bounds().right() - px(4.)
-                                    {
-                                        left = rb.left() - px(width);
-                                    }
-                                    gpui::Bounds::new(
-                                        gpui::point(
-                                            left,
-                                            rb.top() - px(spacing::XX_SMALL + stroke::HAIRLINE),
-                                        ),
-                                        gpui::size(px(width), px(200.)),
-                                    )
-                                });
-                                let sub_menu = sub_menu.clone();
-                                let st = sub_state.clone();
-                                crate::vibrancy::drive_native_popup(
-                                    &ElementId::NamedChild(
-                                        Box::new(parent.clone()),
-                                        format!("native-sub-{ix}").into(),
-                                    ),
-                                    is_open,
-                                    bounds,
-                                    move || native_submenu_spec(sub_menu, st, ix),
-                                    window,
-                                    cx,
-                                );
-                            } else if let Some(rb) = row_bounds.filter(|_| is_open) {
+                            if let Some(rb) = row_bounds.filter(|_| is_open) {
                                 // Web `ContextMenuSubContent`: `left = rect.right`
                                 // (flip to `rect.left - width`), `top = rect.top`.
                                 let mut left = rb.right();
@@ -667,9 +615,7 @@ impl RenderOnce for Menu {
             .max_w(px(MENU_MAX_WIDTH))
             .flex()
             .flex_col()
-            .when(!self.native_frost, |d| {
-                crate::material::frosted_plate(d, crate::SurfaceKind::Menu, cx)
-            })
+            .map(|d| crate::material::frosted_plate(d, crate::SurfaceKind::Menu, cx))
             .font_family(theme.font_family.clone())
             .child({
                 let max_h = (f32::from(window.viewport_size().height) - 32.).max(128.);
@@ -748,11 +694,6 @@ impl RenderOnce for DropdownMenu {
         let close2 = open.clone();
         let anchor = self.anchor;
         let sub = submenu_state(self.menu.id(), window, cx);
-        if crate::vibrancy::native_frost_active(cx) {
-            return self
-                .render_native(open, is_open, toggle, window, cx)
-                .into_any_element();
-        }
         div()
             .id(self.id)
             .relative()
@@ -785,15 +726,19 @@ impl RenderOnce for DropdownMenu {
                                     .id("panel")
                                     .mt(px(spacing::XX_SMALL))
                                     .when(p.open, |d| {
-                                        d.occlude().on_mouse_down_out(move |_, _, cx| {
-                                            if sub.read(cx).hovered {
-                                                return;
-                                            }
-                                            close2.update(cx, |o, cx| {
-                                                *o = false;
-                                                cx.notify();
+                                        d.occlude()
+                                            .capture_any_mouse_down(|_, _, _| {
+                                                crate::layer::claim_mouse_down()
                                             })
-                                        })
+                                            .on_mouse_down_out(move |_, _, cx| {
+                                                if sub.read(cx).hovered {
+                                                    return;
+                                                }
+                                                close2.update(cx, |o, cx| {
+                                                    *o = false;
+                                                    cx.notify();
+                                                })
+                                            })
                                     }),
                             ),
                     )
@@ -801,144 +746,6 @@ impl RenderOnce for DropdownMenu {
                 )
             })
             .into_any_element()
-    }
-}
-
-impl DropdownMenu {
-    /// [`crate::FrostMode::Native`]: the panel opens in its own OS-blurred
-    /// pop-up window (macOS) placed under the trigger.
-    fn render_native(
-        self,
-        open: Entity<bool>,
-        is_open: bool,
-        toggle: Entity<bool>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> impl IntoElement {
-        let trigger_probe = use_layout_probe(&child_id(&self.id, "native-trigger"), window, cx);
-        let width = self.menu.width;
-        let bounds = trigger_probe.read(cx).container.map(|t| {
-            let x = match self.anchor {
-                Corner::TopRight => t.right() - width,
-                _ => t.left(),
-            };
-            // Rough first height; the pop-up resizes itself to the menu.
-            gpui::Bounds::new(
-                gpui::point(x, t.bottom() + px(spacing::XX_SMALL)),
-                gpui::size(width, px(200.)),
-            )
-        });
-        let menu = self.menu.clone();
-        let spec_open = open.clone();
-        crate::vibrancy::drive_native_popup(
-            &self.id,
-            is_open,
-            bounds,
-            move || native_menu_spec(menu, spec_open, true),
-            window,
-            cx,
-        );
-        let close_out = open.clone();
-        div().id(self.id).relative().flex_none().child(
-            div()
-                .id("trigger")
-                .relative()
-                .child(probe(&trigger_probe, None))
-                .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-                    toggle.update(cx, |o, cx| {
-                        *o = !*o;
-                        cx.notify();
-                    });
-                })
-                .when(is_open, |d| {
-                    // Clicks in the pop-up window never reach this window,
-                    // so any click here outside the trigger dismisses.
-                    d.on_mouse_down_out(move |_, _, cx| {
-                        close_out.update(cx, |o, cx| {
-                            *o = false;
-                            cx.notify();
-                        })
-                    })
-                })
-                .child(self.trigger),
-        )
-    }
-}
-
-/// A native-frost pop-up showing `menu`; activating an item (or a
-/// deactivation / move of the owning window) sets `open` to false.
-pub(crate) fn native_menu_spec(
-    menu: Menu,
-    open: Entity<bool>,
-    close_on_deactivate: bool,
-) -> crate::vibrancy::NativePopupSpec {
-    let close_state = open.clone();
-    let close: Rc<dyn Fn(&mut App)> = Rc::new(move |cx| {
-        close_state.update(cx, |o, cx| {
-            if *o {
-                *o = false;
-                cx.notify();
-            }
-        })
-    });
-    let dismiss = close.clone();
-    crate::vibrancy::NativePopupSpec {
-        radius: radius::XX_LARGE,
-        close,
-        still_open: Rc::new(move |cx| *open.read(cx)),
-        content: Rc::new(move |_, _| {
-            let dismiss = dismiss.clone();
-            menu.clone()
-                .native_frost(true)
-                .on_dismiss(Rc::new(move |_, cx| dismiss(cx)))
-                .into_any_element()
-        }),
-        close_on_deactivate,
-        report_size: None,
-        grow_up: None,
-        popover: false,
-    }
-}
-
-/// A submenu's native-frost pop-up: closing it clears `state.open`; hovering
-/// it keeps the parent row's submenu open.
-fn native_submenu_spec(
-    menu: Menu,
-    state: Entity<SubmenuState>,
-    ix: usize,
-) -> crate::vibrancy::NativePopupSpec {
-    let close_state = state.clone();
-    let open_state = state.clone();
-    crate::vibrancy::NativePopupSpec {
-        radius: radius::XX_LARGE,
-        close: Rc::new(move |cx| {
-            close_state.update(cx, |s, cx| {
-                if s.open == Some(ix) {
-                    s.open = None;
-                    s.native_hovered = false;
-                    cx.notify();
-                }
-            })
-        }),
-        still_open: Rc::new(move |cx| open_state.read(cx).open == Some(ix)),
-        content: Rc::new(move |_, _| {
-            let hover = state.clone();
-            div()
-                .id("native-submenu")
-                .on_hover(move |inside, _, cx| {
-                    let inside = *inside;
-                    hover.update(cx, |s, cx| {
-                        s.native_hovered = inside;
-                        cx.notify();
-                    })
-                })
-                .child(menu.clone().native_frost(true))
-                .into_any_element()
-        }),
-        close_on_deactivate: false,
-        report_size: None,
-        grow_up: None,
-        popover: false,
     }
 }
 

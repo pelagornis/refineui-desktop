@@ -24,9 +24,9 @@ panels, docks, multi-document, multi-window).
 | --- | --- | --- |
 | Foundation | `refineui-foundation` (GPUI-free data) + `refineui::foundation` | tokens, material tokens, theme, density, layers, cursor, motion, blur |
 | Material | `refineui-material` (gpui + foundation only) | Material, real backdrop blur, lighting, grain, shadows, `MaterialSurface` |
-| Interaction | `refineui::interaction` + interaction components | keymap (→ GPUI bindings), selection, focus regions, dnd — logic unit-tested; visuals in `components::{drag, selection_box, shortcut_hint, command_palette}` |
+| Interaction | `refineui::interaction` + interaction components | keymap (→ GPUI bindings), selection, focus regions, dnd — logic unit-tested; visuals in `components::{drag, selection_box, shortcut_hint, command}` |
 | Components | `refineui::components` | buttons, inputs, menus, dialogs, tables, trees |
-| Composition | `refineui::workspace` | `layout` = persisted app state (serde feature); views in Phase 3 |
+| Composition | `refineui::workspace` | Split View, Panel Group, Dock Area, Tab Group, Inspector; `layout` = persisted app state (serde feature) |
 | Application | `refineui::shell` | `ShellSpec` + views: Window, Titlebar, WindowControls, MenuBar, StatusBar, ActivityBar, ApplicationShell |
 | Platform | `refineui::platform` | `PlatformAdapter` (macOS / Windows / Linux); all `cfg(target_os)` design decisions go here |
 
@@ -42,31 +42,21 @@ panels, docks, multi-document, multi-window).
 - Link and Carousel are core; Footer and NavigationMenu were removed. Only the page
   `container()` stays behind `web-extras`.
 
-## Phase plan (brief §9)
+## Status
 
-1. **Done** — inspect, inventory, contracts, layer architecture, shell design.
-2. **Done** — Foundation + interaction primitives in GPUI (density everywhere incl. Spacious, F6
-   regions, keymap → GPUI bindings + Shortcut Hint, drag handle / preview / drop zone, selection
-   box, cursor roles), Command Palette, shell chrome (Window, Titlebar, Window Controls, Menu Bar,
-   Toolbar, Status Bar, Activity Bar / Navigation Rail replacing Side Dock, Application Shell),
-   inline application-shell story.
-3. **Next** — Workspace composition (Split View, Resizable Handle, Panel, Panel Group, Dock / Dock Area,
-   Inspector, Tab Bar / Tab Group / Document Tab, Floating Panel, persistence).
-4. Adapt reusable components to their contracts (all 8 states, density, keyboard;
-   virtualized Table / Tree with multi-select + DnD; ResultView).
-5. System components + macOS / Windows validation.
-6. Public API docs and examples.
-
-Material Engine track (docs → Architecture → Material Engine; summary in docs → Final report):
-phases 0–6 done — engine, recipes,
-components on Material (§9) and desktop components on Material (§10: chrome materials, Notification
-Center, Preferences Window, Shortcut Recorder, ResultView, springs, `desktop-showcase`).
-Phase 6: generated API reference, `scripts/bench.sh`, visual regression, cross-platform notes,
-the 13 final deliverables (docs → Final report).
+The six phases of the brief have shipped: foundation and interaction primitives, shell chrome,
+workspace composition (Split View, Panel Group, Dock Area, Tab Group, Inspector, Floating
+Panel, persistence), components on their contracts, system components (Notification Center,
+Preferences Window, Shortcut Recorder, ResultView) and public API docs. Contracts still marked
+`adapt` (Table, Tree, Dialog, Drawer, Toast, …) list desktop work that remains. The Material
+Engine track (docs → Architecture → Material Engine) is done as well: engine, recipes,
+components and desktop chrome on materials. A searchable command list is `Command` (in a
+`CommandDialog` for ⇧⌘P); there is no separate palette widget. Not built yet: Window
+Switcher, Color / Font pickers, Progress Dialog.
 
 Do not implement everything in one pass; build and validate each layer before the next.
-The inventory (docs → Architecture → Component inventory) lists every component's layer,
-status and phase.
+The inventory (docs → Architecture → Component inventory, generated) lists every page and
+every contract's layer and status.
 
 ## Rules (brief §7–§8)
 
@@ -114,8 +104,7 @@ crates/refineui/           GPUI design system
   src/shell/               mod.rs (ShellSpec regions / metrics), window.rs (presets, restore),
                            titlebar.rs (Titlebar, WindowControls, WindowFrame), menu_bar.rs,
                            status_bar.rs, activity_bar.rs, app_shell.rs (ApplicationShell, F6)
-  src/platform/            mod.rs (PlatformAdapter, adapters, chrome preview), macos.rs (AppKit glue)
-  src/vibrancy.rs          native frost pop-ups (public API over platform::macos)
+  src/platform/            mod.rs (PlatformAdapter, adapters, chrome preview), windows.rs (Win32 glue)
   tests/contracts.rs       contract validator
   src/theme.rs             Theme global (appearance, density, colors), ActiveTheme
   src/theme_colors.rs      GENERATED: Hsla version of the semantic colors
@@ -130,8 +119,10 @@ examples/gallery/          gallery app + screenshot generator
   src/app.rs               gallery window (sidebar, light/dark, density, toasts)
   src/bin/screenshots.rs   refineui-screenshots (one PNG per story and appearance)
 docs/                      Astro + Starlight + @pelagornis/page documentation site
-  src/content/docs/        pages (components/, shell/, foundations/ and reference/ are GENERATED;
-                           architecture/, guides/ and report/ are hand-written)
+  src/content/docs/        pages (foundations/, components/, shell/, workspace/, reference/ and
+                           architecture/inventory.mdx are GENERATED by scripts/gen_docs.py;
+                           index, getting-started/, the rest of architecture/, guides/ and
+                           report/ are hand-written)
   src/assets/components/   screenshots <story-id>-light.png / -dark.png
   src/components/Screenshot.astro
 scripts/                   screenshots.sh, gen_docs.py, gen_icons.py, sync_tokens.py, contracts.py,
@@ -146,12 +137,11 @@ examples/gallery/tests/    stories_render.rs (every story renders), visual_regre
 ```sh
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
-cargo clippy --workspace --all-targets --all-features -- -D warnings  # web-extras, serde, vibrancy typecheck
+cargo clippy --workspace --all-targets --all-features -- -D warnings  # web-extras, serde, material
 cargo test --workspace
 cargo test -p refineui --all-features
 cargo build --workspace
 cargo build -p refineui --no-default-features          # Desktop Core without extras
-cargo clippy -p refineui --all-targets --features typecheck-macos-vibrancy -- -D warnings
 cargo clippy -p refineui --all-targets -- -D warnings  # refineui alone: no `material` (the gallery turns it on)
 ./scripts/test_gpui_patch.sh                     # vendor/gpui patch unit tests (blur plan, ordering, cache keys)
 ./scripts/macos-check/check.sh                   # type-check the Metal side from Linux (not a substitute for a Mac)
@@ -163,7 +153,7 @@ cargo run --release -p refineui-material --example blur_bench -- 16  # blur benc
 ./scripts/visual-regression.sh         # compare stories with tests/visual/baselines/<os> (--update, --strict)
 GPUI_BLUR_CACHE=0 cargo run --release -p refineui-material --example blur_bench -- 16  # same, blur cache off
 ./scripts/screenshots.sh [id,id]                 # regenerate docs screenshots
-python3 scripts/gen_docs.py                      # regenerate component doc pages
+python3 scripts/gen_docs.py [--check]            # regenerate (or check) the generated doc pages
 cd docs && bun install && bun run dev            # docs at http://localhost:4321
 cd docs && bun run build                         # static site in docs/dist
 ```
@@ -181,7 +171,7 @@ All cargo commands above must pass before you hand work back. CI
   transient UI state lives in `window.use_keyed_state` keyed by the element id.
 - **Colors only through the theme**: `cx.theme().colors.<semantic_name>`. Never hard-code
   hex values in components; add a token instead. Sizes come from
-  `refineui_tokens::size` / `Theme::control_*` so density switching works.
+  `refineui_foundation::size` / `Theme::control_*` so density switching works.
 - **Desktop behavior**: every interactive element is focusable (`tab_index`), shows the
   focus ring (`theme.focus_ring()`) on keyboard focus, activates with Enter/Space,
   and has hover and active states. Popups close on Escape and outside click.
@@ -315,7 +305,8 @@ platform status change; `bench/results/*.md` is the source for benchmark tables.
 - Don't branch on `cfg(target_os)` in components; use `refineui::platform`.
 - Don't commit `target/`, `docs/node_modules/`, `docs/dist/` or `._*` files.
 - Don't edit generated files by hand (`palette.rs`, `theme_colors.rs`, `icon_names.rs`,
-  `docs/src/content/docs/{components,foundations}/*.mdx`, `contracts/density.json`,
+  `docs/src/content/docs/{foundations,components,shell,workspace,reference}/*.mdx`,
+  `docs/src/content/docs/architecture/inventory.mdx`, `contracts/density.json`,
   `contracts/index.rs`).
 
 ## The GPUI patch (vendor/gpui)

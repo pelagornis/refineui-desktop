@@ -43,8 +43,6 @@ refineui-system-icons = { git = "https://github.com/pelagornis/refineui-system-i
 unsafe_code = "deny"
 missing_debug_implementations = "allow"
 unused_must_use = "deny"
-# objc's `msg_send!` (used by the macOS vibrancy prototype) checks `feature = "cargo-clippy"`.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
 
 [workspace.lints.clippy]
 dbg_macro = "deny"

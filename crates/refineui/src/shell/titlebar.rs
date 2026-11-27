@@ -339,7 +339,12 @@ pub struct Titlebar {
     on_double_click: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
     os: Option<Os>,
     interactive: bool,
+    title_inset: f32,
 }
+
+/// Space kept free on each side of the centred title so it never runs
+/// under the leading / trailing slots of a full-size window.
+const TITLE_INSET: f32 = 240.;
 
 impl Titlebar {
     /// Empty titlebar (unified height).
@@ -357,7 +362,15 @@ impl Titlebar {
             on_double_click: None,
             os: None,
             interactive: true,
+            title_inset: TITLE_INSET,
         }
+    }
+
+    /// Room kept on each side of the centred title (default 240px). Small
+    /// windows (floating panels) pass less so the title still shows.
+    pub(crate) fn title_inset(mut self, inset: f32) -> Self {
+        self.title_inset = inset;
+        self
     }
 
     /// Draw for this OS instead of [`crate::platform::chrome_os`].
@@ -596,7 +609,7 @@ impl RenderOnce for Titlebar {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .px(px(240.))
+                    .px(px(self.title_inset))
                     .child(t)
             }))
     }

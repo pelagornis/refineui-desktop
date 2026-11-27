@@ -652,6 +652,15 @@ pub(crate) struct TooltipRequest {
     tooltip: AnyTooltip,
 }
 
+/// RefineUI patch: see [`Window::element_context`].
+#[derive(Clone)]
+pub struct ElementContext {
+    current_view: EntityId,
+    parent_node: DispatchNodeId,
+    element_id_stack: SmallVec<[ElementId; 32]>,
+    text_style_stack: Vec<TextStyleRefinement>,
+}
+
 pub(crate) struct DeferredDraw {
     current_view: EntityId,
     priority: usize,
@@ -2772,6 +2781,53 @@ impl Window {
             prepaint_range: PrepaintStateIndex::default()..PrepaintStateIndex::default(),
             paint_range: PaintIndex::default()..PaintIndex::default(),
         });
+    }
+
+    /// RefineUI patch: capture what [`Window::defer_draw`] records about the
+    /// current position in the element tree (view, dispatch parent, element id
+    /// and text style stacks), so a child can be prepainted and painted later,
+    /// out of tree order, with [`Window::with_element_context`]. Used for
+    /// overlays nested inside a deferred overlay, where `defer_draw` panics.
+    ///
+    /// This method should only be called as part of the prepaint phase.
+    pub fn element_context(&self) -> ElementContext {
+        self.invalidator.debug_assert_prepaint();
+        ElementContext {
+            current_view: self.current_view(),
+            parent_node: self.next_frame.dispatch_tree.active_node_id().unwrap(),
+            element_id_stack: self.element_id_stack.clone(),
+            text_style_stack: self.text_style_stack.clone(),
+        }
+    }
+
+    /// RefineUI patch: run `f` (a prepaint or paint of an element captured
+    /// with [`Window::element_context`]) as if it were at that position in
+    /// the tree, then restore the current context.
+    pub fn with_element_context<R>(
+        &mut self,
+        context: &ElementContext,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        self.invalidator.debug_assert_paint_or_prepaint();
+        let ids = mem::replace(
+            &mut self.element_id_stack,
+            context.element_id_stack.clone(),
+        );
+        let styles = mem::replace(
+            &mut self.text_style_stack,
+            context.text_style_stack.clone(),
+        );
+        let previous_node = self.next_frame.dispatch_tree.active_node_id();
+        self.next_frame
+            .dispatch_tree
+            .set_active_node(context.parent_node);
+        let result = self.with_rendered_view(context.current_view, f);
+        if let Some(node) = previous_node {
+            self.next_frame.dispatch_tree.set_active_node(node);
+        }
+        self.element_id_stack = ids;
+        self.text_style_stack = styles;
+        result
     }
 
     /// Creates a new painting layer for the specified bounds. A "layer" is a batch

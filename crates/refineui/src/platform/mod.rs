@@ -4,15 +4,10 @@
 //! Components never branch on `cfg(target_os)` for *design* decisions; they
 //! ask the [`PlatformAdapter`] (window-controls side and size, titlebar
 //! heights, where the menu bar lives, the primary shortcut modifier, how
-//! shortcuts are written, whether the compositor can blur). AppKit / Win32
-//! glue lives in `platform::macos` (native frost for [`crate::vibrancy`])
-//! and [`windows`] (Mica / Acrylic system backdrops) behind these adapters
-//! and `cfg` gates.
+//! shortcuts are written, whether the compositor can blur). Win32
+//! glue lives in [`windows`] (Mica / Acrylic system backdrops) behind these
+//! adapters and `cfg` gates.
 
-#[cfg(any(target_os = "macos", feature = "typecheck-macos-vibrancy"))]
-// `objc`'s `sel_impl!` checks `feature = "cargo-clippy"`, hence the cfg allow.
-#[allow(unsafe_code, unexpected_cfgs)]
-pub(crate) mod macos;
 pub mod windows;
 
 use refineui_foundation::size::Density;
@@ -88,7 +83,7 @@ pub trait PlatformAdapter: Send + Sync {
     fn menu_bar(&self) -> MenuBarPlacement;
     /// What `secondary-` means.
     fn primary_modifier(&self) -> Modifier;
-    /// The compositor can blur behind a window (native frost).
+    /// The compositor can blur behind a window.
     fn native_blur(&self) -> bool;
     /// Scrollbar behaviour.
     fn scrollbar(&self) -> ScrollbarStyle;
@@ -207,8 +202,8 @@ fn key_label(key: &str, mac: bool) -> String {
     }
 }
 
-/// macOS: traffic lights on the leading edge, global menu bar, ⌘, native
-/// vibrancy.
+/// macOS: traffic lights on the leading edge, global menu bar, ⌘,
+/// blurred window backgrounds.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MacOsAdapter;
 

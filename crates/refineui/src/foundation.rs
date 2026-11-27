@@ -13,7 +13,7 @@
 //! | Motion | [`crate::motion`] |
 //! | Focus ring | [`Theme::focus_ring`] |
 //! | Layers / z-order | [`LayerOrder`] + [`crate::layer()`] |
-//! | Blur / frost | [`crate::vibrancy`] ([`FrostMode`]) |
+//! | Blur / frost | [`crate::material`] ([`crate::materials_active`]) |
 //! | Pointer and cursor | [`CursorRole`] |
 //! | Window metrics | [`crate::platform::PlatformAdapter`] over `refineui_foundation::window` |
 //!
@@ -24,7 +24,6 @@ pub use refineui_foundation::size::{ControlSize, Density, DesktopMetrics};
 pub use refineui_foundation::{blur, window as window_metrics, z_index};
 
 pub use crate::theme::{ActiveTheme, Appearance, Theme};
-pub use crate::vibrancy::{FrostMode, frost_mode, set_frost_mode};
 
 /// Desktop stacking layers, lowest first (`refineui_foundation::z_index`).
 ///

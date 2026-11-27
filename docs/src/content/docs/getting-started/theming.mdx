@@ -31,15 +31,19 @@ Every window re-renders when the appearance changes.
 
 ## Density
 
-Desktop apps default to **compact** controls (22 / 28 / 32 px). Switch to
-comfortable (28 / 36 / 48 px, the web sizes) per app:
+The default is **comfortable**, the web sizes (buttons 28 / 36 / 48 px).
+Dense tools can switch to **compact** (22 / 28 / 32 px) or larger targets to
+**spacious** (32 / 40 / 52 px) per app:
 
 ```rust
-Theme::set_density(Density::Comfortable, cx);
+Theme::set_density(Density::Compact, cx);
 ```
+
+See [Density](/architecture/density/) for every metric.
 
 ## Raw tokens
 
-The `refineui-tokens` crate has no GPUI dependency and exposes the RefineUI
-palette, semantic colors, spacing, radius, stroke, opacity, typography,
-shadow and motion values (`refineui::tokens`).
+The `refineui-foundation` crate has no GPUI dependency and exposes the
+RefineUI palette, semantic colors, spacing, radius, stroke, opacity,
+typography, shadow, motion, blur and material values. It is re-exported as
+`refineui::tokens` (`refineui-tokens` is a compatibility alias).

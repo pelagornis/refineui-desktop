@@ -29,6 +29,9 @@ use crate::{ActiveTheme, Button, ButtonVariant, ControlSize, Elevation, IconName
 
 /// Titlebar height of a floating panel, px.
 pub const FLOATING_TITLEBAR: f32 = 32.;
+/// Room on each side of the floating panel's centred title: the trailing
+/// Dock + close buttons (two small icon buttons and gaps).
+const FLOATING_TITLE_INSET: f32 = 72.;
 
 /// What happened to a floating panel window.
 #[derive(Clone, Debug, PartialEq)]
@@ -184,6 +187,8 @@ impl RenderOnce for FloatingPanelFrame {
         let titlebar = Titlebar::new(child_id(&self.id, "titlebar"))
             .title(self.title.clone())
             .height(FLOATING_TITLEBAR)
+            // Clear the Dock and close buttons on the trailing side.
+            .title_inset(FLOATING_TITLE_INSET)
             .interactive(self.interactive)
             .buttons(ControlButtons {
                 minimize: false,

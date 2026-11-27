@@ -31,7 +31,7 @@ pub trait PlatformAdapter: Send + Sync {
 | Menu bar | Global | In-window | In-window |
 | `secondary-` | ⌘ | Ctrl | Ctrl |
 | Shortcut labels | Symbols `⌃⌥⇧⌘` | `Ctrl+Alt+Shift+Key` | `Ctrl+Alt+Shift+Key` |
-| Native blur | Yes (`NSVisualEffectView`, see the Blur guide) | Later (Mica / Acrylic) | No |
+| Native blur | Yes (blurred window background, see the Blur guide) | Opt-in DWM backdrop (`platform::windows::set_backdrop`; Mica / Acrylic, not yet run on Windows hardware) | No |
 | Scrollbars | Overlay (thumb on hover / scroll) | Persistent | Overlay |
 | Decorations | Native, transparent titlebar | Drawn caption buttons + `WindowControlArea` hit test | Client-side (`WindowFrame`) |
 
@@ -42,11 +42,9 @@ part (titlebar, controls, shortcut labels) draw as that OS app-wide
 native. Per element, `Titlebar::os`, `WindowControls::os`,
 `ShortcutHint::os` and `ApplicationShell::os` do the same.
 
-Native glue stays in `cfg`-gated modules owned by the adapter: the AppKit
-code (NSWindow lookup, `NSVisualEffectView` shaping, debug dump) lives in
-`platform::macos` (since Phase 2); `refineui::vibrancy` is the public,
-cross-platform API on top of it. Win32 glue (Mica / Acrylic) will live in
-`platform::windows`.
+Native glue stays in `cfg`-gated modules owned by the adapter: the Win32
+DWM glue (`Backdrop`, `set_backdrop`) lives in `platform::windows` and
+returns `BackdropError::Unsupported` on other systems.
 
 ## Cursors
 
@@ -55,6 +53,6 @@ the hand. Components call `StyledExt::cursor_action()` (arrow) or
 `cursor_role(CursorRole::…)` — `Text`, `Grab` / `Grabbing` (drag handles),
 `ResizeColumn` / `ResizeRow` (splitters), `NotAllowed` (disabled).
 
-Validation (brief §9 step 9, Phase 5): each adapter gets a manual checklist
-(controls hit-test, drag, double-click, menu, shortcuts, focus, blur) run
-on macOS and Windows.
+Validation: the unit tests cover every adapter's metrics and labels on any
+OS; [Cross-platform](/report/cross-platform/) lists what has been checked on
+real macOS, Windows and Linux machines.

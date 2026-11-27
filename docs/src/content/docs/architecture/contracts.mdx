@@ -6,10 +6,10 @@ sidebar:
 ---
 
 Every public component has a JSON contract in
-`crates/refineui-tokens/contracts/components/<id>.json`, validated against
+`crates/refineui-foundation/contracts/components/<id>.json`, validated against
 `contracts/schema.json`. The files are embedded in the GPUI-free
-`refineui-tokens` crate (`refineui_tokens::contracts::{ALL, get, SCHEMA,
-DENSITY}`), so any renderer or tool (docs, a linter, an MCP server) can
+`refineui-foundation` crate (`refineui_foundation::contracts::{ALL, get,
+SCHEMA, DENSITY}`), so any renderer or tool (docs, a linter, an MCP server) can
 read them.
 
 ## Fields
@@ -19,11 +19,11 @@ read them.
 | `id`, `name` | Kebab-case id (file stem) and display name |
 | `layer` | `foundation` · `interaction` · `components` · `composition` · `application` · `platform` |
 | `status` | `exists` · `adapt` · `new` · `optional` |
-| `phase` | Target phase (1–6) |
+| `phase` | Delivery phase (1–6) the component was planned in |
 | `feature` | Cargo feature that gates it (`web-extras`) or `null` |
 | `desktop_target` | The brief §5 desktop component it becomes (e.g. Kbd → Shortcut Hint) |
 | `rust_types` | Public types the contract covers |
-| `a11y_role` | AccessKit / ARIA role |
+| `a11y_role` | ARIA-style role name (GPUI 0.2.2 has no accessibility tree yet) |
 | `states` | All eight interaction states. Each is `null` (not applicable) or `{status: implemented / planned, visual}` |
 | `sizes` | `metric` (`button`, `field`, `select`, `chip`, `row`, `desktop`, `fixed`, `content`) plus the resolved numbers for `compact`, `comfortable` and `spacious` |
 | `tokens` | Tokens used, by group (`color`, `radius`, `spacing`, `typography`, `motion`, `elevation`, `stroke`), in web token names |
@@ -66,7 +66,7 @@ Example (abridged):
   some contract's `rust_types`, and every listed type exists.
 - **Sizes**: embedded size numbers equal `Density::{button, field, select,
   chip, desktop}`. `contracts/density.json` equals `density_json()`
-  (regenerate with `UPDATE_CONTRACTS=1 cargo test -p refineui-tokens`).
+  (regenerate with `UPDATE_CONTRACTS=1 cargo test -p refineui-foundation`).
 - **Rules**: no `hover_only`. Focusable components (`single`, `roving`)
   define keys. Non-focusable components have no `focused` state.
 - **Index**: every file is embedded (`contracts/index.rs`).
@@ -82,5 +82,6 @@ python3 scripts/contracts.py index       # rewrite contracts/index.rs
 ```
 
 `refresh` scans the component source, so a state's `implemented` /
-`planned` flag is a **heuristic** until the component is reworked in its
-phase. When you adapt a component, confirm its states by hand.
+`planned` flag is a **heuristic**; confirm states by hand when you change a
+component. The [component inventory](/architecture/inventory/) lists every
+contract with the page that documents it.
